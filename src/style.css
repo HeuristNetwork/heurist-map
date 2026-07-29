@@ -1,0 +1,26 @@
+html,
+body,
+#heurist-map {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  overflow: hidden;
+}
+
+#heurist-map {
+  position: relative;
+  background: #f3f3f3;
+}
+
+.heurist-map-error {
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  font: 16px/1.4 sans-serif;
+}

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Heurist Map</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body>
+  <div id="heurist-map"></div>
+
+  <script>
+    // Public MapDocument domain model. This object mirrors the environment
+    // generated from RT_MAP_DOCUMENT and contains no Leaflet-specific values.
+    window.heuristMapConfig = {
+      format: 'heurist-map-document',
+      version: 1,
+
+      id: null,
+      title: 'Default map document',
+
+      mapBookmark: {
+        raw: null,
+        type: 'view',
+        center: {
+          latitude: -33.8688,
+          longitude: 151.2093
+        },
+        zoom: 3
+      },
+
+      geoObject: null,
+      symbology: null,
+      minimumZoom: null,
+      maximumZoom: null,
+      zoomToPointInKM: 5,
+
+      worldBaseMap: {
+        id: null,
+        code: 'OpenStreetMap',
+        label: 'OpenStreetMap'
+      },
+
+      crs: {
+        id: null,
+        code: 'EPSG:3857',
+        label: 'Web Mercator'
+      },
+
+      layers: []
+    };
+
+    // Runtime settings are intentionally not part of MapDocument.
+    window.heuristMapOptions = {
+      containerId: 'heurist-map',
+      engine: 'leaflet',
+      readonly: true
+    };
+  </script>
+
+  <script type="module" src="/src/main.js"></script>
+
+  <script type="module">
+    async function getHeuristMap() {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if (window.heuristMap) {
+          await window.heuristMap.ready();
+          return window.heuristMap;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+
+      throw new Error('Heurist Map API was not initialized');
+    }
+
+    try {
+      const map = await getHeuristMap();
+
+      await map.addLayer({
+        id: 'sample-places',
+        title: 'Sample places',
+        type: 'geojson',
+        visible: true,
+        data: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              id: 'sydney',
+              properties: { name: 'Sydney', recordId: 1 },
+              geometry: {
+                type: 'Point',
+                coordinates: [151.2093, -33.8688]
+              }
+            },
+            {
+              type: 'Feature',
+              id: 'canberra',
+              properties: { name: 'Canberra', recordId: 2 },
+              geometry: {
+                type: 'Point',
+                coordinates: [149.1300, -35.2809]
+              }
+            }
+          ]
+        },
+        style: {
+          color: '#276cb8',
+          fillColor: '#4f9de8',
+          fillOpacity: 0.45,
+          radius: 8
+        }
+      });
+
+      await map.fitBounds({
+        west: 148.8,
+        south: -35.8,
+        east: 151.8,
+        north: -33.3
+      });
+    } catch (error) {
+      console.error('Cannot add sample map layer', error);
+    }
+  </script>
+</body>
+</html>
