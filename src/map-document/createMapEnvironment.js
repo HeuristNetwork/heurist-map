@@ -45,6 +45,14 @@ function createInitialView(bookmark) {
     };
   }
 
+  if (bookmark?.type === 'point' && bookmark.point) {
+    return {
+      type: 'view',
+      center: bookmark.point,
+      zoom: bookmark.zoom ?? 10
+    };
+  }
+
   return {
     type: 'view',
     center: bookmark?.center || { latitude: 0, longitude: 0 },

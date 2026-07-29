@@ -2,21 +2,17 @@ export const MAP_DOCUMENT_FORMAT = 'heurist-map-document';
 export const MAP_DOCUMENT_VERSION = 1;
 
 const DEFAULT_BOOKMARK = Object.freeze({
-  raw: null,
+  raw: '',
   type: 'view',
   center: Object.freeze({ latitude: 0, longitude: 0 }),
   zoom: 2
 });
 
 /**
- * Normalize the public/API MapDocument domain representation.
+ * Normalize the public/API MapDocument version 1 representation.
  *
- * This function deliberately preserves Heurist identities and raw field
- * values. Engine-specific defaults and Leaflet options belong to the private
- * MapEnvironment created by createMapEnvironment().
- *
- * @param {Object} value MapDocument-like value supplied by the host or API.
- * @returns {Object} Canonical MapDocument version 1.
+ * API MapDocuments contain only engine-neutral domain values. Runtime and
+ * map-engine options are produced separately by createMapEnvironment().
  */
 export function normalizeMapDocument(value = {}) {
   const source = isObject(value) ? value : {};
@@ -24,18 +20,13 @@ export function normalizeMapDocument(value = {}) {
   return {
     format: source.format || MAP_DOCUMENT_FORMAT,
     version: normalizeVersion(source.version),
-
-    id: source.id ?? source.rec_ID ?? null,
-    title: source.title ?? source.rec_Title ?? source.name ?? 'Default map document',
-
+    id: positiveIntegerOrNull(source.id ?? source.rec_ID),
+    title: String(source.title ?? source.rec_Title ?? source.name ?? 'Default map document'),
     mapBookmark: normalizeMapBookmark(
       source.mapBookmark ?? source.bookmark ?? source.DT_MAP_BOOKMARK
     ),
     geoObject: source.geoObject ?? source.DT_GEO_OBJECT ?? null,
     symbology: source.symbology ?? source.DT_SYMBOLOGY ?? null,
-
-    // These values preserve the RT_MAP_DOCUMENT fields. They represent
-    // geographic distance/scale semantics, not native map-engine zoom levels.
     minimumZoom: finiteNumberOrNull(
       source.minimumZoom ?? source.minZoom ?? source.DT_MINIMUM_ZOOM
     ),
@@ -45,16 +36,15 @@ export function normalizeMapDocument(value = {}) {
     zoomToPointInKM: finiteNumberOrNull(
       source.zoomToPointInKM ?? source.DT_ZOOM_KM_POINT
     ),
-
-    worldBaseMap: normalizeBaseMapReference(
-      source.worldBaseMap ?? source.baseMap ?? source.baseLayer ?? source.DT_WORLD_BASEMAP
+    worldBaseMap: normalizeTermDescriptor(
+      source.worldBaseMap ?? source.baseMap ?? source.baseLayer ?? source.DT_WORLD_BASEMAP,
+      { code: 'OpenStreetMap', label: 'OpenStreetMap' }
     ),
-    crs: normalizeCrsReference(source.crs ?? source.DT_CRS),
-    layers: normalizeLayers(source.layers ?? source.initialLayers),
-
-    // Preserve the exact source for round-trip/debugging without making it the
-    // runtime model consumed by a map engine.
-    raw: source
+    crs: normalizeTermDescriptor(
+      source.crs ?? source.DT_CRS,
+      { code: 'EPSG:3857', label: 'Web Mercator' }
+    ),
+    layers: normalizeLayerReferences(source.layers ?? source.initialLayers)
   };
 }
 
@@ -64,18 +54,30 @@ export function normalizeMapBookmark(value) {
   }
 
   if (isObject(value)) {
-    const raw = value.raw ?? value;
+    const raw = typeof value.raw === 'string' ? value.raw : '';
     const type = String(value.type || '').toLowerCase();
-    const bounds = normalizeBounds(value.bounds ?? value.extent ?? value);
+    const bounds = normalizeBounds(value.bounds);
 
-    if (type === 'extent' || bounds) {
-      return bounds
-        ? { raw, type: 'extent', bounds }
-        : { ...DEFAULT_BOOKMARK, raw };
+    if (type === 'extent' && bounds) {
+      return { raw, type: 'extent', bounds };
     }
 
-    const center = normalizeCenter(value.center ?? value);
-    if (center) {
+    const point = normalizeCenter(value.point);
+    if (type === 'point' && point) {
+      return compact({
+        raw,
+        type: 'point',
+        point,
+        minimumZoom: finiteNumberOrNull(value.minimumZoom),
+        maximumZoom: finiteNumberOrNull(value.maximumZoom),
+        zoom: finiteNumberOrNull(value.zoom)
+      });
+    }
+
+    // Local/default documents may use a view bookmark. The public API schema
+    // permits additional bookmark properties, so this remains transport-safe.
+    const center = normalizeCenter(value.center);
+    if (type === 'view' && center) {
       return {
         raw,
         type: 'view',
@@ -86,7 +88,7 @@ export function normalizeMapBookmark(value) {
   }
 
   return {
-    raw: value ?? DEFAULT_BOOKMARK.raw,
+    raw: '',
     type: DEFAULT_BOOKMARK.type,
     center: { ...DEFAULT_BOOKMARK.center },
     zoom: DEFAULT_BOOKMARK.zoom
@@ -111,6 +113,21 @@ function parseLegacyBookmark(value) {
     }
   }
 
+  if (parts[0]?.toLowerCase() === 'point' && parts.length >= 3) {
+    const latitude = Number(parts[1]);
+    const longitude = Number(parts[2]);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return compact({
+        raw: value,
+        type: 'point',
+        point: { latitude, longitude },
+        minimumZoom: finiteNumberOrNull(parts[3]),
+        maximumZoom: finiteNumberOrNull(parts[4]),
+        zoom: finiteNumberOrNull(parts[5])
+      });
+    }
+  }
+
   return {
     raw: value,
     type: DEFAULT_BOOKMARK.type,
@@ -119,124 +136,79 @@ function parseLegacyBookmark(value) {
   };
 }
 
-function normalizeBaseMapReference(value) {
-  if (value === false || value === null || value === 'None') {
+function normalizeTermDescriptor(value, defaults) {
+  if (value === false || value === null) {
     return null;
   }
 
-  if (typeof value === 'string' || typeof value === 'number') {
-    return {
-      id: typeof value === 'number' ? value : null,
-      code: String(value),
-      label: String(value)
-    };
+  if (typeof value === 'number') {
+    return { id: positiveIntegerOrNull(value), code: null, label: null };
+  }
+
+  if (typeof value === 'string') {
+    const code = value === 'XY' ? 'Simple' : value;
+    return { id: null, code, label: code };
   }
 
   if (!isObject(value)) {
-    return { id: null, code: 'OpenStreetMap', label: 'OpenStreetMap' };
+    return { id: null, ...defaults };
   }
 
-  return {
-    id: value.id ?? value.termId ?? value.trm_ID ?? null,
-    code: value.code ?? value.termCode ?? value.name ?? value.title ?? 'OpenStreetMap',
-    label: value.label ?? value.title ?? value.name ?? value.code ?? 'OpenStreetMap',
+  const rawCode = value.code ?? value.termCode ?? value.name ?? defaults.code ?? null;
+  const code = rawCode === 'XY' ? 'Simple' : rawCode;
 
-    // Optional custom provider definition. Known providers normally need only
-    // id/code/label and are resolved by the base-map registry.
-    type: value.type ?? null,
-    url: value.url ?? null,
-    attribution: value.attribution ?? null,
-    minZoom: finiteNumberOrNull(value.minZoom),
-    maxZoom: finiteNumberOrNull(value.maxZoom),
-    subdomains: value.subdomains ?? null,
-    options: isObject(value.options) ? value.options : {}
+  return {
+    id: positiveIntegerOrNull(value.id ?? value.termId ?? value.trm_ID),
+    code: code == null ? null : String(code),
+    label: String(value.label ?? value.title ?? value.name ?? code ?? defaults.label ?? '') || null
   };
 }
 
-function normalizeCrsReference(value) {
-  if (!value) {
-    return { id: null, code: 'EPSG:3857', label: 'Web Mercator' };
-  }
-
-  if (typeof value === 'string' || typeof value === 'number') {
-    const code = String(value) === 'XY' ? 'Simple' : String(value);
-    return { id: typeof value === 'number' ? value : null, code, label: code };
-  }
-
-  const codeValue = value.code ?? value.termCode ?? value.name ?? value.label ?? 'EPSG:3857';
-  const code = String(codeValue) === 'XY' ? 'Simple' : String(codeValue);
-
-  return {
-    id: value.id ?? value.termId ?? value.trm_ID ?? null,
-    code,
-    label: value.label ?? value.title ?? value.name ?? code
-  };
-}
-
-function normalizeLayers(value) {
+function normalizeLayerReferences(value) {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value
-    .map((layer, index) => normalizeLayer(layer, index))
+    .map((layer, index) => normalizeLayerReference(layer, index))
     .filter(Boolean)
     .sort((a, b) => a.order - b.order);
 }
 
-function normalizeLayer(value, index) {
+function normalizeLayerReference(value, index) {
   if (typeof value === 'number' || typeof value === 'string') {
-    return {
-      id: value,
-      title: null,
-      order: index,
-      visible: true,
-      source: {
-        type: 'heurist-map-layer',
-        recordId: value
-      }
-    };
+    const recordId = positiveIntegerOrNull(value);
+    return recordId
+      ? { id: recordId, recordId, title: '', order: index + 1, visible: true }
+      : null;
   }
 
   if (!isObject(value)) {
     return null;
   }
 
-  const id = value.id ?? value.recordId ?? value.rec_ID ?? `layer-${index + 1}`;
-  let source = isObject(value.source) ? { ...value.source } : null;
-
-  if (!source && (value.recordId ?? value.rec_ID)) {
-    source = {
-      type: 'heurist-map-layer',
-      recordId: value.recordId ?? value.rec_ID
-    };
-  }
-
-  if (!source && value.type === 'geojson' && value.data) {
-    source = { type: 'inline-geojson', data: value.data };
+  const recordId = positiveIntegerOrNull(value.recordId ?? value.id ?? value.rec_ID);
+  if (!recordId) {
+    return null;
   }
 
   return {
-    ...value,
-    id,
-    title: value.title ?? value.name ?? null,
-    order: finiteNumberOrNull(value.order) ?? index,
-    visible: value.visible !== false,
-    source
+    id: positiveIntegerOrNull(value.id) || recordId,
+    recordId,
+    title: String(value.title ?? value.name ?? ''),
+    order: positiveIntegerOrNull(value.order) || index + 1,
+    visible: value.visible !== false
   };
 }
 
 function normalizeVersion(value) {
   const version = Number(value);
-  return Number.isInteger(version) && version > 0
-    ? version
-    : MAP_DOCUMENT_VERSION;
+  return Number.isInteger(version) && version > 0 ? version : MAP_DOCUMENT_VERSION;
 }
 
 function normalizeCenter(value) {
   const latitude = Number(value?.latitude ?? value?.lat ?? value?.[0]);
   const longitude = Number(value?.longitude ?? value?.lng ?? value?.lon ?? value?.[1]);
-
   return Number.isFinite(latitude) && Number.isFinite(longitude)
     ? { latitude, longitude }
     : null;
@@ -247,7 +219,6 @@ function normalizeBounds(value) {
   const south = Number(value?.south);
   const east = Number(value?.east);
   const north = Number(value?.north);
-
   return [west, south, east, north].every(Number.isFinite)
     ? { west, south, east, north }
     : null;
@@ -257,9 +228,19 @@ function finiteNumberOrNull(value) {
   if (value === null || value === undefined || value === '') {
     return null;
   }
-
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function positiveIntegerOrNull(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
+}
+
+function compact(value) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined && entry !== null)
+  );
 }
 
 function isObject(value) {

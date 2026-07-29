@@ -4,32 +4,35 @@ Standalone and embeddable mapping application for Heurist.
 
 ## 1. Purpose
 
-`heurist-map` is a separate Vite project for the next-generation Heurist mapping application. It is developed in parallel with the existing `mapping.js`, `app_timemap`, and `app_storymap` implementation.
+`heurist-map` is a separate Vite project for the next-generation Heurist mapping application. It is developed in parallel with the legacy `mapping.js`, `app_timemap`, and `app_storymap` implementation.
 
-Phase 1 establishes:
+Phase 2 adds read-only Heurist public API integration while retaining the Phase 1 engine-neutral application and Leaflet adapter.
 
-- a standalone full-window map application;
-- a stable runtime configuration object;
-- an engine-neutral `MapApplication` controller;
-- a `MapEngineAdapter` contract;
-- an initial Leaflet adapter;
-- a host-adapter boundary for future Heurist editing integration;
-- a narrow same-origin iframe/direct integration API exposed as `window.heuristMap`;
-- fixed Vite distribution file names suitable for copying into Heurist.
+Implemented in this phase:
 
-This phase defines and normalizes the MapDocument model but does not yet load MapDocument or Map Layer records from the Heurist public API. Query layers, timeline integration, drawing, symbology editors, and record editing remain later phases.
+- `HeuristApiClient` based on `fetch`;
+- MapDocument and MapLayer response validation;
+- `MapDocumentProvider`;
+- `MapLayerProvider`;
+- `QueryGeoDataProvider`;
+- `map.loadMapDocument(recordId)`;
+- ordered loading of Map Layer references;
+- public query and single-record GeoJSON sources;
+- automatic GeoJSON pagination;
+- request cancellation;
+- clear API/network/JSON errors;
+- MapDocument and MapLayer response fixtures;
+- reserved timeline response constants without timeline loading or rendering.
+
+Editing is not included.
 
 ## 2. Requirements
 
-Recommended environment:
-
 - Node.js 22 or later;
 - npm 10 or later;
-- a modern browser with ES module support.
-
-Runtime dependency:
-
-- Leaflet 1.9.4.
+- a modern browser with ES module support;
+- Leaflet 1.9.4;
+- Heurist mapping endpoints described by `docs/heurist-openapi.yaml`.
 
 ## 3. Project structure
 
@@ -38,10 +41,26 @@ src/
   main.js
   mapConfig.js
   initHeuristMap.js
-  style.css
 
   core/
     MapApplication.js
+
+  data/
+    HeuristApiClient.js
+    HeuristApiError.js
+    MapDocumentProvider.js
+    MapLayerProvider.js
+    QueryGeoDataProvider.js
+
+  map-document/
+    MapDocument.js
+    createMapEnvironment.js
+
+  map-layer/
+    MapLayer.js
+
+  timeline/
+    TimelineResponse.js
 
   adapters/map/
     MapEngineAdapter.js
@@ -55,13 +74,15 @@ src/
 
   public-api/
     HeuristMapPublicApi.js
-```
 
-The application core does not expose Leaflet objects. A future map engine, such as Google Maps, MapLibre, or OpenLayers, can implement the same `MapEngineAdapter` contract.
+public/fixtures/
+  map-document.json
+  map-layer.json
+```
 
 ## 4. Runtime configuration
 
-`window.heuristMapConfig` is the public MapDocument domain model generated from an `RT_MAP_DOCUMENT` record. It contains no Leaflet-specific objects or runtime DOM settings.
+`window.heuristMapConfig` is the initial engine-neutral MapDocument. It may be a local/default document; a persisted API MapDocument can later replace it through `loadMapDocument()`.
 
 ```js
 window.heuristMapConfig = {
@@ -70,7 +91,7 @@ window.heuristMapConfig = {
   id: null,
   title: 'Default map document',
   mapBookmark: {
-    raw: null,
+    raw: '',
     type: 'view',
     center: { latitude: -33.8688, longitude: 151.2093 },
     zoom: 3
@@ -86,28 +107,138 @@ window.heuristMapConfig = {
 };
 ```
 
-Runtime-only application settings are separate:
+Runtime and API settings are separate:
 
 ```js
 window.heuristMapOptions = {
   containerId: 'heurist-map',
   engine: 'leaflet',
-  readonly: true
+  readonly: true,
+  apiBaseUrl: '/heurist/api',
+  database: 'my_database'
 };
 ```
 
-Internally, the MapDocument is converted into a private engine-neutral `MapEnvironment`; only the Leaflet adapter creates Leaflet options and objects.
+`serverUrl` may be supplied instead of `apiBaseUrl`. If it does not end with `/api`, the client appends `/api`.
 
-## 5. Development
+Optional authenticated access:
 
-Install dependencies and start Vite:
+```js
+window.heuristMapOptions.accessToken = 'bearer-token';
+window.heuristMapOptions.requestHeaders = {
+  'X-Custom-Header': 'value'
+};
+```
+
+## 5. Loading a MapDocument
+
+```js
+const map = window.heuristMap;
+await map.ready();
+await map.loadMapDocument(123);
+```
+
+The load operation performs the following steps:
+
+1. `GET /api/{database}/map/document/{recordId}`;
+2. sort layer references by `order`;
+3. `GET /api/{database}/map/layer/{recordId}` for each reference;
+4. obtain GeoJSON from `/map` for `heurist-query` or `record` sources;
+5. initialize the map environment and add layers in document order;
+6. apply the document bookmark.
+
+API data is prepared before the existing map is replaced. A failed document or layer request therefore does not clear the displayed map.
+
+Supported Phase 2 MapLayer source types:
+
+```text
+heurist-query
+record
+inline-geojson
+```
+
+Other source types return a clear unsupported-source error until their later implementation phases.
+
+## 6. Query GeoJSON
+
+`QueryGeoDataProvider` selects GET for short string queries and POST for structured or long queries. It supports:
+
+- `limit` and `offset`;
+- geometry simplification;
+- `AbortSignal`;
+- automatic pagination through `searchAll()`;
+- GeoJSON response validation.
+
+Query-backed MapLayers are loaded through:
+
+```text
+GET  /api/{database}/map?q=...
+POST /api/{database}/map
+```
+
+Single-record layers use:
+
+```text
+GET /api/{database}/map/{recordId}
+```
+
+## 7. Cancellation
+
+Starting a new MapDocument load automatically aborts the previous load.
+
+Explicit cancellation:
+
+```js
+map.cancelPendingRequests('The user selected another document');
+```
+
+External cancellation:
+
+```js
+const controller = new AbortController();
+const promise = map.loadMapDocument(123, {
+  signal: controller.signal
+});
+
+controller.abort();
+await promise;
+```
+
+## 8. API errors
+
+`HeuristApiError` retains:
+
+- HTTP status and status text;
+- request URL and method;
+- Heurist error code and response details;
+- the original network or JSON parsing error as `cause`.
+
+Errors are augmented with document/layer context, for example:
+
+```text
+Cannot load MapDocument record 123: Cannot load MapLayer record 1001: Heurist API request failed: Record not found
+```
+
+## 9. Timeline reservation
+
+`src/timeline/TimelineResponse.js` reserves:
+
+```js
+export const TIMELINE_FORMAT = 'heurist-timeline';
+export const TIMELINE_VERSION = 1;
+```
+
+No `/time` request, timeline provider, or timeline UI is connected in Phase 2.
+
+## 10. Development and tests
 
 ```bash
 npm install
+npm test
 npm run dev
 ```
 
-The development server uses:
+The Vite development server uses:
 
 ```text
 http://127.0.0.1:5174/
@@ -115,13 +246,13 @@ http://127.0.0.1:5174/
 
 Requests beginning with `/heurist` are proxied to local Apache at `http://127.0.0.1`.
 
-## 6. Build
+## 11. Build
 
 ```bash
 npm run build
 ```
 
-The project creates fixed distribution names under `dist/`:
+Expected distribution names:
 
 ```text
 dist/
@@ -130,71 +261,4 @@ dist/
   heurist-map.js.map
 ```
 
-Additional chunks use the prefix `heurist-map-`.
-
-## 7. Public integration API
-
-After initialization, the application exposes a narrow API:
-
-```js
-const map = iframe.contentWindow.heuristMap;
-await map.ready();
-```
-
-Available Phase 1 methods:
-
-```js
-await map.getCapabilities();
-await map.addLayer(layerDefinition);
-await map.removeLayer(layerId);
-await map.setLayerVisibility(layerId, true);
-await map.setView({ latitude: -33.86, longitude: 151.20 }, 10);
-await map.fitBounds({ west: 150, south: -34, east: 152, north: -33 });
-await map.invalidateSize();
-const view = await map.getViewState();
-await map.destroy();
-```
-
-Example GeoJSON layer:
-
-```js
-await map.addLayer({
-  id: 'sample-places',
-  type: 'geojson',
-  visible: true,
-  data: {
-    type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: { title: 'Sydney' },
-        geometry: {
-          type: 'Point',
-          coordinates: [151.2093, -33.8688]
-        }
-      }
-    ]
-  }
-});
-```
-
-No native Leaflet map or layer objects are exposed through this API.
-
-## 8. Phase 1 limitations
-
-The following are reserved for later phases:
-
-- Heurist public API data provider;
-- query layers;
-- map-document loading;
-- timeline;
-- selection synchronization;
-- layer panel;
-- marker clustering;
-- custom CRS;
-- image and GeoTIFF layers;
-- drawing;
-- map-document and layer editing;
-- symbology and thematic-map editors;
-- Heurist host adapter;
-- wrapper widgets for the main Heurist interface.
+No native Leaflet map or layer object is exposed through `window.heuristMap`.

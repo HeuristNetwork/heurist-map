@@ -142,9 +142,22 @@ export class LeafletMapAdapter extends MapEngineAdapter {
   }
 
   addGeoJsonLayer(definition) {
+    const symbol = definition.style?.symbol ?? definition.style ?? {};
+    const pointStyle = compactOptions({
+      radius: symbol.radius,
+      color: symbol.color,
+      weight: symbol.weight,
+      opacity: symbol.opacity,
+      fillColor: symbol.fillColor,
+      fillOpacity: symbol.fillOpacity,
+      fill: symbol.fill,
+      stroke: symbol.stroke
+    });
+
     const layer = L.geoJSON(definition.data, {
-      style: definition.style,
-      pointToLayer: definition.pointToLayer,
+      style: definition.style?.type === 'simple' ? symbol : definition.style,
+      pointToLayer: definition.pointToLayer
+        || ((feature, latlng) => L.circleMarker(latlng, pointStyle)),
       onEachFeature: definition.onEachFeature
     });
 

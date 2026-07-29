@@ -19,6 +19,14 @@ export class HeuristMapPublicApi {
     return this.application.getMapDocument();
   }
 
+  loadMapDocument(recordId, options = {}) {
+    return this.application.loadMapDocument(recordId, options);
+  }
+
+  cancelPendingRequests(reason) {
+    return this.application.cancelPendingRequests(reason);
+  }
+
   addLayer(definition) {
     return this.application.addLayer(definition);
   }

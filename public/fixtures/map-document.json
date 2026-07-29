@@ -1,0 +1,40 @@
+{
+  "format": "heurist-map-document",
+  "version": 1,
+  "id": 123,
+  "title": "Phase 2 sample map document",
+  "mapBookmark": {
+    "raw": "Extent,-35.8,148.8,-33.3,151.8,1800,2050",
+    "type": "extent",
+    "bounds": {
+      "west": 148.8,
+      "south": -35.8,
+      "east": 151.8,
+      "north": -33.3
+    }
+  },
+  "geoObject": null,
+  "symbology": null,
+  "minimumZoom": 1800,
+  "maximumZoom": 2050,
+  "zoomToPointInKM": 5,
+  "worldBaseMap": {
+    "id": 456,
+    "code": "OpenStreetMap",
+    "label": "OpenStreetMap"
+  },
+  "crs": {
+    "id": 789,
+    "code": "EPSG:3857",
+    "label": "Web Mercator"
+  },
+  "layers": [
+    {
+      "id": 1001,
+      "recordId": 1001,
+      "title": "Public places query",
+      "order": 1,
+      "visible": true
+    }
+  ]
+}

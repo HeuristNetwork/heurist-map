@@ -1,0 +1,41 @@
+{
+  "format": "heurist-map-layer",
+  "version": 1,
+  "id": 1001,
+  "title": "Public places query",
+  "description": "Example query-backed map layer",
+  "visible": true,
+  "selectable": true,
+  "source": {
+    "type": "heurist-query",
+    "recordId": 1001,
+    "title": "Public places query",
+    "query": {
+      "t": 12,
+      "sort": "rec_Title"
+    }
+  },
+  "style": {
+    "type": "simple",
+    "symbol": {
+      "color": "#276cb8",
+      "fillColor": "#4f9de8",
+      "weight": 2,
+      "opacity": 1,
+      "fillOpacity": 0.45,
+      "radius": 7
+    },
+    "thematic": null
+  },
+  "timeline": {
+    "enabled": false,
+    "fields": []
+  },
+  "options": {
+    "markerClustering": false,
+    "zoomToExtent": false,
+    "minimumZoom": null,
+    "maximumZoom": null,
+    "popupTemplate": null
+  }
+}
