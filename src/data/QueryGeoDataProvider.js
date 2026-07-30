@@ -37,6 +37,8 @@ export class QueryGeoDataProvider {
     const usePost = method === 'post'
       || (method === 'auto' && shouldUsePost(query));
 
+console.log('QueryGeoDataProvider.search', { query, usePost });
+
     const response = usePost
       ? await this.apiClient.post('/map', {
           body: {

@@ -142,9 +142,8 @@ export class LeafletMapAdapter extends MapEngineAdapter {
   }
 
   addGeoJsonLayer(definition) {
-    const symbol = definition.style?.symbol ?? definition.style ?? {};
-    const pointStyle = compactOptions({
-      radius: symbol.radius,
+    const symbol = definition.style?.symbol ?? {};
+    const pathStyle = compactOptions({
       color: symbol.color,
       weight: symbol.weight,
       opacity: symbol.opacity,
@@ -155,10 +154,16 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     });
 
     const layer = L.geoJSON(definition.data, {
-      style: definition.style?.type === 'simple' ? symbol : definition.style,
-      pointToLayer: definition.pointToLayer
-        || ((feature, latlng) => L.circleMarker(latlng, pointStyle)),
-      onEachFeature: definition.onEachFeature
+      style: () => pathStyle,
+      pointToLayer: (feature, latlng) => createPointLayer(feature, latlng, symbol),
+      onEachFeature: (feature, nativeLayer) => {
+        if (definition.popup?.enabled !== false) {
+          const popupHtml = createPopupHtml(feature, definition.popup);
+          if (popupHtml) {
+            nativeLayer.bindPopup(popupHtml);
+          }
+        }
+      }
     });
 
     return this.registerLayer(definition, layer);
@@ -258,4 +263,73 @@ function compactOptions(options) {
   return Object.fromEntries(
     Object.entries(options).filter(([, value]) => value !== undefined)
   );
+}
+
+
+function createPointLayer(feature, latlng, symbol) {
+  if ((symbol.iconType === 'icon' || symbol.iconType === 'marker') && symbol.iconUrl) {
+    const icon = L.icon(compactOptions({
+      iconUrl: symbol.iconUrl,
+      iconSize: symbol.iconSize,
+      iconAnchor: symbol.iconAnchor,
+      popupAnchor: symbol.popupAnchor
+    }));
+    return L.marker(latlng, { icon });
+  }
+
+  return L.circleMarker(latlng, compactOptions({
+    radius: symbol.radius,
+    color: symbol.color,
+    weight: symbol.weight,
+    opacity: symbol.opacity,
+    fillColor: symbol.fillColor,
+    fillOpacity: symbol.fillOpacity,
+    fill: symbol.fill,
+    stroke: symbol.stroke
+  }));
+}
+
+function createPopupHtml(feature, popup) {
+  const properties = feature?.properties || {};
+  const metadata = properties.heurist || {};
+  const titleField = popup?.titleField;
+  const title = titleField && properties[titleField] != null
+    ? String(properties[titleField])
+    : metadata.title || properties.rec_Title || properties.title || properties.name || '';
+
+  const parts = [];
+  if (title) {
+    parts.push(`<strong>${escapeHtml(title)}</strong>`);
+  }
+
+  if (popup?.showRecordId !== false && metadata.recordId) {
+    parts.push(`<div>Record ${escapeHtml(metadata.recordId)}</div>`);
+  }
+
+  for (const field of popup?.fields || []) {
+    const descriptor = typeof field === 'string' ? { name: field, label: field } : field;
+    const value = properties[descriptor.name];
+    if (value === undefined || value === null || value === '') continue;
+    parts.push(
+      `<div><span>${escapeHtml(descriptor.label || descriptor.name)}:</span> ${escapeHtml(formatPopupValue(value))}</div>`
+    );
+  }
+
+  return parts.join('');
+}
+
+function formatPopupValue(value) {
+  if (typeof value === 'object') {
+    try { return JSON.stringify(value); } catch { return String(value); }
+  }
+  return String(value);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }

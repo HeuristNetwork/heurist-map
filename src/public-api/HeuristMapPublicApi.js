@@ -39,6 +39,22 @@ export class HeuristMapPublicApi {
     return this.application.setLayerVisibility(layerId, visible);
   }
 
+  getLayers() {
+    return this.application.getLayers();
+  }
+
+  getLayer(layerId) {
+    return this.application.getLayer(layerId);
+  }
+
+  reloadLayer(layerId, options = {}) {
+    return this.application.reloadLayer(layerId, options);
+  }
+
+  clearLayers() {
+    return this.application.clearLayers();
+  }
+
   setView(center, zoom, options = {}) {
     return this.application.setView(center, zoom, options);
   }

@@ -5,13 +5,15 @@ import { createMapEnvironment } from '../map-document/createMapEnvironment.js';
  * Engine-neutral application controller.
  */
 export class MapApplication {
-  constructor({ container, config, mapEngine, host, providers = {} }) {
+  constructor({ container, config, mapEngine, host, providers = {}, layerLoaders }) {
     this.container = container;
     this.config = config;
     this.mapEngine = mapEngine;
     this.host = host;
     this.providers = providers;
+    this.layerLoaders = layerLoaders;
     this.mapEnvironment = createMapEnvironment(config.mapDocument);
+    this.layers = new Map();
     this.initialized = false;
     this.destroyed = false;
     this.activeLoadController = null;
@@ -24,22 +26,15 @@ export class MapApplication {
     try {
       await this.initializeMapEngine(this.mapEnvironment);
       await this.applyInitialView(this.mapEnvironment.initialView);
-
       this.initialized = true;
-      this.dispatch('heurist-map-ready', {
-        mapDocument: this.config.mapDocument
-      });
+      this.dispatch('heurist-map-ready', { mapDocument: this.config.mapDocument });
     } catch (error) {
       await this.mapEngine.destroy();
       await this.host.destroy();
-      throw error;
+      throw addContext(error, 'Cannot initialize map rendering');
     }
   }
 
-  /**
-   * Load a MapDocument and every referenced MapLayer from the public API.
-   * The existing map remains visible until all API data has been prepared.
-   */
   async loadMapDocument(recordId, { signal } = {}) {
     this.assertActive();
     this.assertDataIntegrationConfigured();
@@ -63,7 +58,6 @@ export class MapApplication {
         mapDocument,
         layerCount: runtimeLayers.length
       });
-
       return mapDocument;
     } catch (error) {
       if (isAbortError(error)) {
@@ -81,7 +75,6 @@ export class MapApplication {
     if (!this.activeLoadController) {
       return false;
     }
-
     this.activeLoadController.abort(new DOMException(reason, 'AbortError'));
     this.activeLoadController = null;
     return true;
@@ -89,17 +82,94 @@ export class MapApplication {
 
   async addLayer(definition) {
     this.assertActive();
-    return this.mapEngine.addLayer(definition);
+    const normalized = clonePlain(definition);
+    if (!normalized?.id) {
+      throw new TypeError('Layer definition requires an id');
+    }
+    if (this.layers.has(normalized.id)) {
+      throw new Error(`Layer "${normalized.id}" already exists`);
+    }
+
+    const state = {
+      ...normalized,
+      visible: normalized.visible !== false,
+      loadState: 'loading',
+      error: null
+    };
+    this.layers.set(state.id, state);
+
+    try {
+      const result = await this.mapEngine.addLayer(definition);
+      state.loadState = 'loaded';
+      this.dispatch('heurist-map-layer-loaded', { layer: this.getLayer(state.id) });
+      return result;
+    } catch (error) {
+      state.loadState = 'error';
+      state.error = serializeError(error);
+      this.dispatch('heurist-map-error', {
+        operation: 'add-layer',
+        layer: this.getLayer(state.id),
+        error: state.error
+      });
+      throw addContext(error, `Cannot render layer "${state.title || state.id}"`);
+    }
   }
 
   async removeLayer(layerId) {
     this.assertActive();
-    return this.mapEngine.removeLayer(layerId);
+    const removed = await this.mapEngine.removeLayer(layerId);
+    if (removed) {
+      this.layers.delete(layerId);
+    }
+    return removed;
   }
 
   async setLayerVisibility(layerId, visible) {
     this.assertActive();
-    return this.mapEngine.setLayerVisibility(layerId, visible);
+    await this.mapEngine.setLayerVisibility(layerId, visible);
+    const layer = this.layers.get(layerId);
+    if (layer) {
+      layer.visible = Boolean(visible);
+    }
+    this.dispatch('heurist-map-layer-visibility-changed', {
+      layerId,
+      visible: Boolean(visible)
+    });
+  }
+
+  getLayers() {
+    return [...this.layers.values()]
+      .sort(compareRuntimeLayers)
+      .map(clonePlain);
+  }
+
+  getLayer(layerId) {
+    const layer = this.layers.get(layerId);
+    return layer ? clonePlain(layer) : null;
+  }
+
+  async reloadLayer(layerId, { signal } = {}) {
+    this.assertDataIntegrationConfigured();
+    const current = this.layers.get(layerId);
+    if (!current?.recordId) {
+      throw new Error(`Layer "${layerId}" is not backed by a MapLayer record`);
+    }
+
+    const reference = {
+      id: current.id,
+      recordId: current.recordId,
+      order: current.order
+    };
+    const mapLayer = await this.providers.mapLayer.getById(current.recordId, { signal });
+    const runtimeLayer = await this.createRuntimeLayer(mapLayer, reference, signal);
+    await this.removeLayer(layerId);
+    return this.addLayer(runtimeLayer);
+  }
+
+  async clearLayers() {
+    for (const layerId of [...this.layers.keys()]) {
+      await this.removeLayer(layerId);
+    }
   }
 
   async setView(center, zoom, options = {}) {
@@ -123,7 +193,7 @@ export class MapApplication {
   }
 
   getMapDocument() {
-    return this.config.mapDocument;
+    return clonePlain(this.config.mapDocument);
   }
 
   getCapabilities() {
@@ -133,6 +203,7 @@ export class MapApplication {
         && Boolean(this.config.database),
       mapDocuments: Boolean(this.providers.mapDocument),
       queryGeoJson: Boolean(this.providers.queryGeoData),
+      remoteGeoJson: true,
       timeline: false,
       editing: !this.config.readonly && this.host.supportsEditing()
     };
@@ -142,8 +213,8 @@ export class MapApplication {
     if (this.destroyed) {
       return;
     }
-
     this.cancelPendingRequests('Map application destroyed');
+    this.layers.clear();
     await this.mapEngine.destroy();
     await this.host.destroy();
     this.destroyed = true;
@@ -153,11 +224,9 @@ export class MapApplication {
   async prepareReferencedLayers(mapDocument, signal) {
     const references = [...mapDocument.layers].sort(compareLayerReferences);
     const result = [];
-    // Sequential loading preserves deterministic request/addition order and
-    // avoids overloading a Heurist instance with many simultaneous searches.
+
     for (const reference of references) {
       throwIfAborted(signal);
-
       let mapLayer;
       try {
         mapLayer = await this.providers.mapLayer.getById(reference.recordId, { signal });
@@ -165,66 +234,25 @@ export class MapApplication {
         throw addContext(error, `Cannot load MapLayer record ${reference.recordId}`);
       }
 
-      let runtimeLayer;
       try {
-        runtimeLayer = await this.createRuntimeLayer(mapLayer, reference, signal);
+        result.push(await this.createRuntimeLayer(mapLayer, reference, signal));
       } catch (error) {
         throw addContext(error, `Cannot prepare MapLayer record ${reference.recordId}`);
       }
-
-      result.push(runtimeLayer);
     }
-
     return result;
   }
 
   async createRuntimeLayer(mapLayer, reference, signal) {
-    const source = mapLayer.source;
-    let geoJson;
-console.log('createRuntimeLayer', mapLayer, reference, source);
-    switch (source.type) {
-      case 'heurist-query':
-        geoJson = await this.providers.queryGeoData.searchAll({
-          query: source.query,
-          limit: source.limit || 1000,
-          simplify: source.simplify === true,
-          signal
-        });
-        break;
-
-      case 'record':
-        geoJson = await this.providers.queryGeoData.getRecord(
-          source.recordId,
-          { simplify: source.simplify === true, signal }
-        );
-        break;
-
-      case 'inline-geojson':
-        geoJson = source.data;
-        break;
-
-      default:
-        throw new Error(
-          `MapLayer source type "${source.type}" is not supported in Phase 2`
-        );
+    if (!this.layerLoaders) {
+      throw new Error('MapLayer loader registry is not configured');
     }
-
-    return {
-      id: mapLayer.id,
-      recordId: mapLayer.id,
-      title: reference.title || mapLayer.title,
-      type: 'geojson',
-      visible: reference.visible !== false && mapLayer.visible !== false,
-      selectable: mapLayer.selectable,
-      data: geoJson,
-      style: mapLayer.style,
-      options: mapLayer.options,
-      source
-    };
+    return this.layerLoaders.load(mapLayer, { reference, signal, application: this });
   }
 
   async replaceMapEnvironment(mapDocument, environment, runtimeLayers) {
     await this.mapEngine.destroy();
+    this.layers.clear();
 
     try {
       await this.initializeMapEngine(environment);
@@ -234,7 +262,11 @@ console.log('createRuntimeLayer', mapLayer, reference, source);
       await this.applyInitialView(environment.initialView);
     } catch (error) {
       await this.mapEngine.destroy();
-      throw error;
+      this.layers.clear();
+      throw addContext(
+        error,
+        'Map data was loaded but the new MapDocument could not be rendered; the map must be reinitialized'
+      );
     }
 
     this.config.mapDocument = normalizeMapDocument(mapDocument);
@@ -252,7 +284,6 @@ console.log('createRuntimeLayer', mapLayer, reference, source);
       baseLayer: environment.baseMap
     });
   }
-
 
   async applyInitialView(initialView) {
     if (initialView.type === 'bounds') {
@@ -287,19 +318,20 @@ function compareLayerReferences(a, b) {
   return orderDifference || Number(a.recordId || a.id) - Number(b.recordId || b.id);
 }
 
+function compareRuntimeLayers(a, b) {
+  return Number(a.order || 0) - Number(b.order || 0)
+    || String(a.id).localeCompare(String(b.id));
+}
+
 function combineAbortSignals(internalSignal, externalSignal) {
-  if (!externalSignal) {
-    return internalSignal;
-  }
+  if (!externalSignal) return internalSignal;
   if (typeof AbortSignal.any === 'function') {
     return AbortSignal.any([internalSignal, externalSignal]);
   }
-
   const controller = new AbortController();
-  const abort = (signal) => {
-    controller.abort(signal.reason || new DOMException('The request was aborted', 'AbortError'));
-  };
-
+  const abort = (signal) => controller.abort(
+    signal.reason || new DOMException('The request was aborted', 'AbortError')
+  );
   for (const signal of [internalSignal, externalSignal]) {
     if (signal.aborted) {
       abort(signal);
@@ -307,7 +339,6 @@ function combineAbortSignals(internalSignal, externalSignal) {
     }
     signal.addEventListener('abort', () => abort(signal), { once: true });
   }
-
   return controller.signal;
 }
 
@@ -324,20 +355,27 @@ function isAbortError(error) {
 }
 
 function addContext(error, context) {
-  if (isAbortError(error)) {
-    return error;
-  }
-
-  const contextualError = new Error(`${context}: ${error?.message || String(error)}`, {
-    cause: error
-  });
+  if (isAbortError(error)) return error;
+  const contextualError = new Error(`${context}: ${error?.message || String(error)}`, { cause: error });
   contextualError.name = error?.name || 'Error';
-
   for (const property of ['status', 'statusText', 'url', 'method', 'code', 'details']) {
-    if (error?.[property] !== undefined) {
-      contextualError[property] = error[property];
-    }
+    if (error?.[property] !== undefined) contextualError[property] = error[property];
   }
-
   return contextualError;
+}
+
+function clonePlain(value) {
+  if (value === undefined) return undefined;
+  return typeof structuredClone === 'function'
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value));
+}
+
+function serializeError(error) {
+  return {
+    name: error?.name || 'Error',
+    message: error?.message || String(error),
+    code: error?.code ?? null,
+    status: error?.status ?? null
+  };
 }

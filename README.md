@@ -262,3 +262,48 @@ dist/
 ```
 
 No native Leaflet map or layer object is exposed through `window.heuristMap`.
+
+## 12. Phase 2.1 and Phase 3A
+
+This revision adds the first stable layer-domain boundary:
+
+- application-level layer registry separate from native Leaflet layers;
+- public `getLayers()`, `getLayer()`, `reloadLayer()`, and `clearLayers()` methods;
+- runtime layer IDs use `reference.id ?? map-layer-{recordId}`;
+- loader registry replaces the MapApplication source-type switch;
+- pure simple-symbol normalization;
+- normalized feature metadata under `feature.properties.heurist`;
+- deterministic client-side feature IDs when external GeoJSON has no ID;
+- basic escaped popups;
+- `remote-geojson` and `tile` source loaders;
+- clear rendering errors after an unrecoverable map replacement failure.
+
+Supported source types are now:
+
+```text
+heurist-query
+record
+inline-geojson
+remote-geojson
+tile
+```
+
+Example layer inspection:
+
+```js
+const layers = window.heuristMap.getLayers();
+const layer = window.heuristMap.getLayer('map-layer-101');
+await window.heuristMap.setLayerVisibility(layer.id, false);
+await window.heuristMap.reloadLayer(layer.id);
+```
+
+For external GeoJSON, IDs are normalized in this order:
+
+1. existing `feature.id`;
+2. `properties.featureId` or `properties.id`;
+3. Heurist record ID plus feature position, as `record-{recordId}-feature-{position}`;
+4. deterministic local ID, as `{layerId}-feature-{position}`.
+
+A future server-side conversion service for SHP and KML should preferably emit a
+stable `feature.id`. The client-side fallback remains useful for arbitrary
+third-party GeoJSON.

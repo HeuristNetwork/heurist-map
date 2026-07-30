@@ -1,6 +1,6 @@
 {
   "name": "heurist-map",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Standalone and embeddable mapping application for Heurist",
   "type": "module",

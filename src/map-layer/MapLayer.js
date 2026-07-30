@@ -1,3 +1,5 @@
+import { normalizeLayerStyle } from '../symbology/normalizeLayerStyle.js';
+
 export const MAP_LAYER_FORMAT = 'heurist-map-layer';
 export const MAP_LAYER_VERSION = 1;
 
@@ -32,12 +34,7 @@ function normalizeSource(value) {
 }
 
 function normalizeStyle(value) {
-  const style = value && typeof value === 'object' ? value : {};
-  return {
-    type: style.type === 'thematic' ? 'thematic' : 'simple',
-    symbol: style.symbol ?? null,
-    thematic: style.thematic ?? null
-  };
+  return normalizeLayerStyle(value);
 }
 
 function normalizeTimeline(value) {
