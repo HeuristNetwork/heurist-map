@@ -153,7 +153,6 @@ export class MapApplication {
   async prepareReferencedLayers(mapDocument, signal) {
     const references = [...mapDocument.layers].sort(compareLayerReferences);
     const result = [];
-
     // Sequential loading preserves deterministic request/addition order and
     // avoids overloading a Heurist instance with many simultaneous searches.
     for (const reference of references) {
@@ -182,7 +181,7 @@ export class MapApplication {
   async createRuntimeLayer(mapLayer, reference, signal) {
     const source = mapLayer.source;
     let geoJson;
-
+console.log('createRuntimeLayer', mapLayer, reference, source);
     switch (source.type) {
       case 'heurist-query':
         geoJson = await this.providers.queryGeoData.searchAll({

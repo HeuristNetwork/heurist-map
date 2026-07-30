@@ -47,8 +47,8 @@
 
       // Phase 2 public API configuration. Replace the database before calling
       // loadMapDocument(). apiBaseUrl may also be a complete absolute URL.
-      apiBaseUrl: '/heurist/api',
-      database: null
+      apiBaseUrl: 'heurist/api',
+      database: 'osmak_mapping'
     };
   </script>
 
@@ -69,7 +69,8 @@
     try {
       const map = await getHeuristMap();
 
-      // Phase 1/standalone inline layer remains available.
+    // Phase 1/standalone inline layer remains available.
+    if(false){
       await map.addLayer({
         id: 'sample-places',
         title: 'Sample places',
@@ -106,9 +107,11 @@
         east: 151.8,
         north: -33.3
       });
-
+    }else{
       // Public API example after setting heuristMapOptions.database:
-      // await map.loadMapDocument(123);
+      await map.loadMapDocument(101);
+    }
+
     } catch (error) {
       console.error('Cannot initialize sample map content', error);
     }

@@ -1,6 +1,17 @@
 import { HeuristApiError } from './HeuristApiError.js';
 
 /**
+ * Invoke the native fetch implementation without losing its required global
+ * receiver in browsers.
+ *
+ * @param {...*} args Arguments passed to fetch.
+ * @returns {Promise<Response>} Fetch response.
+ */
+function defaultFetch(...args) {
+  return globalThis.fetch(...args);
+}
+
+/**
  * Small fetch-based client for the public Heurist API.
  */
 export class HeuristApiClient {
@@ -10,7 +21,7 @@ export class HeuristApiClient {
     database,
     accessToken = null,
     headers = {},
-    fetchImpl = globalThis.fetch
+    fetchImpl = defaultFetch
   } = {}) {
     if (typeof fetchImpl !== 'function') {
       throw new TypeError('A fetch implementation is required');
