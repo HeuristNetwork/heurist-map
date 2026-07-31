@@ -1,3 +1,15 @@
+/**
+ * normalizeMapSymbol.js - Map symbol normalization
+ *
+ * @fileOverview Applies defaults and validates point, line, and polygon symbol properties used by map engine adapters.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 export const DEFAULT_MAP_SYMBOL = Object.freeze({
   iconType: 'circle',
   iconUrl: null,

@@ -1,8 +1,25 @@
+/**
+ * MapLayer.js - MapLayer domain normalization
+ *
+ * @fileOverview Validates and normalizes public MapLayer responses, source definitions, styles, options, and supported source types.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import { normalizeLayerStyle } from '../symbology/normalizeLayerStyle.js';
 
 export const MAP_LAYER_FORMAT = 'heurist-map-layer';
 export const MAP_LAYER_VERSION = 1;
 
+/**
+ * Normalize map layer.
+ *
+ * @returns {*} Function result.
+ */
 export function normalizeMapLayer(value = {}) {
   const source = value && typeof value === 'object' ? value : {};
 

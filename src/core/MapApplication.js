@@ -1,3 +1,15 @@
+/**
+ * MapApplication.js - Engine-neutral map controller
+ *
+ * @fileOverview Coordinates map initialization, MapDocument loading, layer preparation, rendering, application state, cancellation, and public map operations.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import { normalizeMapDocument } from '../map-document/MapDocument.js';
 import { createMapEnvironment } from '../map-document/createMapEnvironment.js';
 
@@ -5,6 +17,9 @@ import { createMapEnvironment } from '../map-document/createMapEnvironment.js';
  * Engine-neutral application controller.
  */
 export class MapApplication {
+  /**
+   * Create and initialize the class instance.
+   */
   constructor({ container, config, mapEngine, host, providers = {}, layerLoaders }) {
     this.container = container;
     this.config = config;
@@ -19,6 +34,10 @@ export class MapApplication {
     this.activeLoadController = null;
   }
 
+  /**
+   * Initialize the component and its required resources.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async initialize() {
     this.assertActive();
     await this.host.initialize({ application: this, config: this.config });
@@ -35,6 +54,10 @@ export class MapApplication {
     }
   }
 
+  /**
+   * Load, prepare, and render a MapDocument and its ordered MapLayer references.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async loadMapDocument(recordId, { signal } = {}) {
     this.assertActive();
     this.assertDataIntegrationConfigured();
@@ -71,6 +94,10 @@ export class MapApplication {
     }
   }
 
+  /**
+   * Cancel the currently active MapDocument or data-loading request.
+   * @returns {boolean} Operation result.
+   */
   cancelPendingRequests(reason = 'Map request cancelled') {
     if (!this.activeLoadController) {
       return false;
@@ -80,6 +107,10 @@ export class MapApplication {
     return true;
   }
 
+  /**
+   * Add an engine-neutral runtime layer and register its application state.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async addLayer(definition) {
     this.assertActive();
     const normalized = clonePlain(definition);
@@ -115,6 +146,10 @@ export class MapApplication {
     }
   }
 
+  /**
+   * Remove a runtime layer from the map and application registry.
+   * @returns {Promise<boolean>} Resolves with whether a layer was removed.
+   */
   async removeLayer(layerId) {
     this.assertActive();
     const removed = await this.mapEngine.removeLayer(layerId);
@@ -124,6 +159,10 @@ export class MapApplication {
     return removed;
   }
 
+  /**
+   * Show or hide a runtime layer.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async setLayerVisibility(layerId, visible) {
     this.assertActive();
     await this.mapEngine.setLayerVisibility(layerId, visible);
@@ -137,17 +176,29 @@ export class MapApplication {
     });
   }
 
+  /**
+   * Return all registered runtime layers in display order.
+   * @returns {Array<Object>} Cloned runtime layer descriptions.
+   */
   getLayers() {
     return [...this.layers.values()]
       .sort(compareRuntimeLayers)
       .map(clonePlain);
   }
 
+  /**
+   * Return one registered runtime layer by ID.
+   * @returns {?Object} Cloned runtime layer description, or null.
+   */
   getLayer(layerId) {
     const layer = this.layers.get(layerId);
     return layer ? clonePlain(layer) : null;
   }
 
+  /**
+   * Reload a persisted MapLayer record and replace its rendered runtime layer.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async reloadLayer(layerId, { signal } = {}) {
     this.assertDataIntegrationConfigured();
     const current = this.layers.get(layerId);
@@ -166,36 +217,64 @@ export class MapApplication {
     return this.addLayer(runtimeLayer);
   }
 
+  /**
+   * Remove all runtime layers from the application.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async clearLayers() {
     for (const layerId of [...this.layers.keys()]) {
       await this.removeLayer(layerId);
     }
   }
 
+  /**
+   * Set the map center and zoom.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async setView(center, zoom, options = {}) {
     this.assertActive();
     return this.mapEngine.setView(center, zoom, options);
   }
 
+  /**
+   * Fit the map viewport to geographic bounds.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async fitBounds(bounds, options = {}) {
     this.assertActive();
     return this.mapEngine.fitBounds(bounds, options);
   }
 
+  /**
+   * Notify the map engine that its container dimensions changed.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async invalidateSize() {
     this.assertActive();
     return this.mapEngine.invalidateSize();
   }
 
+  /**
+   * Return the current engine-neutral map view state.
+   * @returns {*} Method result.
+   */
   getViewState() {
     this.assertActive();
     return this.mapEngine.getViewState();
   }
 
+  /**
+   * Return the current public MapDocument representation.
+   * @returns {*} Method result.
+   */
   getMapDocument() {
     return clonePlain(this.config.mapDocument);
   }
 
+  /**
+   * Return supported application or map-engine capabilities.
+   * @returns {*} Method result.
+   */
   getCapabilities() {
     return {
       ...this.mapEngine.getCapabilities(),
@@ -209,6 +288,10 @@ export class MapApplication {
     };
   }
 
+  /**
+   * Release resources, handlers, requests, layers, and host integrations.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async destroy() {
     if (this.destroyed) {
       return;
@@ -221,6 +304,10 @@ export class MapApplication {
     this.initialized = false;
   }
 
+  /**
+   * Prepare referenced layers.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async prepareReferencedLayers(mapDocument, signal) {
     const references = [...mapDocument.layers].sort(compareLayerReferences);
     const result = [];
@@ -243,6 +330,10 @@ export class MapApplication {
     return result;
   }
 
+  /**
+   * Create runtime layer.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async createRuntimeLayer(mapLayer, reference, signal) {
     if (!this.layerLoaders) {
       throw new Error('MapLayer loader registry is not configured');
@@ -250,6 +341,10 @@ export class MapApplication {
     return this.layerLoaders.load(mapLayer, { reference, signal, application: this });
   }
 
+  /**
+   * Replace map environment.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async replaceMapEnvironment(mapDocument, environment, runtimeLayers) {
     await this.mapEngine.destroy();
     this.layers.clear();
@@ -274,6 +369,10 @@ export class MapApplication {
     this.initialized = true;
   }
 
+  /**
+   * Initialize map engine.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async initializeMapEngine(environment) {
     const initialView = environment.initialView;
     await this.mapEngine.initialize(this.container, {
@@ -285,12 +384,20 @@ export class MapApplication {
     });
   }
 
+  /**
+   * Apply initial view.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async applyInitialView(initialView) {
     if (initialView.type === 'bounds') {
       await this.fitBounds(initialView.bounds, { animate: false });
     }
   }
 
+  /**
+   * Assert data integration configured.
+   * @returns {*} Method result.
+   */
   assertDataIntegrationConfigured() {
     if (!this.providers.mapDocument || !this.providers.mapLayer || !this.providers.queryGeoData) {
       throw new Error('Heurist public API providers are not configured');
@@ -302,10 +409,18 @@ export class MapApplication {
     }
   }
 
+  /**
+   * Dispatch.
+   * @returns {*} Method result.
+   */
   dispatch(name, detail) {
     this.container.dispatchEvent(new CustomEvent(name, { detail }));
   }
 
+  /**
+   * Assert active.
+   * @returns {*} Method result.
+   */
   assertActive() {
     if (this.destroyed) {
       throw new Error('The map application has been destroyed');

@@ -1,3 +1,15 @@
+/**
+ * RemoteGeoJsonLayerLoader.js - Remote GeoJSON layer loader
+ *
+ * @fileOverview Fetches external GeoJSON resources, validates them, and produces normalized engine-neutral runtime layers.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import { HeuristApiError } from '../../data/HeuristApiError.js';
 import { createGeoJsonRuntimeLayer } from './GeoJsonLayerLoader.js';
 
@@ -5,11 +17,21 @@ function defaultFetch(...args) {
   return globalThis.fetch(...args);
 }
 
+/**
+ * Loads external GeoJSON MapLayers through fetch.
+ */
 export class RemoteGeoJsonLayerLoader {
+  /**
+   * Create and initialize the class instance.
+   */
   constructor({ fetchImpl = defaultFetch } = {}) {
     this.fetchImpl = fetchImpl;
   }
 
+  /**
+   * Load a MapLayer using the loader registered for its source type.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async load(mapLayer, context) {
     const source = mapLayer.source;
     if (!source.url) {

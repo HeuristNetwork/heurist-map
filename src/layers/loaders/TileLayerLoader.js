@@ -1,4 +1,20 @@
+/**
+ * TileLayerLoader.js - Tile layer loader
+ *
+ * @fileOverview Converts public tile MapLayer definitions into engine-neutral runtime tile layers.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 export class TileLayerLoader {
+  /**
+   * Load a MapLayer using the loader registered for its source type.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async load(mapLayer, context) {
     const source = mapLayer.source;
     if (!source.url) {

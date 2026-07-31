@@ -1,3 +1,15 @@
+/**
+ * MapLayerProvider.js - MapLayer data provider
+ *
+ * @fileOverview Loads and validates public MapLayer API responses and converts them to the application domain format.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import {
   MAP_LAYER_FORMAT,
   MAP_LAYER_VERSION,
@@ -5,11 +17,21 @@ import {
 } from '../map-layer/MapLayer.js';
 import { HeuristApiError } from './HeuristApiError.js';
 
+/**
+ * Loads and validates MapLayer records through the public Heurist API.
+ */
 export class MapLayerProvider {
+  /**
+   * Create and initialize the class instance.
+   */
   constructor({ apiClient }) {
     this.apiClient = apiClient;
   }
 
+  /**
+   * Load and validate a public API entity by record ID.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async getById(recordId, { signal } = {}) {
     const id = requireRecordId(recordId);
     const response = await this.apiClient.get(`/map/layer/${id}`, { signal });

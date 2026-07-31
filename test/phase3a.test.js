@@ -1,3 +1,15 @@
+/**
+ * phase3a.test.js - Phase 3A automated tests
+ *
+ * @fileOverview Tests symbol normalization, feature metadata normalization, generated IDs, and layer loader registry behavior.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeMapSymbol } from '../src/symbology/normalizeMapSymbol.js';

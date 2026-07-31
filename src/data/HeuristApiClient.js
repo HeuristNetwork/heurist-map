@@ -1,3 +1,15 @@
+/**
+ * HeuristApiClient.js - Heurist public API client
+ *
+ * @fileOverview Provides request construction, authentication headers, cancellation, JSON parsing, and consistent errors for the public Heurist API.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import { HeuristApiError } from './HeuristApiError.js';
 
 /**
@@ -15,6 +27,9 @@ function defaultFetch(...args) {
  * Small fetch-based client for the public Heurist API.
  */
 export class HeuristApiClient {
+  /**
+   * Create and initialize the class instance.
+   */
   constructor({
     apiBaseUrl,
     serverUrl,
@@ -34,18 +49,34 @@ export class HeuristApiClient {
     this.fetchImpl = fetchImpl;
   }
 
+  /**
+   * Return whether the API client has the required base URL and database.
+   * @returns {boolean} Operation result.
+   */
   isConfigured() {
     return Boolean(this.apiBaseUrl && this.database);
   }
 
+  /**
+   * Send a GET request to the public Heurist API.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async get(path, { query, signal, headers } = {}) {
     return this.request(path, { method: 'GET', query, signal, headers });
   }
 
+  /**
+   * Send a POST request to the public Heurist API.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async post(path, { body, signal, headers } = {}) {
     return this.request(path, { method: 'POST', body, signal, headers });
   }
 
+  /**
+   * Send a public Heurist API request and parse its JSON response.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async request(path, {
     method = 'GET',
     query = null,
@@ -107,6 +138,10 @@ export class HeuristApiClient {
     return payload;
   }
 
+  /**
+   * Build an absolute API URL for the configured database.
+   * @returns {*} Method result.
+   */
   buildUrl(path, query = null) {
     const normalizedPath = String(path || '').startsWith('/')
       ? String(path)
@@ -129,6 +164,10 @@ export class HeuristApiClient {
     return url.toString();
   }
 
+  /**
+   * Throw when required API configuration is missing.
+   * @returns {*} Method result.
+   */
   assertConfigured() {
     if (!this.apiBaseUrl) {
       throw new HeuristApiError(

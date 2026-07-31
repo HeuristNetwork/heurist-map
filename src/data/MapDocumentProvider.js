@@ -1,3 +1,15 @@
+/**
+ * MapDocumentProvider.js - MapDocument data provider
+ *
+ * @fileOverview Loads and validates public MapDocument API responses and converts them to the application domain format.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import {
   MAP_DOCUMENT_FORMAT,
   MAP_DOCUMENT_VERSION,
@@ -5,11 +17,21 @@ import {
 } from '../map-document/MapDocument.js';
 import { HeuristApiError } from './HeuristApiError.js';
 
+/**
+ * Loads and validates MapDocument records through the public Heurist API.
+ */
 export class MapDocumentProvider {
+  /**
+   * Create and initialize the class instance.
+   */
   constructor({ apiClient }) {
     this.apiClient = apiClient;
   }
 
+  /**
+   * Load and validate a public API entity by record ID.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async getById(recordId, { signal } = {}) {
     const id = requireRecordId(recordId, 'MapDocument');
     const response = await this.apiClient.get(`/map/document/${id}`, { signal });

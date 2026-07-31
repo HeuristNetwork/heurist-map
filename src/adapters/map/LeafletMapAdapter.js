@@ -1,3 +1,15 @@
+/**
+ * LeafletMapAdapter.js - Leaflet map engine adapter
+ *
+ * @fileOverview Implements the engine-neutral map contract with Leaflet while keeping Leaflet objects private to the adapter.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import L from 'leaflet';
 import { MapEngineAdapter } from './MapEngineAdapter.js';
 
@@ -5,12 +17,19 @@ import { MapEngineAdapter } from './MapEngineAdapter.js';
  * Leaflet implementation hidden behind the engine-neutral adapter contract.
  */
 export class LeafletMapAdapter extends MapEngineAdapter {
+  /**
+   * Create and initialize the class instance.
+   */
   constructor() {
     super();
     this.map = null;
     this.layers = new Map();
   }
 
+  /**
+   * Initialize the component and its required resources.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async initialize(container, options) {
     this.map = L.map(container, {
       zoomControl: options.controls?.zoom !== false,
@@ -33,6 +52,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     }
   }
 
+  /**
+   * Add an engine-neutral runtime layer and register its application state.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async addLayer(definition) {
     this.assertInitialized();
     validateLayerDefinition(definition);
@@ -51,6 +74,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     }
   }
 
+  /**
+   * Remove a runtime layer from the map and application registry.
+   * @returns {Promise<boolean>} Resolves with whether a layer was removed.
+   */
   async removeLayer(layerId) {
     const entry = this.layers.get(layerId);
     if (!entry) {
@@ -62,6 +89,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     return true;
   }
 
+  /**
+   * Show or hide a runtime layer.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async setLayerVisibility(layerId, visible) {
     const entry = this.getLayerEntry(layerId);
 
@@ -74,11 +105,19 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     entry.visible = Boolean(visible);
   }
 
+  /**
+   * Set the map center and zoom.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async setView(center, zoom, options = {}) {
     const point = normalizeCenter(center);
     this.map.setView([point.latitude, point.longitude], zoom, options);
   }
 
+  /**
+   * Fit the map viewport to geographic bounds.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async fitBounds(bounds, options = {}) {
     const normalized = normalizeBounds(bounds);
     this.map.fitBounds(
@@ -90,10 +129,18 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     );
   }
 
+  /**
+   * Notify the map engine that its container dimensions changed.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async invalidateSize() {
     this.map.invalidateSize();
   }
 
+  /**
+   * Return the current engine-neutral map view state.
+   * @returns {*} Method result.
+   */
   getViewState() {
     this.assertInitialized();
     const center = this.map.getCenter();
@@ -114,6 +161,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     };
   }
 
+  /**
+   * Return supported application or map-engine capabilities.
+   * @returns {*} Method result.
+   */
   getCapabilities() {
     return {
       engine: 'leaflet',
@@ -126,6 +177,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     };
   }
 
+  /**
+   * Release resources, handlers, requests, layers, and host integrations.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async destroy() {
     if (!this.map) {
       return;
@@ -141,6 +196,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     map.remove();
   }
 
+  /**
+   * Create and register a Leaflet GeoJSON layer.
+   * @returns {*} Method result.
+   */
   addGeoJsonLayer(definition) {
     const symbol = definition.style?.symbol ?? {};
     const pathStyle = compactOptions({
@@ -169,6 +228,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     return this.registerLayer(definition, layer);
   }
 
+  /**
+   * Create and register a Leaflet tile layer.
+   * @returns {*} Method result.
+   */
   addTileLayer(definition) {
     if (!definition.url) {
       throw new TypeError(
@@ -191,6 +254,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     return this.registerLayer(definition, layer);
   }
 
+  /**
+   * Register a native Leaflet layer and optionally add it to the map.
+   * @returns {*} Method result.
+   */
   registerLayer(definition, layer) {
     const visible = definition.visible !== false;
     const entry = { definition, layer, visible };
@@ -207,6 +274,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     };
   }
 
+  /**
+   * Return a native Leaflet layer registry entry.
+   * @returns {*} Method result.
+   */
   getLayerEntry(layerId) {
     const entry = this.layers.get(layerId);
     if (!entry) {
@@ -215,6 +286,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     return entry;
   }
 
+  /**
+   * Throw when the map engine has not been initialized.
+   * @returns {*} Method result.
+   */
   assertInitialized() {
     if (!this.map) {
       throw new Error('Leaflet map is not initialized');

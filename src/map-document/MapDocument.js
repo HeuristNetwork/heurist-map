@@ -1,3 +1,15 @@
+/**
+ * MapDocument.js - MapDocument domain normalization
+ *
+ * @fileOverview Validates and normalizes public MapDocument responses while preserving the engine-neutral API representation.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 export const MAP_DOCUMENT_FORMAT = 'heurist-map-document';
 export const MAP_DOCUMENT_VERSION = 1;
 
@@ -48,6 +60,11 @@ export function normalizeMapDocument(value = {}) {
   };
 }
 
+/**
+ * Normalize map bookmark.
+ *
+ * @returns {*} Function result.
+ */
 export function normalizeMapBookmark(value) {
   if (typeof value === 'string') {
     return parseLegacyBookmark(value);

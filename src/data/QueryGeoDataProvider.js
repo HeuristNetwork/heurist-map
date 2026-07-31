@@ -1,3 +1,15 @@
+/**
+ * QueryGeoDataProvider.js - GeoJSON data provider
+ *
+ * @fileOverview Loads record and query GeoJSON from the public map API, including paging, POST fallback, validation, and cancellation.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import { HeuristApiError } from './HeuristApiError.js';
 
 const DEFAULT_LIMIT = 1000;
@@ -7,10 +19,17 @@ const MAX_LIMIT = 1000;
  * Loads GeoJSON from the public /map endpoints.
  */
 export class QueryGeoDataProvider {
+  /**
+   * Create and initialize the class instance.
+   */
   constructor({ apiClient }) {
     this.apiClient = apiClient;
   }
 
+  /**
+   * Load GeoJSON for one Heurist record.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async getRecord(recordId, { simplify = false, signal } = {}) {
     const id = requireRecordId(recordId);
     const response = await this.apiClient.get(`/map/${id}`, {
@@ -20,6 +39,10 @@ export class QueryGeoDataProvider {
     return validateGeoJsonResponse(response);
   }
 
+  /**
+   * Load one page of GeoJSON for a Heurist query.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async search({
     query,
     limit = DEFAULT_LIMIT,
@@ -37,7 +60,6 @@ export class QueryGeoDataProvider {
     const usePost = method === 'post'
       || (method === 'auto' && shouldUsePost(query));
 
-console.log('QueryGeoDataProvider.search', { query, usePost });
 
     const response = usePost
       ? await this.apiClient.post('/map', {

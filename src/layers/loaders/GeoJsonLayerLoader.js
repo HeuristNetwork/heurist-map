@@ -1,10 +1,32 @@
+/**
+ * GeoJsonLayerLoader.js - Heurist GeoJSON layer loader
+ *
+ * @fileOverview Loads query, record, or inline GeoJSON sources and produces normalized engine-neutral runtime layers.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import { normalizeGeoJson } from '../../metadata/normalizeGeoJson.js';
 
+/**
+ * Loads Heurist query, record, and inline GeoJSON MapLayers.
+ */
 export class GeoJsonLayerLoader {
+  /**
+   * Create and initialize the class instance.
+   */
   constructor({ queryGeoData }) {
     this.queryGeoData = queryGeoData;
   }
 
+  /**
+   * Load a MapLayer using the loader registered for its source type.
+   * @returns {Promise<*>} Resolves when the operation completes.
+   */
   async load(mapLayer, context) {
     const source = mapLayer.source;
     let geoJson;
@@ -35,6 +57,11 @@ export class GeoJsonLayerLoader {
   }
 }
 
+/**
+ * Create geo json runtime layer.
+ *
+ * @returns {*} Function result.
+ */
 export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson) {
   const id = context.reference.id ?? `map-layer-${context.reference.recordId}`;
   return {

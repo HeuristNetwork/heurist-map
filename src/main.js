@@ -1,4 +1,16 @@
 /**
+ * main.js - Application entry point
+ *
+ * @fileOverview Starts the standalone mapping application, exposes its public API, and handles startup and hot-module cleanup.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
+/**
  * @file main.js
  * @brief Entry point for the standalone Heurist Map application.
  *

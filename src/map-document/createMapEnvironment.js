@@ -1,3 +1,15 @@
+/**
+ * createMapEnvironment.js - Map environment builder
+ *
+ * @fileOverview Converts a normalized MapDocument into the private runtime environment used to initialize the map engine.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 const BASE_MAP_REGISTRY = Object.freeze({
   OpenStreetMap: Object.freeze({
     id: '__base__',

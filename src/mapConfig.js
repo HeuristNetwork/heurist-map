@@ -1,3 +1,15 @@
+/**
+ * mapConfig.js - Runtime configuration normalization
+ *
+ * @fileOverview Reads browser configuration, validates runtime options, and produces the normalized application configuration.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import { normalizeMapDocument } from './map-document/MapDocument.js';
 
 /**

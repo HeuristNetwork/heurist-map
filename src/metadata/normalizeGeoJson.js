@@ -1,4 +1,16 @@
 /**
+ * normalizeGeoJson.js - GeoJSON metadata normalization
+ *
+ * @fileOverview Normalizes FeatureCollections and adds stable feature, record, layer, title, and source metadata for later interaction.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
+/**
  * Normalize GeoJSON feature metadata for record-backed and external datasets.
  * Existing feature IDs are preserved. Missing IDs receive a deterministic ID
  * based on the layer ID and feature position.

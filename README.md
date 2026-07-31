@@ -307,3 +307,8 @@ For external GeoJSON, IDs are normalized in this order:
 A future server-side conversion service for SHP and KML should preferably emit a
 stable `feature.id`. The client-side fallback remains useful for arbitrary
 third-party GeoJSON.
+
+
+## Architecture documentation
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the initialization workflow, class hierarchy, and current architectural boundaries.

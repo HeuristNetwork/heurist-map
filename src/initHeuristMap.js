@@ -1,3 +1,15 @@
+/**
+ * initHeuristMap.js - Mapping application initializer
+ *
+ * @fileOverview Creates the map engine, host adapter, API providers, layer loaders, application controller, and stable public API.
+ * @project     Heurist mapping application
+ *
+ * @link        https://HeuristNetwork.org
+ * @copyright   (C) 2026 Heurist Network
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ * @author      Artem Osmakov <osmakov@gmail.com>
+ */
+
 import { MapApplication } from './core/MapApplication.js';
 import { createMapEngine } from './adapters/map/createMapEngine.js';
 import { createHostAdapter } from './host/createHostAdapter.js';
