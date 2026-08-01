@@ -1,7 +1,7 @@
 /**
  * createLayerLoaderRegistry.js - Layer loader registry factory
  *
- * @fileOverview Creates the default loader registry for query, record, inline, remote GeoJSON, and tile sources.
+ * @fileOverview Creates the default loader registry for query, record, inline, remote GeoJSON, tile, and image sources.
  * @project     Heurist mapping application
  *
  * @link        https://HeuristNetwork.org
@@ -14,6 +14,7 @@ import { LayerLoaderRegistry } from './LayerLoaderRegistry.js';
 import { GeoJsonLayerLoader } from './loaders/GeoJsonLayerLoader.js';
 import { RemoteGeoJsonLayerLoader } from './loaders/RemoteGeoJsonLayerLoader.js';
 import { TileLayerLoader } from './loaders/TileLayerLoader.js';
+import { ImageLayerLoader } from './loaders/ImageLayerLoader.js';
 
 /**
  * Create layer loader registry.
@@ -28,6 +29,7 @@ export function createLayerLoaderRegistry({ queryGeoData, fetchImpl } = {}) {
       new GeoJsonLayerLoader({ queryGeoData })
     )
     .register('remote-geojson', new RemoteGeoJsonLayerLoader({ fetchImpl }))
-    .register(['tile', 'tiled-image', 'tiledImage'], new TileLayerLoader());
+    .register('tile', new TileLayerLoader())
+    .register('image', new ImageLayerLoader());
   return registry;
 }

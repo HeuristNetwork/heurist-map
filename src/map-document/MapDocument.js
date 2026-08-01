@@ -10,8 +10,6 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { normalizeBounds } from '../geo/normalizeBounds.js';
-
 export const MAP_DOCUMENT_FORMAT = 'heurist-map-document';
 export const MAP_DOCUMENT_VERSION = 1;
 
@@ -39,7 +37,7 @@ export function normalizeMapDocument(value = {}) {
     mapBookmark: normalizeMapBookmark(
       source.mapBookmark ?? source.bookmark ?? source.DT_MAP_BOOKMARK
     ),
-    bounds: normalizeBounds(source.bounds ?? source.geoObject ?? source.DT_GEO_OBJECT),
+    bounds: source.bounds ?? source.DT_GEO_OBJECT ?? null,
     symbology: source.symbology ?? source.DT_SYMBOLOGY ?? null,
     minimumZoom: finiteNumberOrNull(
       source.minimumZoom ?? source.minZoom ?? source.DT_MINIMUM_ZOOM
@@ -233,6 +231,15 @@ function normalizeCenter(value) {
     : null;
 }
 
+function normalizeBounds(value) {
+  const west = Number(value?.west);
+  const south = Number(value?.south);
+  const east = Number(value?.east);
+  const north = Number(value?.north);
+  return [west, south, east, north].every(Number.isFinite)
+    ? { west, south, east, north }
+    : null;
+}
 
 function finiteNumberOrNull(value) {
   if (value === null || value === undefined || value === '') {

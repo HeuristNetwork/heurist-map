@@ -11,8 +11,8 @@
  */
 
 import L from 'leaflet';
-import { normalizeBounds as normalizeGeographicBounds } from '../../geo/normalizeBounds.js';
 import { MapEngineAdapter } from './MapEngineAdapter.js';
+import { createImageFilterCss } from '../../symbology/normalizeImageFilter.js';
 
 /**
  * Leaflet implementation hidden behind the engine-neutral adapter contract.
@@ -70,6 +70,8 @@ export class LeafletMapAdapter extends MapEngineAdapter {
         return this.addGeoJsonLayer(definition);
       case 'tile':
         return this.addTileLayer(definition);
+      case 'image':
+        return this.addImageLayer(definition);
       default:
         throw new Error(`Unsupported Leaflet layer type: ${definition.type}`);
     }
@@ -171,7 +173,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       engine: 'leaflet',
       geojson: true,
       tileLayers: true,
-      imageOverlays: false,
+      imageOverlays: true,
       customCrs: false,
       drawing: false,
       markerClustering: false
@@ -250,14 +252,57 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       minZoom: definition.minZoom,
       maxZoom: definition.maxZoom,
       subdomains: definition.subdomains,
-      tms: definition.tms,
-      bounds: toLeafletBounds(definition.bounds),
-      noWrap: definition.noWrap,
-      opacity: definition.opacity
+      tms: definition.tms
+      /*
+      bounds: definition.bounds,
+      noWrap: true,
+      opacity: 0.80,
+      keepBuffer: 0
+      */
     });
 
     const layer = L.tileLayer(definition.url, options);
     return this.registerLayer(definition, layer);
+  }
+
+  /**
+   * Create and register a Leaflet image overlay.
+   *
+   * @param {Object} definition Engine-neutral runtime image layer.
+   * @returns {Object} Public native-layer registration result.
+   */
+  addImageLayer(definition) {
+    if (!definition.url) {
+      throw new TypeError(`Image layer "${definition.id}" requires a URL`);
+    }
+
+    const bounds = normalizeBounds(definition.bounds);
+    const leafletBounds = [
+      [bounds.south, bounds.west],
+      [bounds.north, bounds.east]
+    ];
+
+    const options = compactOptions({
+      ...definition.options,
+      opacity: definition.opacity,
+      interactive: false,
+      className: `heurist-map-image-layer heurist-map-image-layer-${sanitizeClassToken(definition.id)}`
+    });
+
+    const layer = L.imageOverlay(definition.url, leafletBounds, options);
+    const filterCss = createImageFilterCss(definition.imageFilter);
+
+    const applyFilter = () => {
+      const image = layer.getElement();
+      if (image) {
+        image.style.filter = filterCss;
+      }
+    };
+
+    layer.on('load', applyFilter);
+    const result = this.registerLayer(definition, layer);
+    applyFilter();
+    return result;
   }
 
   /**
@@ -327,21 +372,16 @@ function normalizeCenter(center) {
 }
 
 function normalizeBounds(bounds) {
-  const normalized = normalizeGeographicBounds(bounds);
-  if (!normalized) {
+  const west = Number(bounds?.west);
+  const south = Number(bounds?.south);
+  const east = Number(bounds?.east);
+  const north = Number(bounds?.north);
+
+  if (![west, south, east, north].every(Number.isFinite)) {
     throw new TypeError('Invalid map bounds');
   }
-  return normalized;
-}
 
-function toLeafletBounds(bounds) {
-  const normalized = normalizeGeographicBounds(bounds);
-  return normalized
-    ? [
-        [normalized.south, normalized.west],
-        [normalized.north, normalized.east]
-      ]
-    : undefined;
+  return { west, south, east, north };
 }
 
 
@@ -464,6 +504,11 @@ function createIconType(latlng, symbol) {
     });
 
     return L.marker(latlng, { icon });
+}
+
+
+function sanitizeClassToken(value) {
+  return String(value).replace(/[^A-Za-z0-9_-]/g, '-');
 }
 
 function createPopupHtml(feature, popup) {

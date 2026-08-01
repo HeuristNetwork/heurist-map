@@ -50,6 +50,14 @@ export function normalizeMapSymbol(value = {}, defaults = DEFAULT_MAP_SYMBOL) {
     fill: booleanValue(symbol.fill, defaults.fill),
     stroke: booleanValue(symbol.stroke, defaults.stroke),
     dashArray: nonEmptyStringOrNull(symbol.dashArray ?? defaults.dashArray),
+    blur: nonEmptyStringOrNull(symbol.blur),
+    brightness: nonEmptyStringOrNull(symbol.brightness),
+    contrast: nonEmptyStringOrNull(symbol.contrast),
+    grayscale: nonEmptyStringOrNull(symbol.grayscale),
+    'hue-rotate': nonEmptyStringOrNull(symbol['hue-rotate'] ?? symbol.hueRotate),
+    invert: nonEmptyStringOrNull(symbol.invert),
+    saturate: nonEmptyStringOrNull(symbol.saturate),
+    sepia: nonEmptyStringOrNull(symbol.sepia),
   };
 }
 

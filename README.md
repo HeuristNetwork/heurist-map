@@ -312,3 +312,36 @@ third-party GeoJSON.
 ## Architecture documentation
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the initialization workflow, class hierarchy, and current architectural boundaries.
+
+### Static image layers
+
+A MapLayer with `source.type: "image"` is rendered as a georeferenced Leaflet
+image overlay. The API should return an absolute image URL and geographic bounds.
+
+```json
+{
+  "source": {
+    "type": "image",
+    "url": "https://example.org/heurist/?fullres=1&db=my_database&file=12",
+    "bounds": {
+      "minx": 151.11488376,
+      "miny": -33.93908829,
+      "maxx": 151.3212204,
+      "maxy": -33.74375321
+    }
+  },
+  "style": {
+    "type": "simple",
+    "symbol": {
+      "opacity": 75,
+      "blur": "10px",
+      "brightness": "3",
+      "contrast": "3"
+    }
+  }
+}
+```
+
+`opacity` accepts either `0-1` values or percentages from `0-100`. Image filter
+properties remain in `style.symbol`. Supported filters are `blur`, `brightness`,
+`contrast`, `grayscale`, `hue-rotate`, `invert`, `saturate`, and `sepia`.

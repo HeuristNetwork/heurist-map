@@ -35,9 +35,6 @@ export class TileLayerLoader {
       minZoom: source.minZoom,
       maxZoom: source.maxZoom,
       subdomains: source.subdomains,
-      bounds: source.bounds,
-      opacity: source.opacity ?? mapLayer.options?.opacity,
-      noWrap: source.noWrap ?? Boolean(source.bounds),
       options: {
         ...(mapLayer.options || {}),
         ...(source.options || {})

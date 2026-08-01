@@ -45,3 +45,81 @@ test('layer loader registry rejects unknown source types', async () => {
     /not supported/
   );
 });
+
+import { ImageLayerLoader } from '../src/layers/loaders/ImageLayerLoader.js';
+import {
+  createImageFilterCss,
+  normalizeImageFilter,
+  normalizeOpacity
+} from '../src/symbology/normalizeImageFilter.js';
+
+test('normalizes image opacity from fractions and percentages', () => {
+  assert.equal(normalizeOpacity(0.65), 0.65);
+  assert.equal(normalizeOpacity('65'), 0.65);
+  assert.equal(normalizeOpacity(100), 1);
+  assert.equal(normalizeOpacity(0), 0);
+});
+
+test('normalizes image filters and supplies missing CSS units', () => {
+  const filter = normalizeImageFilter({
+    blur: 10,
+    brightness: '3',
+    opacity: 75,
+    'hue-rotate': 360,
+    unsupported: 'ignored'
+  });
+
+  assert.deepEqual(filter, {
+    blur: '10px',
+    brightness: '3',
+    'hue-rotate': '360deg'
+  });
+  assert.equal(
+    createImageFilterCss(filter),
+    'blur(10px) brightness(3) hue-rotate(360deg)'
+  );
+});
+
+test('loads an image source as an engine-neutral runtime layer', async () => {
+  const loader = new ImageLayerLoader();
+  const runtime = await loader.load({
+    id: 501,
+    title: 'Sydney Satellite',
+    description: '',
+    visible: true,
+    source: {
+      type: 'image',
+      url: 'https://example.test/image.jpg',
+      bounds: {
+        minx: 151.11488376,
+        miny: -33.93908829,
+        maxx: 151.3212204,
+        maxy: -33.74375321
+      }
+    },
+    style: {
+      symbol: {
+        opacity: 75,
+        blur: '10px',
+        contrast: '3'
+      }
+    },
+    options: {}
+  }, {
+    reference: { recordId: 501, order: 2 }
+  });
+
+  assert.equal(runtime.id, 'map-layer-501');
+  assert.equal(runtime.type, 'image');
+  assert.equal(runtime.opacity, 0.75);
+  assert.deepEqual(runtime.bounds, {
+    west: 151.11488376,
+    south: -33.93908829,
+    east: 151.3212204,
+    north: -33.74375321
+  });
+  assert.deepEqual(runtime.imageFilter, {
+    blur: '10px',
+    contrast: '3'
+  });
+});
