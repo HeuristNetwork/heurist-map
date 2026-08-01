@@ -15,6 +15,10 @@ import assert from 'node:assert/strict';
 import { normalizeMapSymbol } from '../src/symbology/normalizeMapSymbol.js';
 import { normalizeGeoJson } from '../src/metadata/normalizeGeoJson.js';
 import { LayerLoaderRegistry } from '../src/layers/LayerLoaderRegistry.js';
+import { normalizeMapLayer } from '../src/map-layer/MapLayer.js';
+import { TileLayerLoader } from '../src/layers/loaders/TileLayerLoader.js';
+import { ImageLayerLoader } from '../src/layers/loaders/ImageLayerLoader.js';
+import { createImageFilterCss, normalizeImageFilter, normalizeOpacity } from '../src/symbology/normalizeImageFilter.js';
 
 test('normalizes simple symbol defaults', () => {
   const symbol = normalizeMapSymbol({ color: '#000', opacity: 2, radius: -1 });
@@ -46,12 +50,28 @@ test('layer loader registry rejects unknown source types', async () => {
   );
 });
 
-import { ImageLayerLoader } from '../src/layers/loaders/ImageLayerLoader.js';
-import {
-  createImageFilterCss,
-  normalizeImageFilter,
-  normalizeOpacity
-} from '../src/symbology/normalizeImageFilter.js';
+
+test('normalizes and propagates tiled-image bounds', async () => {
+  const layer = normalizeMapLayer({
+    id: 50,
+    title: 'Tiled image',
+    source: {
+      type: 'tiled-image',
+      url: '/tiles/{z}/{x}/{y}.png',
+      bounds: { minx: 10, miny: 20, maxx: 30, maxy: 40 }
+    }
+  });
+
+  assert.deepEqual(layer.source.bounds, { west: 10, south: 20, east: 30, north: 40 });
+
+  const runtime = await new TileLayerLoader().load(layer, {
+    reference: { id: 'tiled-50', recordId: 50, order: 1 }
+  });
+
+  assert.deepEqual(runtime.bounds, { west: 10, south: 20, east: 30, north: 40 });
+  assert.equal(runtime.noWrap, true);
+});
+
 
 test('normalizes image opacity from fractions and percentages', () => {
   assert.equal(normalizeOpacity(0.65), 0.65);
@@ -74,15 +94,11 @@ test('normalizes image filters and supplies missing CSS units', () => {
     brightness: '3',
     'hue-rotate': '360deg'
   });
-  assert.equal(
-    createImageFilterCss(filter),
-    'blur(10px) brightness(3) hue-rotate(360deg)'
-  );
+  assert.equal(createImageFilterCss(filter), 'blur(10px) brightness(3) hue-rotate(360deg)');
 });
 
 test('loads an image source as an engine-neutral runtime layer', async () => {
-  const loader = new ImageLayerLoader();
-  const runtime = await loader.load({
+  const runtime = await new ImageLayerLoader().load({
     id: 501,
     title: 'Sydney Satellite',
     description: '',
@@ -90,36 +106,15 @@ test('loads an image source as an engine-neutral runtime layer', async () => {
     source: {
       type: 'image',
       url: 'https://example.test/image.jpg',
-      bounds: {
-        minx: 151.11488376,
-        miny: -33.93908829,
-        maxx: 151.3212204,
-        maxy: -33.74375321
-      }
+      bounds: { minx: 151.11488376, miny: -33.93908829, maxx: 151.3212204, maxy: -33.74375321 }
     },
-    style: {
-      symbol: {
-        opacity: 75,
-        blur: '10px',
-        contrast: '3'
-      }
-    },
+    style: { symbol: { opacity: 75, blur: '10px', contrast: '3' } },
     options: {}
-  }, {
-    reference: { recordId: 501, order: 2 }
-  });
+  }, { reference: { recordId: 501, order: 2 } });
 
   assert.equal(runtime.id, 'map-layer-501');
   assert.equal(runtime.type, 'image');
   assert.equal(runtime.opacity, 0.75);
-  assert.deepEqual(runtime.bounds, {
-    west: 151.11488376,
-    south: -33.93908829,
-    east: 151.3212204,
-    north: -33.74375321
-  });
-  assert.deepEqual(runtime.imageFilter, {
-    blur: '10px',
-    contrast: '3'
-  });
+  assert.deepEqual(runtime.bounds, { west: 151.11488376, south: -33.93908829, east: 151.3212204, north: -33.74375321 });
+  assert.deepEqual(runtime.imageFilter, { blur: '10px', contrast: '3' });
 });

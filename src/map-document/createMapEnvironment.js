@@ -30,7 +30,7 @@ const BASE_MAP_REGISTRY = Object.freeze({
  */
 export function createMapEnvironment(mapDocument) {
   return {
-    initialView: createInitialView(mapDocument.mapBookmark),
+    initialView: createInitialView(mapDocument.mapBookmark, mapDocument.bounds),
     crs: {
       code: mapDocument.crs?.code || 'EPSG:3857'
     },
@@ -44,7 +44,7 @@ export function createMapEnvironment(mapDocument) {
   };
 }
 
-function createInitialView(bookmark) {
+function createInitialView(bookmark, documentBounds) {
   if (bookmark?.type === 'extent' && bookmark.bounds) {
     return {
       type: 'bounds',
@@ -65,11 +65,41 @@ function createInitialView(bookmark) {
     };
   }
 
+  // A deliberately supplied view bookmark takes precedence over document
+  // bounds. The synthetic default bookmark (0,0 at zoom 2) does not.
+  if (bookmark?.type === 'view' && !isSyntheticDefaultView(bookmark)) {
+    return {
+      type: 'view',
+      center: bookmark.center,
+      zoom: bookmark.zoom ?? 2
+    };
+  }
+
+  if (documentBounds) {
+    return {
+      type: 'bounds',
+      bounds: documentBounds,
+      center: {
+        latitude: (documentBounds.south + documentBounds.north) / 2,
+        longitude: (documentBounds.west + documentBounds.east) / 2
+      },
+      zoom: 2
+    };
+  }
+
   return {
     type: 'view',
     center: bookmark?.center || { latitude: 0, longitude: 0 },
     zoom: bookmark?.zoom ?? 2
   };
+}
+
+function isSyntheticDefaultView(bookmark) {
+  return bookmark?.type === 'view'
+    && !bookmark.raw
+    && Number(bookmark.center?.latitude) === 0
+    && Number(bookmark.center?.longitude) === 0
+    && Number(bookmark.zoom ?? 2) === 2;
 }
 
 function resolveBaseMap(reference) {

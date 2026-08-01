@@ -1,8 +1,7 @@
 /**
  * normalizeBounds.js - Geographic bounds normalization
  *
- * @fileOverview Converts supported API and runtime bounds representations into
- * the engine-neutral west/south/east/north structure used by map adapters.
+ * @fileOverview Normalizes engine-neutral geographic bounds from either the public Heurist API min/max format or the west/south/east/north client format.
  * @project     Heurist mapping application
  *
  * @link        https://HeuristNetwork.org
@@ -12,43 +11,31 @@
  */
 
 /**
- * Normalize geographic bounds.
+ * Normalize geographic bounds to the canonical client representation.
  *
- * @param {Object|Array|null} value Bounds using minx/miny/maxx/maxy,
- * west/south/east/north, or Leaflet-style corner arrays.
- * @returns {{west:number,south:number,east:number,north:number}|null}
- * Normalized bounds, or null when the value is invalid.
+ * The Heurist API currently returns `{minx, miny, maxx, maxy}` while the
+ * engine-neutral client model uses `{west, south, east, north}`.
+ *
+ * @param {Object|Array|null} value Bounds value to normalize.
+ * @returns {{west:number,south:number,east:number,north:number}|null} Canonical bounds, or null when invalid.
  */
 export function normalizeBounds(value) {
   if (!value) {
     return null;
   }
 
-  let west;
-  let south;
-  let east;
-  let north;
-
-  if (Array.isArray(value) && value.length >= 2) {
-    south = Number(value[0]?.[0]);
-    west = Number(value[0]?.[1]);
-    north = Number(value[1]?.[0]);
-    east = Number(value[1]?.[1]);
-  } else {
-    west = Number(value.west ?? value.minx ?? value.xmin);
-    south = Number(value.south ?? value.miny ?? value.ymin);
-    east = Number(value.east ?? value.maxx ?? value.xmax);
-    north = Number(value.north ?? value.maxy ?? value.ymax);
-  }
+  const west = Number(value.west ?? value.minx ?? value.minX ?? value[0]);
+  const south = Number(value.south ?? value.miny ?? value.minY ?? value[1]);
+  const east = Number(value.east ?? value.maxx ?? value.maxX ?? value[2]);
+  const north = Number(value.north ?? value.maxy ?? value.maxY ?? value[3]);
 
   if (![west, south, east, north].every(Number.isFinite)) {
     return null;
   }
 
-  return {
-    west: Math.min(west, east),
-    south: Math.min(south, north),
-    east: Math.max(west, east),
-    north: Math.max(south, north)
-  };
+  if (south > north || west > east) {
+    return null;
+  }
+
+  return { west, south, east, north };
 }

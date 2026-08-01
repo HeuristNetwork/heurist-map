@@ -313,10 +313,14 @@ third-party GeoJSON.
 
 See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the initialization workflow, class hierarchy, and current architectural boundaries.
 
+### Bounds format
+
+The public API may return bounds as `{minx, miny, maxx, maxy}`. The client normalizes this once to the engine-neutral form `{west, south, east, north}`. MapDocument bounds are used as the initial viewport when no explicit bookmark is supplied. Tile/tiled-image bounds are forwarded to the map adapter to restrict tile loading to the image extent.
+
+
 ### Static image layers
 
-A MapLayer with `source.type: "image"` is rendered as a georeferenced Leaflet
-image overlay. The API should return an absolute image URL and geographic bounds.
+A MapLayer with `source.type: "image"` is rendered as a georeferenced image overlay. The API should preferably return an absolute image URL and geographic bounds.
 
 ```json
 {
@@ -342,6 +346,4 @@ image overlay. The API should return an absolute image URL and geographic bounds
 }
 ```
 
-`opacity` accepts either `0-1` values or percentages from `0-100`. Image filter
-properties remain in `style.symbol`. Supported filters are `blur`, `brightness`,
-`contrast`, `grayscale`, `hue-rotate`, `invert`, `saturate`, and `sepia`.
+`opacity` accepts either `0-1` values or percentages from `0-100`. Image filter properties remain in `style.symbol`. Supported filters are `blur`, `brightness`, `contrast`, `grayscale`, `hue-rotate`, `invert`, `saturate`, and `sepia`.

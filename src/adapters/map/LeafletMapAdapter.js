@@ -11,6 +11,7 @@
  */
 
 import L from 'leaflet';
+import { normalizeBounds as normalizeGeographicBounds } from '../../geo/normalizeBounds.js';
 import { MapEngineAdapter } from './MapEngineAdapter.js';
 import { createImageFilterCss } from '../../symbology/normalizeImageFilter.js';
 
@@ -252,13 +253,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       minZoom: definition.minZoom,
       maxZoom: definition.maxZoom,
       subdomains: definition.subdomains,
-      tms: definition.tms
-      /*
-      bounds: definition.bounds,
-      noWrap: true,
-      opacity: 0.80,
-      keepBuffer: 0
-      */
+      tms: definition.tms,
+      bounds: toLeafletBounds(definition.bounds),
+      noWrap: definition.noWrap,
+      opacity: definition.opacity
     });
 
     const layer = L.tileLayer(definition.url, options);
@@ -276,10 +274,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       throw new TypeError(`Image layer "${definition.id}" requires a URL`);
     }
 
-    const bounds = normalizeBounds(definition.bounds);
+    const normalized = normalizeBounds(definition.bounds);
     const leafletBounds = [
-      [bounds.south, bounds.west],
-      [bounds.north, bounds.east]
+      [normalized.south, normalized.west],
+      [normalized.north, normalized.east]
     ];
 
     const options = compactOptions({
@@ -372,16 +370,21 @@ function normalizeCenter(center) {
 }
 
 function normalizeBounds(bounds) {
-  const west = Number(bounds?.west);
-  const south = Number(bounds?.south);
-  const east = Number(bounds?.east);
-  const north = Number(bounds?.north);
-
-  if (![west, south, east, north].every(Number.isFinite)) {
+  const normalized = normalizeGeographicBounds(bounds);
+  if (!normalized) {
     throw new TypeError('Invalid map bounds');
   }
+  return normalized;
+}
 
-  return { west, south, east, north };
+function toLeafletBounds(bounds) {
+  const normalized = normalizeGeographicBounds(bounds);
+  return normalized
+    ? [
+        [normalized.south, normalized.west],
+        [normalized.north, normalized.east]
+      ]
+    : undefined;
 }
 
 
@@ -505,7 +508,6 @@ function createIconType(latlng, symbol) {
 
     return L.marker(latlng, { icon });
 }
-
 
 function sanitizeClassToken(value) {
   return String(value).replace(/[^A-Za-z0-9_-]/g, '-');

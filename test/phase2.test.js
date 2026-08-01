@@ -165,3 +165,23 @@ function jsonResponse(value, status = 200) {
     headers: { 'Content-Type': 'application/json' }
   });
 }
+
+test('MapDocument normalizes API min/max bounds', async () => {
+  const provider = new MapDocumentProvider({
+    apiClient: {
+      get: async () => ({
+        ...mapDocumentFixture,
+        mapBookmark: null,
+        bounds: { minx: -153.23896368, miny: -38.34214362, maxx: 190.64474738, maxy: 70.36205494 }
+      })
+    }
+  });
+
+  const document = await provider.getById(123);
+  assert.deepEqual(document.bounds, {
+    west: -153.23896368,
+    south: -38.34214362,
+    east: 190.64474738,
+    north: 70.36205494
+  });
+});
