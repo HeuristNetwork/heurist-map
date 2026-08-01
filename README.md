@@ -347,3 +347,7 @@ A MapLayer with `source.type: "image"` is rendered as a georeferenced image over
 ```
 
 `opacity` accepts either `0-1` values or percentages from `0-100`. Image filter properties remain in `style.symbol`. Supported filters are `blur`, `brightness`, `contrast`, `grayscale`, `hue-rotate`, `invert`, `saturate`, and `sepia`.
+
+### GeoJSON rendering performance
+
+The application-level layer registry stores only lightweight layer metadata. It does not clone or expose the GeoJSON `data` payload through `getLayer()`, `getLayers()`, or layer events. The Leaflet adapter also reuses one marker icon per layer and creates popup HTML and popup instances only after the first feature click.

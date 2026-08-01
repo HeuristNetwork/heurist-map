@@ -118,3 +118,55 @@ test('loads an image source as an engine-neutral runtime layer', async () => {
   assert.deepEqual(runtime.bounds, { west: 151.11488376, south: -33.93908829, east: 151.3212204, north: -33.74375321 });
   assert.deepEqual(runtime.imageFilter, { blur: '10px', contrast: '3' });
 });
+
+test('application registry excludes GeoJSON payloads', async () => {
+  const { MapApplication } = await import('../src/core/MapApplication.js');
+  const mapEngine = {
+    async addLayer(definition) {
+      assert.equal(definition.data.features.length, 100);
+      return { id: definition.id, type: definition.type };
+    },
+    async removeLayer() { return true; },
+    async setLayerVisibility() {},
+    getCapabilities() { return {}; },
+    async destroy() {}
+  };
+  const application = new MapApplication({
+    container: { dispatchEvent() {} },
+    config: {
+      mapDocument: {
+        format: 'heurist-map-document',
+        version: 1,
+        id: null,
+        title: 'Test',
+        mapBookmark: null,
+        bounds: null,
+        worldBaseMap: null,
+        crs: null,
+        layers: []
+      },
+      readonly: true
+    },
+    mapEngine,
+    host: { supportsEditing() { return false; } }
+  });
+
+  const features = Array.from({ length: 100 }, (_, index) => ({
+    type: 'Feature',
+    id: index + 1,
+    properties: { title: `Feature ${index + 1}` },
+    geometry: { type: 'Point', coordinates: [index, index] }
+  }));
+
+  await application.addLayer({
+    id: 'performance-layer',
+    type: 'geojson',
+    title: 'Performance layer',
+    data: { type: 'FeatureCollection', features }
+  });
+
+  const layer = application.getLayer('performance-layer');
+  assert.equal(layer.featureCount, 100);
+  assert.equal(Object.hasOwn(layer, 'data'), false);
+  assert.equal(JSON.stringify(layer).includes('Feature 100'), false);
+});

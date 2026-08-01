@@ -216,18 +216,24 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       stroke: symbol.stroke,
       dashArray: symbol.dashArray
     });
+    const pointToLayer = createPointLayerFactory(symbol);
+    const popupEnabled = definition.popup?.enabled !== false;
 
     const layer = L.geoJSON(definition.data, {
       style: () => pathStyle,
-      pointToLayer: (feature, latlng) => createPointLayer(feature, latlng, symbol),
-      onEachFeature: (feature, nativeLayer) => {
-        if (definition.popup?.enabled !== false) {
-          const popupHtml = createPopupHtml(feature, definition.popup);
-          if (popupHtml) {
-            nativeLayer.bindPopup(popupHtml);
+      pointToLayer,
+      // Popup HTML and Leaflet popup instances are created lazily. This avoids
+      // expensive per-feature DOM/string work while a large layer is loading.
+      onEachFeature: popupEnabled
+        ? (feature, nativeLayer) => {
+            nativeLayer.once('click', () => {
+              const popupHtml = createPopupHtml(feature, definition.popup);
+              if (popupHtml) {
+                nativeLayer.bindPopup(popupHtml).openPopup();
+              }
+            });
           }
-        }
-      }
+        : undefined
     });
 
     return this.registerLayer(definition, layer);
@@ -395,7 +401,7 @@ function compactOptions(options) {
 }
 
 
-function createPointLayer(feature, latlng, symbol) {
+function createPointLayerFactory(symbol) {
   if ((symbol.iconType === 'icon' || symbol.iconType === 'marker') && symbol.iconUrl) {
     const icon = L.icon(compactOptions({
       iconUrl: symbol.iconUrl,
@@ -403,14 +409,15 @@ function createPointLayer(feature, latlng, symbol) {
       iconAnchor: symbol.iconAnchor,
       popupAnchor: symbol.popupAnchor
     }));
-    return L.marker(latlng, { icon });
+    return (_feature, latlng) => L.marker(latlng, { icon });
   }
 
-  if(symbol.iconType === 'iconfont'){
-    return createIconType(latlng, symbol);
+  if (symbol.iconType === 'iconfont') {
+    const icon = createIconFontIcon(symbol);
+    return (_feature, latlng) => L.marker(latlng, { icon });
   }
 
-  return L.circleMarker(latlng, compactOptions({
+  const options = compactOptions({
     radius: symbol.radius,
     color: symbol.color,
     weight: symbol.weight,
@@ -419,94 +426,71 @@ function createPointLayer(feature, latlng, symbol) {
     fillOpacity: symbol.fillOpacity,
     fill: symbol.fill,
     stroke: symbol.stroke
-  }));
+  });
+  return (_feature, latlng) => L.circleMarker(latlng, options);
 }
 
-function createIconType(latlng, symbol) {
+function createIconFontIcon(symbol) {
+  const iconFont = symbol.iconFont || 'ui-icon-location';
+  let className;
 
-    let iconFont = symbol.iconFont || 'ui-icon-location';
-    let className;
+  const classes = String(iconFont)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
 
-    const classes = String(iconFont)
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
+  const isFontAwesome = classes.some((name) =>
+    name === 'fa'
+    || name === 'fas'
+    || name === 'far'
+    || name === 'fab'
+    || name.startsWith('fa-')
+  );
 
-    const isFontAwesome = classes.some((name) =>
-        name === 'fa'
-        || name === 'fas'
-        || name === 'far'
-        || name === 'fab'
-        || name.startsWith('fa-')
+  if (isFontAwesome) {
+    const hasStyleClass = classes.some((name) =>
+      name === 'fa-solid'
+      || name === 'fa-regular'
+      || name === 'fa-brands'
+      || name === 'fas'
+      || name === 'far'
+      || name === 'fab'
     );
-
-    if (isFontAwesome) {
-        const hasStyleClass = classes.some((name) =>
-            name === 'fa-solid'
-            || name === 'fa-regular'
-            || name === 'fa-brands'
-            || name === 'fas'
-            || name === 'far'
-            || name === 'fab'
-        );
-
-        if (!hasStyleClass) {
-            classes.unshift('fa-solid');
-        }
-
-        className = classes.join(' ');
-    } else {
-        const iconClass = classes.find((name) =>
-            name.startsWith('ui-icon-')
-        ) || iconFont;
-
-        className = `ui-icon ${
-            iconClass.startsWith('ui-icon-')
-                ? iconClass
-                : `ui-icon-${iconClass}`
-        }`;
+    if (!hasStyleClass) {
+      classes.unshift('fa-solid');
     }
+    className = classes.join(' ');
+  } else {
+    const iconClass = classes.find((name) => name.startsWith('ui-icon-')) || iconFont;
+    className = `ui-icon ${iconClass.startsWith('ui-icon-') ? iconClass : `ui-icon-${iconClass}`}`;
+  }
 
-    let width = 24;
-    let height = 24;
+  const safeClassName = className
+    .split(/\s+/)
+    .filter((name) => /^[A-Za-z0-9_-]+$/.test(name))
+    .join(' ');
 
-    if (Array.isArray(symbol.iconSize)) {
-        width = Number(symbol.iconSize[0]) || 24;
-        height = Number(symbol.iconSize[1]) || width;
-    } else if (Number(symbol.iconSize) > 0) {
-        width = height = Number(symbol.iconSize);
-    }
+  let width = 24;
+  let height = 24;
+  if (Array.isArray(symbol.iconSize)) {
+    width = Number(symbol.iconSize[0]) || 24;
+    height = Number(symbol.iconSize[1]) || width;
+  } else if (Number(symbol.iconSize) > 0) {
+    width = height = Number(symbol.iconSize);
+  }
 
-    const fontSize = Math.min(width, height);
-    const color = symbol.color || '#000000';
+  const fontSize = Math.min(width, height);
+  const color = symbol.color || '#000000';
+  const backgroundStyle = symbol.fillColor
+    ? `background-color:${symbol.fillColor};`
+    : 'background:none;';
 
-    const backgroundStyle = symbol.fillColor
-        ? `background-color:${symbol.fillColor};`
-        : 'background:none;';
-
-    const icon = L.divIcon({
-        className: 'heurist-map-iconfont-marker',
-        html: `
-            <span
-                class="${className}"
-                style="
-                    display:flex;
-                    align-items:center;
-                    justify-content:center;
-                    border:none;
-                    font-size:${fontSize}px;
-                    width:${width}px;
-                    height:${height}px;
-                    color:${color};
-                    ${backgroundStyle}
-                "
-            ></span>
-        `,
-        iconSize: [width, height],
-        iconAnchor: symbol.iconAnchor || [width / 2, height / 2]
-    });
-
-    return L.marker(latlng, { icon });
+  return L.divIcon({
+    className: 'heurist-map-iconfont-marker',
+    html: `<span class="${safeClassName}" style="display:flex;align-items:center;justify-content:center;border:none;font-size:${fontSize}px;width:${width}px;height:${height}px;color:${color};${backgroundStyle}"></span>`,
+    iconSize: [width, height],
+    iconAnchor: symbol.iconAnchor || [width / 2, height / 2]
+  });
 }
 
 function sanitizeClassToken(value) {

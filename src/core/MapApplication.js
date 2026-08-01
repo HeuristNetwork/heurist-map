@@ -113,20 +113,17 @@ export class MapApplication {
    */
   async addLayer(definition) {
     this.assertActive();
-    const normalized = clonePlain(definition);
-    if (!normalized?.id) {
+    if (!definition?.id) {
       throw new TypeError('Layer definition requires an id');
     }
-    if (this.layers.has(normalized.id)) {
-      throw new Error(`Layer "${normalized.id}" already exists`);
+    if (this.layers.has(definition.id)) {
+      throw new Error(`Layer "${definition.id}" already exists`);
     }
 
-    const state = {
-      ...normalized,
-      visible: normalized.visible !== false,
-      loadState: 'loading',
-      error: null
-    };
+    // Keep only lightweight, engine-neutral metadata in the application
+    // registry. Large GeoJSON payloads remain in the rendering pipeline and
+    // are never cloned by getLayer(), getLayers(), or layer events.
+    const state = createLayerState(definition);
     this.layers.set(state.id, state);
 
     try {
@@ -426,6 +423,36 @@ export class MapApplication {
       throw new Error('The map application has been destroyed');
     }
   }
+}
+
+function createLayerState(definition) {
+  return {
+    id: definition.id,
+    recordId: definition.recordId ?? null,
+    title: definition.title ?? '',
+    description: definition.description ?? '',
+    type: definition.type ?? null,
+    source: clonePlain(definition.source ?? null),
+    style: clonePlain(definition.style ?? null),
+    popup: clonePlain(definition.popup ?? null),
+    options: clonePlain(definition.options ?? null),
+    order: Number(definition.order ?? 0),
+    visible: definition.visible !== false,
+    selectable: definition.selectable !== false,
+    featureCount: getFeatureCount(definition),
+    loadState: 'loading',
+    error: null
+  };
+}
+
+function getFeatureCount(definition) {
+  if (definition.type !== 'geojson') {
+    return null;
+  }
+  if (Array.isArray(definition.data?.features)) {
+    return definition.data.features.length;
+  }
+  return definition.data ? 1 : 0;
 }
 
 function compareLayerReferences(a, b) {
