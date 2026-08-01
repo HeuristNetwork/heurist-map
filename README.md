@@ -351,3 +351,15 @@ A MapLayer with `source.type: "image"` is rendered as a georeferenced image over
 ### GeoJSON rendering performance
 
 The application-level layer registry stores only lightweight layer metadata. It does not clone or expose the GeoJSON `data` payload through `getLayer()`, `getLayers()`, or layer events. The Leaflet adapter also reuses one marker icon per layer and creates popup HTML and popup instances only after the first feature click.
+
+### Deferred loading of initially hidden layers
+
+MapDocument loading fetches each lightweight MapLayer definition to determine its source and initial visibility. When a MapLayer response has `visible: false`, its source data is not requested and no native map layer is created. The application registers it with `loadState: "deferred"`.
+
+The first call to:
+
+```javascript
+await window.heuristMap.setLayerVisibility(layerId, true);
+```
+
+loads and renders the source. Subsequent visibility changes reuse the loaded native layer and do not repeat the source request. `getLayers()` and `getLayer()` expose the `deferred`, `loading`, `loaded`, or `error` state.

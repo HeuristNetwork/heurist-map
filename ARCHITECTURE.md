@@ -67,3 +67,7 @@ Phase 3A currently creates popup HTML and calls Leaflet `bindPopup()` while a Ge
 The implementation is read-only. It includes public API integration, MapDocument and MapLayer loading, GeoJSON and tile rendering, simple symbology, normalized feature metadata, basic eager popups, cancellation, and layer inspection.
 
 Editing, timeline integration, selection synchronization, legend UI, SHP/KML/image/tiled-image loaders, thematic mapping, and wrapper widgets belong to later phases.
+
+## Deferred hidden layers
+
+MapApplication resolves MapLayer records in document order, but it does not load source data for definitions whose initial `visible` value is `false`. These layers are retained in an internal deferred registry and exposed publicly with `loadState: "deferred"`. The first visibility request loads the source through the normal LayerLoaderRegistry and renders it through the active map adapter. Once loaded, normal show/hide operations do not reload it.

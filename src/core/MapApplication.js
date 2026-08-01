@@ -29,6 +29,8 @@ export class MapApplication {
     this.layerLoaders = layerLoaders;
     this.mapEnvironment = createMapEnvironment(config.mapDocument);
     this.layers = new Map();
+    this.deferredLayers = new Map();
+    this.pendingLayerLoads = new Map();
     this.initialized = false;
     this.destroyed = false;
     this.activeLoadController = null;
@@ -71,15 +73,17 @@ export class MapApplication {
       const mapDocument = await this.providers.mapDocument.getById(recordId, {
         signal: combinedSignal
       });
-      const runtimeLayers = await this.prepareReferencedLayers(mapDocument, combinedSignal);
+      const preparedLayers = await this.prepareReferencedLayers(mapDocument, combinedSignal);
       const environment = createMapEnvironment(mapDocument);
 
       throwIfAborted(combinedSignal);
-      await this.replaceMapEnvironment(mapDocument, environment, runtimeLayers);
+      await this.replaceMapEnvironment(mapDocument, environment, preparedLayers);
 
       this.dispatch('heurist-map-document-loaded', {
         mapDocument,
-        layerCount: runtimeLayers.length
+        layerCount: preparedLayers.length,
+        loadedLayerCount: preparedLayers.filter((item) => item.runtimeLayer).length,
+        deferredLayerCount: preparedLayers.filter((item) => !item.runtimeLayer).length
       });
       return mapDocument;
     } catch (error) {
@@ -149,6 +153,18 @@ export class MapApplication {
    */
   async removeLayer(layerId) {
     this.assertActive();
+
+    const pending = this.pendingLayerLoads.get(layerId);
+    if (pending) {
+      pending.abort(new DOMException('Layer was removed', 'AbortError'));
+      this.pendingLayerLoads.delete(layerId);
+    }
+
+    if (this.deferredLayers.has(layerId)) {
+      this.deferredLayers.delete(layerId);
+      return this.layers.delete(layerId);
+    }
+
     const removed = await this.mapEngine.removeLayer(layerId);
     if (removed) {
       this.layers.delete(layerId);
@@ -162,15 +178,127 @@ export class MapApplication {
    */
   async setLayerVisibility(layerId, visible) {
     this.assertActive();
-    await this.mapEngine.setLayerVisibility(layerId, visible);
+    const nextVisible = Boolean(visible);
     const layer = this.layers.get(layerId);
-    if (layer) {
-      layer.visible = Boolean(visible);
+
+    if (!layer) {
+      throw new Error(`Layer "${layerId}" is not registered`);
     }
+
+    if (nextVisible && this.deferredLayers.has(layerId)) {
+      await this.loadDeferredLayer(layerId);
+    } else if (!this.deferredLayers.has(layerId)) {
+      await this.mapEngine.setLayerVisibility(layerId, nextVisible);
+    }
+
+    const current = this.layers.get(layerId);
+    if (current) {
+      current.visible = nextVisible;
+    }
+
     this.dispatch('heurist-map-layer-visibility-changed', {
       layerId,
-      visible: Boolean(visible)
+      visible: nextVisible
     });
+  }
+
+  /**
+   * Register an initially hidden MapLayer without loading its source data.
+   *
+   * @param {Object} mapLayer Normalized public MapLayer definition.
+   * @param {Object} reference MapDocument layer reference.
+   * @returns {Object} Lightweight registered layer state.
+   */
+  registerDeferredLayer(mapLayer, reference) {
+    const id = reference.id ?? `map-layer-${reference.recordId}`;
+    const definition = {
+      id,
+      recordId: mapLayer.id,
+      title: mapLayer.title,
+      description: mapLayer.description,
+      type: mapLayer.source?.type || null,
+      visible: false,
+      selectable: mapLayer.selectable !== false,
+      source: mapLayer.source,
+      style: mapLayer.style,
+      options: mapLayer.options,
+      order: reference.order ?? 0
+    };
+    const state = createLayerState(definition);
+    state.visible = false;
+    state.loadState = 'deferred';
+    this.layers.set(id, state);
+    this.deferredLayers.set(id, { mapLayer, reference });
+    return state;
+  }
+
+  /**
+   * Load and render a previously deferred layer on first visibility request.
+   * Concurrent requests for the same layer share one promise.
+   *
+   * @param {string|number} layerId Runtime layer identifier.
+   * @returns {Promise<Object>} Rendered runtime layer definition.
+   */
+  async loadDeferredLayer(layerId) {
+    const deferred = this.deferredLayers.get(layerId);
+    if (!deferred) {
+      return this.getLayer(layerId);
+    }
+
+    const existing = this.pendingLayerLoads.get(layerId);
+    if (existing?.promise) {
+      return existing.promise;
+    }
+
+    const controller = new AbortController();
+    const state = this.layers.get(layerId);
+    if (state) {
+      state.loadState = 'loading';
+      state.error = null;
+    }
+
+    const promise = (async () => {
+      try {
+        const runtimeLayer = await this.createRuntimeLayer(
+          deferred.mapLayer,
+          deferred.reference,
+          controller.signal
+        );
+        runtimeLayer.visible = true;
+        await this.mapEngine.addLayer(runtimeLayer);
+
+        const loadedState = createLayerState(runtimeLayer);
+        loadedState.visible = true;
+        loadedState.loadState = 'loaded';
+        this.layers.set(layerId, loadedState);
+        this.deferredLayers.delete(layerId);
+
+        this.dispatch('heurist-map-layer-loaded', {
+          layer: this.getLayer(layerId),
+          deferred: true
+        });
+        return runtimeLayer;
+      } catch (error) {
+        if (state) {
+          state.loadState = isAbortError(error) ? 'deferred' : 'error';
+          state.error = isAbortError(error) ? null : serializeError(error);
+        }
+        if (!isAbortError(error)) {
+          this.dispatch('heurist-map-error', {
+            operation: 'load-deferred-layer',
+            layer: this.getLayer(layerId),
+            error: serializeError(error)
+          });
+          throw addContext(error, `Cannot load deferred layer "${state?.title || layerId}"`);
+        }
+        throw error;
+      } finally {
+        this.pendingLayerLoads.delete(layerId);
+      }
+    })();
+
+    this.pendingLayerLoads.set(layerId, { controller, promise });
+    return promise;
   }
 
   /**
@@ -209,8 +337,15 @@ export class MapApplication {
       order: current.order
     };
     const mapLayer = await this.providers.mapLayer.getById(current.recordId, { signal });
-    const runtimeLayer = await this.createRuntimeLayer(mapLayer, reference, signal);
+    const shouldBeVisible = current.visible !== false;
     await this.removeLayer(layerId);
+
+    if (!shouldBeVisible) {
+      return this.registerDeferredLayer(mapLayer, reference);
+    }
+
+    const runtimeLayer = await this.createRuntimeLayer(mapLayer, reference, signal);
+    runtimeLayer.visible = true;
     return this.addLayer(runtimeLayer);
   }
 
@@ -294,6 +429,11 @@ export class MapApplication {
       return;
     }
     this.cancelPendingRequests('Map application destroyed');
+    for (const pending of this.pendingLayerLoads.values()) {
+      pending.controller.abort(new DOMException('Map application destroyed', 'AbortError'));
+    }
+    this.pendingLayerLoads.clear();
+    this.deferredLayers.clear();
     this.layers.clear();
     await this.mapEngine.destroy();
     await this.host.destroy();
@@ -318,8 +458,17 @@ export class MapApplication {
         throw addContext(error, `Cannot load MapLayer record ${reference.recordId}`);
       }
 
+      if (mapLayer.visible === false) {
+        result.push({ mapLayer, reference, runtimeLayer: null });
+        continue;
+      }
+
       try {
-        result.push(await this.createRuntimeLayer(mapLayer, reference, signal));
+        result.push({
+          mapLayer,
+          reference,
+          runtimeLayer: await this.createRuntimeLayer(mapLayer, reference, signal)
+        });
       } catch (error) {
         throw addContext(error, `Cannot prepare MapLayer record ${reference.recordId}`);
       }
@@ -342,18 +491,24 @@ export class MapApplication {
    * Replace map environment.
    * @returns {Promise<*>} Resolves when the operation completes.
    */
-  async replaceMapEnvironment(mapDocument, environment, runtimeLayers) {
+  async replaceMapEnvironment(mapDocument, environment, preparedLayers) {
     await this.mapEngine.destroy();
+    this.deferredLayers.clear();
     this.layers.clear();
 
     try {
       await this.initializeMapEngine(environment);
-      for (const layer of runtimeLayers) {
-        await this.addLayer(layer);
+      for (const item of preparedLayers) {
+        if (item.runtimeLayer) {
+          await this.addLayer(item.runtimeLayer);
+        } else {
+          this.registerDeferredLayer(item.mapLayer, item.reference);
+        }
       }
       await this.applyInitialView(environment.initialView);
     } catch (error) {
       await this.mapEngine.destroy();
+      this.deferredLayers.clear();
       this.layers.clear();
       throw addContext(
         error,

@@ -170,3 +170,89 @@ test('application registry excludes GeoJSON payloads', async () => {
   assert.equal(Object.hasOwn(layer, 'data'), false);
   assert.equal(JSON.stringify(layer).includes('Feature 100'), false);
 });
+
+test('initially hidden MapLayers defer source loading until first show', async () => {
+  const { MapApplication } = await import('../src/core/MapApplication.js');
+  let sourceLoadCount = 0;
+  const rendered = [];
+
+  const hiddenMapLayer = {
+    id: 77,
+    title: 'Hidden query layer',
+    description: '',
+    visible: false,
+    selectable: true,
+    source: { type: 'heurist-query', query: { t: 10 } },
+    style: { type: 'simple', symbol: {} },
+    options: {}
+  };
+
+  const mapEngine = {
+    async initialize() {},
+    async destroy() {},
+    async addLayer(layer) { rendered.push(layer.id); return { id: layer.id }; },
+    async removeLayer() { return true; },
+    async setLayerVisibility() {},
+    async fitBounds() {},
+    getCapabilities() { return {}; }
+  };
+
+  const application = new MapApplication({
+    container: new EventTarget(),
+    config: {
+      mapDocument: {
+        format: 'heurist-map-document', version: 1, id: null, title: 'Initial',
+        mapBookmark: null, bounds: null, worldBaseMap: null, crs: null, layers: []
+      },
+      apiBaseUrl: '/heurist/api', database: 'demo', readonly: true
+    },
+    mapEngine,
+    host: { async initialize() {}, async destroy() {}, supportsEditing() { return false; } },
+    providers: {
+      mapDocument: { getById: async () => ({
+        format: 'heurist-map-document', version: 1, id: 1, title: 'Test',
+        mapBookmark: null, bounds: null, worldBaseMap: null, crs: null,
+        layers: [{ id: 'hidden-77', recordId: 77, order: 1 }]
+      }) },
+      mapLayer: { getById: async () => hiddenMapLayer },
+      queryGeoData: {}
+    },
+    layerLoaders: {
+      async load(mapLayer, context) {
+        sourceLoadCount += 1;
+        return {
+          id: context.reference.id,
+          recordId: mapLayer.id,
+          title: mapLayer.title,
+          type: 'geojson',
+          visible: true,
+          selectable: true,
+          data: { type: 'FeatureCollection', features: [] },
+          source: mapLayer.source,
+          style: mapLayer.style,
+          options: mapLayer.options,
+          order: context.reference.order
+        };
+      }
+    }
+  });
+
+  await application.initialize();
+  await application.loadMapDocument(1);
+
+  assert.equal(sourceLoadCount, 0);
+  assert.deepEqual(rendered, []);
+  assert.equal(application.getLayer('hidden-77').loadState, 'deferred');
+  assert.equal(application.getLayer('hidden-77').visible, false);
+
+  await application.setLayerVisibility('hidden-77', true);
+
+  assert.equal(sourceLoadCount, 1);
+  assert.deepEqual(rendered, ['hidden-77']);
+  assert.equal(application.getLayer('hidden-77').loadState, 'loaded');
+  assert.equal(application.getLayer('hidden-77').visible, true);
+
+  await application.setLayerVisibility('hidden-77', false);
+  await application.setLayerVisibility('hidden-77', true);
+  assert.equal(sourceLoadCount, 1);
+});
