@@ -13,7 +13,7 @@
       "north": -33.3
     }
   },
-  "geoObject": null,
+  "bounds": null,
   "symbology": null,
   "minimumZoom": 1800,
   "maximumZoom": 2050,

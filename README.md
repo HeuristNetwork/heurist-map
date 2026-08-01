@@ -96,7 +96,7 @@ window.heuristMapConfig = {
     center: { latitude: -33.8688, longitude: 151.2093 },
     zoom: 3
   },
-  geoObject: null,
+  bounds: null,
   symbology: null,
   minimumZoom: null,
   maximumZoom: null,

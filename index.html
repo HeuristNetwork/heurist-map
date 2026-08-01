@@ -22,7 +22,7 @@
         center: { latitude: -33.8688, longitude: 151.2093 },
         zoom: 3
       },
-      geoObject: null,
+      bounds: null,
       symbology: null,
       minimumZoom: null,
       maximumZoom: null,
@@ -109,6 +109,10 @@
       });
     }else{
       // Public API example after setting heuristMapOptions.database:
+      // 101 - cities
+      // 129 - china mosques
+      // 125 - new york bromley map
+      // 126 - Brantford
       await map.loadMapDocument(101);
     }
 

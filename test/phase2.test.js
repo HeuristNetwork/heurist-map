@@ -13,7 +13,7 @@ const mapDocumentFixture = {
   id: 123,
   title: 'Test document',
   mapBookmark: { raw: '', type: 'view', center: { latitude: 0, longitude: 0 }, zoom: 2 },
-  geoObject: null,
+  bounds: null,
   symbology: null,
   minimumZoom: null,
   maximumZoom: null,

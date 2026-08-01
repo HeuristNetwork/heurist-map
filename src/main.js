@@ -21,6 +21,9 @@
  */
 import 'leaflet/dist/leaflet.css';
 import './style.css';
+import './assets/jquery-ui.icon-font.css';
+import '@fortawesome/fontawesome-free/css/fontawesome.min.css';
+import '@fortawesome/fontawesome-free/css/solid.min.css';
 
 import { getHeuristMapConfig } from './mapConfig.js';
 import { initHeuristMap } from './initHeuristMap.js';

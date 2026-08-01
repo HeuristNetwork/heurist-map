@@ -209,7 +209,8 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       fillColor: symbol.fillColor,
       fillOpacity: symbol.fillOpacity,
       fill: symbol.fill,
-      stroke: symbol.stroke
+      stroke: symbol.stroke,
+      dashArray: symbol.dashArray
     });
 
     const layer = L.geoJSON(definition.data, {
@@ -247,7 +248,14 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       attribution: definition.attribution,
       minZoom: definition.minZoom,
       maxZoom: definition.maxZoom,
-      subdomains: definition.subdomains
+      subdomains: definition.subdomains,
+      tms: definition.tms
+      /*
+      bounds: definition.bounds,
+      noWrap: true,
+      opacity: 0.80,
+      keepBuffer: 0
+      */
     });
 
     const layer = L.tileLayer(definition.url, options);
@@ -352,6 +360,10 @@ function createPointLayer(feature, latlng, symbol) {
     return L.marker(latlng, { icon });
   }
 
+  if(symbol.iconType === 'iconfont'){
+    return createIconType(latlng, symbol);
+  }
+
   return L.circleMarker(latlng, compactOptions({
     radius: symbol.radius,
     color: symbol.color,
@@ -362,6 +374,93 @@ function createPointLayer(feature, latlng, symbol) {
     fill: symbol.fill,
     stroke: symbol.stroke
   }));
+}
+
+function createIconType(latlng, symbol) {
+
+    let iconFont = symbol.iconFont || 'ui-icon-location';
+    let className;
+
+    const classes = String(iconFont)
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    const isFontAwesome = classes.some((name) =>
+        name === 'fa'
+        || name === 'fas'
+        || name === 'far'
+        || name === 'fab'
+        || name.startsWith('fa-')
+    );
+
+    if (isFontAwesome) {
+        const hasStyleClass = classes.some((name) =>
+            name === 'fa-solid'
+            || name === 'fa-regular'
+            || name === 'fa-brands'
+            || name === 'fas'
+            || name === 'far'
+            || name === 'fab'
+        );
+
+        if (!hasStyleClass) {
+            classes.unshift('fa-solid');
+        }
+
+        className = classes.join(' ');
+    } else {
+        const iconClass = classes.find((name) =>
+            name.startsWith('ui-icon-')
+        ) || iconFont;
+
+        className = `ui-icon ${
+            iconClass.startsWith('ui-icon-')
+                ? iconClass
+                : `ui-icon-${iconClass}`
+        }`;
+    }
+
+    let width = 24;
+    let height = 24;
+
+    if (Array.isArray(symbol.iconSize)) {
+        width = Number(symbol.iconSize[0]) || 24;
+        height = Number(symbol.iconSize[1]) || width;
+    } else if (Number(symbol.iconSize) > 0) {
+        width = height = Number(symbol.iconSize);
+    }
+
+    const fontSize = Math.min(width, height);
+    const color = symbol.color || '#000000';
+
+    const backgroundStyle = symbol.fillColor
+        ? `background-color:${symbol.fillColor};`
+        : 'background:none;';
+
+    const icon = L.divIcon({
+        className: 'heurist-map-iconfont-marker',
+        html: `
+            <span
+                class="${className}"
+                style="
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    border:none;
+                    font-size:${fontSize}px;
+                    width:${width}px;
+                    height:${height}px;
+                    color:${color};
+                    ${backgroundStyle}
+                "
+            ></span>
+        `,
+        iconSize: [width, height],
+        iconAnchor: symbol.iconAnchor || [width / 2, height / 2]
+    });
+
+    return L.marker(latlng, { icon });
 }
 
 function createPopupHtml(feature, popup) {

@@ -30,6 +30,7 @@ export class TileLayerLoader {
       visible: mapLayer.visible !== false,
       selectable: false,
       url: source.url,
+      tms: (source.tms===true),
       attribution: source.attribution || '',
       minZoom: source.minZoom,
       maxZoom: source.maxZoom,

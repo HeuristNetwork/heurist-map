@@ -13,17 +13,19 @@
 export const DEFAULT_MAP_SYMBOL = Object.freeze({
   iconType: 'circle',
   iconUrl: null,
+  iconFont: null,
   iconSize: [24, 24],
   iconAnchor: null,
   popupAnchor: null,
   radius: 6,
   color: '#3388ff',
-  fillColor: '#3388ff',
   weight: 2,
-  opacity: 1,
-  fillOpacity: 0.4,
-  fill: true,
-  stroke: true
+  dashArray: null, //"4 1 2 3"
+  stroke: true,
+  fillColor: '#3388ff',
+  opacity: 1,  //stroke opacity
+  fillOpacity: 0.5, //0~1 or 0~100
+  fill: true
 });
 
 /**
@@ -35,6 +37,7 @@ export function normalizeMapSymbol(value = {}, defaults = DEFAULT_MAP_SYMBOL) {
   return {
     iconType: normalizeIconType(symbol.iconType ?? symbol.type ?? defaults.iconType),
     iconUrl: nonEmptyStringOrNull(symbol.iconUrl ?? symbol.iconURL ?? defaults.iconUrl),
+    iconFont: nonEmptyStringOrNull(symbol.iconFont ?? symbol.iconFont ?? defaults.iconFont),
     iconSize: normalizePair(symbol.iconSize, defaults.iconSize),
     iconAnchor: normalizePair(symbol.iconAnchor, defaults.iconAnchor),
     popupAnchor: normalizePair(symbol.popupAnchor, defaults.popupAnchor),
@@ -45,13 +48,14 @@ export function normalizeMapSymbol(value = {}, defaults = DEFAULT_MAP_SYMBOL) {
     opacity: unitInterval(symbol.opacity, defaults.opacity),
     fillOpacity: unitInterval(symbol.fillOpacity, defaults.fillOpacity),
     fill: booleanValue(symbol.fill, defaults.fill),
-    stroke: booleanValue(symbol.stroke, defaults.stroke)
+    stroke: booleanValue(symbol.stroke, defaults.stroke),
+    dashArray: nonEmptyStringOrNull(symbol.dashArray ?? defaults.dashArray),
   };
 }
 
 function normalizeIconType(value) {
   const type = String(value || '').trim().toLowerCase();
-  return ['circle', 'marker', 'icon'].includes(type) ? type : 'circle';
+  return ['circle', 'marker', 'icon', 'iconfont'].includes(type) ? type : 'circle';
 }
 
 function normalizePair(value, fallback) {
@@ -60,6 +64,11 @@ function normalizePair(value, fallback) {
     const second = Number(value[1]);
     if (Number.isFinite(first) && Number.isFinite(second)) {
       return [first, second];
+    }
+  }else {
+    const val = Number(value);
+    if (Number.isFinite(val)) {
+      return [val, val];
     }
   }
   return Array.isArray(fallback) ? [...fallback] : null;
@@ -71,8 +80,14 @@ function nonNegativeNumber(value, fallback) {
 }
 
 function unitInterval(value, fallback) {
-  const number = Number(value);
-  return Number.isFinite(number) ? Math.min(1, Math.max(0, number)) : fallback;
+  let number = Number(value);
+  if(Number.isFinite(number)){
+    if(number>1){
+        number = number / 100;
+    }
+    return Math.min(1, Math.max(0, number));
+  }
+  return fallback;
 }
 
 function booleanValue(value, fallback) {

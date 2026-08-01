@@ -37,7 +37,7 @@ export function normalizeMapDocument(value = {}) {
     mapBookmark: normalizeMapBookmark(
       source.mapBookmark ?? source.bookmark ?? source.DT_MAP_BOOKMARK
     ),
-    geoObject: source.geoObject ?? source.DT_GEO_OBJECT ?? null,
+    bounds: source.bounds ?? source.DT_GEO_OBJECT ?? null,
     symbology: source.symbology ?? source.DT_SYMBOLOGY ?? null,
     minimumZoom: finiteNumberOrNull(
       source.minimumZoom ?? source.minZoom ?? source.DT_MINIMUM_ZOOM

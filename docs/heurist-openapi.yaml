@@ -2041,7 +2041,7 @@ components:
       - id
       - title
       - mapBookmark
-      - geoObject
+      - bounds
       - symbology
       - minimumZoom
       - maximumZoom
@@ -2063,7 +2063,7 @@ components:
           type: string
         mapBookmark:
           $ref: '#/components/schemas/MapBookmark'
-        geoObject: {}
+        bounds: {}
         symbology: {}
         minimumZoom:
           type:
