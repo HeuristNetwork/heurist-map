@@ -11,6 +11,7 @@
  */
 
 import { normalizeLayerStyle } from '../symbology/normalizeLayerStyle.js';
+import { normalizeBounds } from '../geo/normalizeBounds.js';
 
 export const MAP_LAYER_FORMAT = 'heurist-map-layer';
 export const MAP_LAYER_VERSION = 1;
@@ -46,7 +47,8 @@ function normalizeSource(value) {
     ...source,
     type: String(source.type || ''),
     recordId: positiveIntegerOrNull(source.recordId),
-    title: String(source.title || '')
+    title: String(source.title || ''),
+    bounds: normalizeBounds(source.bounds)
   };
 }
 

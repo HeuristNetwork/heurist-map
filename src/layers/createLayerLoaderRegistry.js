@@ -28,6 +28,6 @@ export function createLayerLoaderRegistry({ queryGeoData, fetchImpl } = {}) {
       new GeoJsonLayerLoader({ queryGeoData })
     )
     .register('remote-geojson', new RemoteGeoJsonLayerLoader({ fetchImpl }))
-    .register('tile', new TileLayerLoader());
+    .register(['tile', 'tiled-image', 'tiledImage'], new TileLayerLoader());
   return registry;
 }
