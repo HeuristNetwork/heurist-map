@@ -18,6 +18,9 @@ import { HeuristApiClient } from './data/HeuristApiClient.js';
 import { MapDocumentProvider } from './data/MapDocumentProvider.js';
 import { MapLayerProvider } from './data/MapLayerProvider.js';
 import { QueryGeoDataProvider } from './data/QueryGeoDataProvider.js';
+import { RecordTypeProvider } from './data/RecordTypeProvider.js';
+import { MapDocumentListProvider } from './data/MapDocumentListProvider.js';
+import { MapControlPanel } from './ui/MapControlPanel.js';
 import { createLayerLoaderRegistry } from './layers/createLayerLoaderRegistry.js';
 
 /**
@@ -42,7 +45,10 @@ export async function initHeuristMap(config) {
     headers: config.requestHeaders
   });
 
+  const recordTypes = new RecordTypeProvider({ apiClient });
   const providers = {
+    recordTypes,
+    mapDocumentList: new MapDocumentListProvider({ apiClient, recordTypes }),
     mapDocument: new MapDocumentProvider({ apiClient }),
     mapLayer: new MapLayerProvider({ apiClient }),
     queryGeoData: new QueryGeoDataProvider({ apiClient })
@@ -61,7 +67,23 @@ export async function initHeuristMap(config) {
   });
 
   const publicApi = new HeuristMapPublicApi(application);
-  const readyPromise = application.initialize().then(() => publicApi);
+  let controlPanel = null;
+  const readyPromise = application.initialize().then(async () => {
+    controlPanel = new MapControlPanel({
+      api: publicApi,
+      mapContainer: container,
+      options: config.ui
+    });
+    controlPanel.mount();
+    application.controlPanel = controlPanel;
+
+    if (config.documents.autoLoad !== false && apiClient.isConfigured()) {
+      await publicApi.loadMapDocuments(config.documents.query, {
+        activateFirst: config.documents.activateFirst !== false
+      });
+    }
+    return publicApi;
+  });
   publicApi.setReadyPromise(readyPromise);
 
   // Narrow, stable API for same-origin iframe and direct host integrations.

@@ -34,6 +34,11 @@ export class MapApplication {
     this.initialized = false;
     this.destroyed = false;
     this.activeLoadController = null;
+    this.mapDocuments = new Map();
+    this.activeMapDocumentId = null;
+    this.controlPanel = null;
+    this.baseMaps = new Map((config.baseMaps || []).map((item) => [String(item.id), clonePlain(item)]));
+    this.activeBaseMapId = config.mapDocument?.worldBaseMap?.code || config.baseMaps?.[0]?.id || null;
   }
 
   /**
@@ -54,6 +59,112 @@ export class MapApplication {
       await this.host.destroy();
       throw addContext(error, 'Cannot initialize map rendering');
     }
+  }
+
+  /** Load the lightweight list of available MapDocuments. */
+  async loadMapDocuments(query = null, { signal, activateFirst = true } = {}) {
+    this.assertActive();
+    if (!this.providers.mapDocumentList) {
+      throw new Error('MapDocument list provider is not configured');
+    }
+    this.dispatch('heurist-map-documents-loading', { query });
+    const result = await this.providers.mapDocumentList.search(query, { signal });
+    this.mapDocuments.clear();
+    for (const item of result.items) this.mapDocuments.set(item.id, { ...item, loadState: 'available' });
+    this.dispatch('heurist-map-documents-loaded', { documents: this.getMapDocuments(), pagination: result.pagination });
+    if (activateFirst && result.items.length) await this.activateMapDocument(result.items[0].id, { signal });
+    return this.getMapDocuments();
+  }
+
+  /** Return available MapDocuments in API order. */
+  getMapDocuments() { return [...this.mapDocuments.values()].map(clonePlain); }
+
+  /** Return the active MapDocument list entry. */
+  getActiveMapDocument() {
+    const item = this.mapDocuments.get(this.activeMapDocumentId);
+    return item ? clonePlain(item) : null;
+  }
+
+  /** Activate exactly one persisted MapDocument. */
+  async activateMapDocument(documentId, { signal } = {}) {
+    const id = Number(documentId);
+    const item = this.mapDocuments.get(id);
+    if (!item) throw new Error(`MapDocument ${documentId} is not in the available document list`);
+    if (this.activeMapDocumentId === id && this.config.mapDocument?.id === id) return this.config.mapDocument;
+    this.dispatch('heurist-map-document-activating', { document: clonePlain(item) });
+    item.loadState = 'loading';
+    try {
+      const document = await this.loadMapDocument(id, { signal });
+      if (this.activeMapDocumentId && this.mapDocuments.has(this.activeMapDocumentId)) {
+        this.mapDocuments.get(this.activeMapDocumentId).active = false;
+      }
+      this.activeMapDocumentId = id;
+      item.active = true;
+      item.loadState = 'loaded';
+      this.dispatch('heurist-map-document-activated', { document: clonePlain(item), mapDocument: document });
+      return document;
+    } catch (error) {
+      item.loadState = 'error'; item.error = serializeError(error); throw error;
+    }
+  }
+
+  /** Zoom to a document bookmark or bounds without exposing engine details. */
+  async zoomToMapDocument(documentId) {
+    const id = Number(documentId);
+    const document = this.config.mapDocument?.id === id
+      ? this.config.mapDocument
+      : await this.providers.mapDocument.getById(id);
+    const view = createMapEnvironment(document).initialView;
+    if (view.type === 'bounds') return this.fitBounds(view.bounds, { animate: false });
+    return this.setView(view.center, view.zoom, { animate: false });
+  }
+
+  /** Return configured engine-neutral base-map definitions. */
+  getBaseMaps() { return [...this.baseMaps.values()].map(clonePlain); }
+
+  /** Return the active base-map definition. */
+  getActiveBaseMap() {
+    const item = this.baseMaps.get(String(this.activeBaseMapId));
+    return item ? clonePlain(item) : null;
+  }
+
+  /** Replace the active base map while preserving operational layers. */
+  async setBaseMap(baseMapId) {
+    const item = this.baseMaps.get(String(baseMapId));
+    if (!item) throw new Error(`Unknown base map "${baseMapId}"`);
+    await this.mapEngine.setBaseMap(item.type === 'none' ? null : item);
+    this.activeBaseMapId = item.id;
+    this.dispatch('heurist-map-basemap-changed', { baseMap: clonePlain(item) });
+    return clonePlain(item);
+  }
+
+  /** Zoom to a layer extent from source metadata or the map engine. */
+  async zoomToLayer(layerId) {
+    const layer = this.layers.get(layerId);
+    if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
+    const bounds = layer.source?.bounds || await this.mapEngine.getLayerBounds(layerId);
+    if (!bounds) throw new Error(`Layer "${layer.title || layerId}" does not define an extent`);
+    return this.fitBounds(bounds, { animate: false });
+  }
+
+  /** Apply a runtime global opacity multiplier; accepts 0-1 or 0-100. */
+  async setLayerOpacity(layerId, opacity) {
+    const value = normalizeRuntimeOpacity(opacity);
+    const layer = this.layers.get(layerId);
+    if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
+    layer.opacity = value;
+    if (!this.deferredLayers.has(layerId)) await this.mapEngine.setLayerOpacity(layerId, value);
+    this.dispatch('heurist-map-layer-opacity-changed', { layerId, opacity: value, layer: this.getLayer(layerId) });
+    return value;
+  }
+
+  requestEditMapDocument(documentId) {
+    this.dispatch('heurist-map-edit-document-requested', { documentId: Number(documentId) });
+  }
+
+  requestEditLayer(layerId) {
+    const layer = this.layers.get(layerId);
+    this.dispatch('heurist-map-edit-layer-requested', { layerId, recordId: layer?.recordId ?? null });
   }
 
   /**
@@ -133,6 +244,7 @@ export class MapApplication {
     try {
       const result = await this.mapEngine.addLayer(definition);
       state.loadState = 'loaded';
+      this.dispatch('heurist-map-layer-state-changed', { layer: this.getLayer(state.id) });
       this.dispatch('heurist-map-layer-loaded', { layer: this.getLayer(state.id) });
       return result;
     } catch (error) {
@@ -197,9 +309,9 @@ export class MapApplication {
     }
 
     this.dispatch('heurist-map-layer-visibility-changed', {
-      layerId,
-      visible: nextVisible
+      layerId, visible: nextVisible, layer: this.getLayer(layerId)
     });
+    this.dispatch('heurist-map-layer-state-changed', { layer: this.getLayer(layerId) });
   }
 
   /**
@@ -255,6 +367,9 @@ export class MapApplication {
     if (state) {
       state.loadState = 'loading';
       state.error = null;
+      this.dispatch('heurist-map-layer-state-changed', {
+        layer: this.getLayer(layerId)
+      });
     }
 
     const promise = (async () => {
@@ -435,6 +550,7 @@ export class MapApplication {
     this.pendingLayerLoads.clear();
     this.deferredLayers.clear();
     this.layers.clear();
+    this.controlPanel?.destroy();
     await this.mapEngine.destroy();
     await this.host.destroy();
     this.destroyed = true;
@@ -595,6 +711,7 @@ function createLayerState(definition) {
     visible: definition.visible !== false,
     selectable: definition.selectable !== false,
     featureCount: getFeatureCount(definition),
+    opacity: normalizeRuntimeOpacity(definition.opacity ?? 1),
     loadState: 'loading',
     error: null
   };
@@ -675,4 +792,11 @@ function serializeError(error) {
     code: error?.code ?? null,
     status: error?.status ?? null
   };
+}
+
+function normalizeRuntimeOpacity(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 1;
+  const normalized = number > 1 ? number / 100 : number;
+  return Math.min(1, Math.max(0, normalized));
 }

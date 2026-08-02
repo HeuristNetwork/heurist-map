@@ -363,3 +363,48 @@ await window.heuristMap.setLayerVisibility(layerId, true);
 ```
 
 loads and renders the source. Subsequent visibility changes reuse the loaded native layer and do not repeat the source request. `getLayers()` and `getLayer()` expose the `deferred`, `loading`, `loaded`, or `error` state.
+
+## Phase 5A: map control panel
+
+The standalone application can load a lightweight list of persisted MapDocument records through the standard Heurist API. It resolves the database-specific MapDocument record type ID from concept code `3-1019`, then searches `/records/` with either all documents, an ID list, or a standard Heurist query.
+
+```js
+await window.heuristMap.loadMapDocuments();
+await window.heuristMap.loadMapDocuments([1, 2, 3]);
+await window.heuristMap.loadMapDocuments('t:24 sortby:rec_Title');
+```
+
+The first returned document is activated by default. Persisted MapDocuments are mutually exclusive: activating another document removes the previous document's native layers and heavy data while retaining the lightweight document list.
+
+A compact URL form is supported:
+
+```text
+?doc=1,2,3
+```
+
+Runtime options remain explicit:
+
+```js
+window.heuristMapOptions = {
+  database: 'osmak_mapping',
+  apiBaseUrl: 'http://127.0.0.1/heurist/api',
+  documents: {
+    query: null,
+    autoLoad: true,
+    activateFirst: true
+  },
+  ui: {
+    enabled: true,
+    placement: 'overlay', // overlay | external | none
+    containerId: null,
+    position: 'top-right',
+    initiallyExpanded: true,
+    showCurrentDocument: false, // reserved for the later dynamic document
+    showMapDocuments: true,
+    showLayers: true,
+    showBaseMaps: true
+  }
+};
+```
+
+The `MapControlPanel` is engine-neutral and interacts only through `HeuristMapPublicApi`. It provides MapDocument selection, ordered layer rows, deferred/loading/loaded/error states, layer visibility, zoom-to-extent, runtime global opacity, edit-request events, and configured basemap selection. The current/dynamic document is intentionally deferred to a later phase.

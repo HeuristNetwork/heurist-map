@@ -109,6 +109,39 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     entry.visible = Boolean(visible);
   }
 
+  /** Replace the current base map without touching operational layers. */
+  async setBaseMap(definition) {
+    await this.removeLayer('__base__');
+    if (definition) {
+      this.addTileLayer({ id: '__base__', ...definition, visible: true });
+      const base = this.layers.get('__base__')?.layer;
+      if (typeof base?.bringToBack === 'function') base.bringToBack();
+    }
+  }
+
+  /** Apply a global opacity multiplier without changing persisted symbology. */
+  async setLayerOpacity(layerId, opacity) {
+    const entry = this.getLayerEntry(layerId);
+    const value = Math.min(1, Math.max(0, Number(opacity)));
+    entry.opacity = value;
+    const nativeLayer = entry.layer;
+    if (typeof nativeLayer.setOpacity === 'function') {
+      nativeLayer.setOpacity(value);
+      return;
+    }
+    if (typeof nativeLayer.eachLayer === 'function') {
+      nativeLayer.eachLayer((child) => applyChildOpacity(child, value, entry.baseOpacity));
+    }
+  }
+
+  /** Return geographic bounds for a rendered layer. */
+  async getLayerBounds(layerId) {
+    const entry = this.getLayerEntry(layerId);
+    const bounds = typeof entry.layer.getBounds === 'function' ? entry.layer.getBounds() : null;
+    if (!bounds?.isValid?.()) return entry.definition?.bounds || null;
+    return { west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth() };
+  }
+
   /**
    * Set the map center and zoom.
    * @returns {Promise<*>} Resolves when the operation completes.
@@ -315,7 +348,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    */
   registerLayer(definition, layer) {
     const visible = definition.visible !== false;
-    const entry = { definition, layer, visible };
+    const entry = { definition, layer, visible, opacity: 1, baseOpacity: new WeakMap() };
 
     this.layers.set(definition.id, entry);
 
@@ -540,4 +573,37 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function applyChildOpacity(layer, multiplier, baseOpacity) {
+  let base = baseOpacity.get(layer);
+  if (!base) {
+    const options = layer.options || {};
+    base = {
+      opacity: finiteOpacity(options.opacity, 1),
+      fillOpacity: finiteOpacity(options.fillOpacity, 0.2)
+    };
+    baseOpacity.set(layer, base);
+  }
+
+  if (typeof layer.setStyle === 'function') {
+    layer.setStyle({
+      opacity: base.opacity * multiplier,
+      fillOpacity: base.fillOpacity * multiplier
+    });
+    return;
+  }
+
+  if (typeof layer.setOpacity === 'function') {
+    layer.setOpacity(base.opacity * multiplier);
+    return;
+  }
+
+  const element = typeof layer.getElement === 'function' ? layer.getElement() : null;
+  if (element) element.style.opacity = String(base.opacity * multiplier);
+}
+
+function finiteOpacity(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
 }

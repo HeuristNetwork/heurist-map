@@ -71,3 +71,9 @@ Editing, timeline integration, selection synchronization, legend UI, SHP/KML/ima
 ## Deferred hidden layers
 
 MapApplication resolves MapLayer records in document order, but it does not load source data for definitions whose initial `visible` value is `false`. These layers are retained in an internal deferred registry and exposed publicly with `loadState: "deferred"`. The first visibility request loads the source through the normal LayerLoaderRegistry and renders it through the active map adapter. Once loaded, normal show/hide operations do not reload it.
+
+## Phase 5A control UI
+
+`src/ui/MapControlPanel.js` is an application overlay or external panel, not a Leaflet control. Its child components are `MapDocumentSelector`, `LayerPanel`, `LayerPanelItem`, and `BaseMapSelector`. They depend only on `HeuristMapPublicApi`, preserving map-engine isolation.
+
+`RecordTypeProvider` resolves the MapDocument concept code `3-1019`; `MapDocumentListProvider` uses the standard records endpoint. `MapApplication` retains lightweight MapDocument list state and renders only one persisted MapDocument at a time. Layer order is taken directly from the MapDocument API response and is not editable in the panel.

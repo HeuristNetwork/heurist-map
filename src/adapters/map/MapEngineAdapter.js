@@ -46,6 +46,21 @@ export class MapEngineAdapter {
     throw new Error('MapEngineAdapter.setLayerVisibility() is not implemented');
   }
 
+  /** Replace the current base map. */
+  async setBaseMap() {
+    throw new Error('MapEngineAdapter.setBaseMap() is not implemented');
+  }
+
+  /** Set a runtime global opacity multiplier for one rendered layer. */
+  async setLayerOpacity() {
+    throw new Error('MapEngineAdapter.setLayerOpacity() is not implemented');
+  }
+
+  /** Return engine-neutral bounds for a rendered layer when available. */
+  async getLayerBounds() {
+    return null;
+  }
+
   /**
    * Set the map center and zoom.
    * @returns {Promise<*>} Resolves when the operation completes.
