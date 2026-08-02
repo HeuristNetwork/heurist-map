@@ -48,7 +48,12 @@ export function getHeuristMapConfig() {
       showCurrentDocument: runtime.ui?.showCurrentDocument === true,
       showMapDocuments: runtime.ui?.showMapDocuments !== false,
       showLayers: runtime.ui?.showLayers !== false,
-      showBaseMaps: runtime.ui?.showBaseMaps !== false
+      showBaseMaps: runtime.ui?.showBaseMaps !== false,
+      showZoomControl: runtime.ui?.showZoomControl !== false,
+      showScaleControl: runtime.ui?.showScaleControl !== false,
+      showHomeControl: runtime.ui?.showHomeControl !== false,
+      baseMapsInitiallyExpanded: runtime.ui?.baseMapsInitiallyExpanded !== false,
+      maxHeight: runtime.ui?.controlPanelMaxHeight || runtime.ui?.maxHeight || '70vh'
     },
     mapDocument
   };

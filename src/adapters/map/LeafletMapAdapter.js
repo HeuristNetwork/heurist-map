@@ -45,6 +45,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       options.zoom
     );
 
+    if (options.controls?.scale !== false) {
+      L.control.scale({ position: 'bottomleft' }).addTo(this.map);
+    }
+
     if (options.baseLayer) {
       this.addTileLayer({
         id: '__base__',
@@ -140,6 +144,24 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     const bounds = typeof entry.layer.getBounds === 'function' ? entry.layer.getBounds() : null;
     if (!bounds?.isValid?.()) return entry.definition?.bounds || null;
     return { west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth() };
+  }
+
+  /** Return combined bounds for visible operational layers. */
+  async getVisibleLayerBounds() {
+    let combined = null;
+    for (const [id, entry] of this.layers) {
+      if (id === '__base__' || !entry.visible || !this.map.hasLayer(entry.layer)) continue;
+      const nativeBounds = typeof entry.layer.getBounds === 'function' ? entry.layer.getBounds() : null;
+      if (nativeBounds?.isValid?.()) {
+        combined = combined ? combined.extend(nativeBounds) : L.latLngBounds(nativeBounds);
+      } else if (entry.definition?.bounds) {
+        const bounds = toLeafletBounds(entry.definition.bounds);
+        if (bounds) combined = combined ? combined.extend(bounds) : L.latLngBounds(bounds);
+      }
+    }
+    return combined?.isValid?.()
+      ? { west: combined.getWest(), south: combined.getSouth(), east: combined.getEast(), north: combined.getNorth() }
+      : null;
   }
 
   /**

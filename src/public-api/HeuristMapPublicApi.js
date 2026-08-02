@@ -71,8 +71,17 @@ export class HeuristMapPublicApi {
   /** Return the active lightweight MapDocument entry. */
   getActiveMapDocument() { return this.application.getActiveMapDocument(); }
 
+  /** Reload one persisted MapDocument. */
+  reloadMapDocument(documentId, options = {}) { return this.application.reloadMapDocument(documentId, options); }
+
+  /** Unload the active persisted MapDocument. */
+  unloadMapDocument(documentId) { return this.application.unloadMapDocument(documentId); }
+
   /** Zoom to a MapDocument bookmark or bounds. */
   zoomToMapDocument(documentId) { return this.application.zoomToMapDocument(documentId); }
+
+  /** Restore the active document's home extent. */
+  zoomHome() { return this.application.zoomHome(); }
 
   /** Return configured base maps. */
   getBaseMaps() { return this.application.getBaseMaps(); }

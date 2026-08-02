@@ -29,3 +29,9 @@ test('MapDocument list accepts ID arrays and standard Heurist queries', async ()
   assert.equal(queries[0].ids,'1,2,3');
   assert.equal(queries[1].q,'t:24 sortby:rec_Title');
 });
+
+test('RecordTypeProvider accepts a direct integer API response', async () => {
+  const apiClient={async get(){return 24;}};
+  const provider=new RecordTypeProvider({apiClient});
+  assert.equal(await provider.getIdByConceptCode('3-1019'),24);
+});

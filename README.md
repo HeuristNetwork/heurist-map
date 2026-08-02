@@ -408,3 +408,34 @@ window.heuristMapOptions = {
 ```
 
 The `MapControlPanel` is engine-neutral and interacts only through `HeuristMapPublicApi`. It provides MapDocument selection, ordered layer rows, deferred/loading/loaded/error states, layer visibility, zoom-to-extent, runtime global opacity, edit-request events, and configured basemap selection. The current/dynamic document is intentionally deferred to a later phase.
+
+## Phase 5B — Map lifecycle and control-panel polish
+
+Phase 5B adds guarded MapDocument activation, cancellation of stale document and layer loads, document reload/unload operations, document and layer zoom fallbacks, complete configured basemap switching, zoom/scale/home controls, and a revised accessible control panel.
+
+The active MapDocument expands in place and contains its ordered layers directly beneath it. The active document and layer block use a slightly darker background. Separate “Map documents” and “Layers” labels are intentionally omitted. The “Base maps” heading toggles its radio list.
+
+New public operations include:
+
+```js
+await heuristMap.reloadMapDocument(documentId);
+await heuristMap.unloadMapDocument(documentId);
+await heuristMap.zoomHome();
+```
+
+Relevant UI options are explicit:
+
+```js
+ui: {
+  showMapDocuments: true,
+  showLayers: true,
+  showBaseMaps: true,
+  showZoomControl: true,
+  showScaleControl: true,
+  showHomeControl: true,
+  baseMapsInitiallyExpanded: true,
+  controlPanelMaxHeight: '70vh'
+}
+```
+
+MapDocument list entries use `kind: "record"`. The reserved future dynamic document can use `kind: "dynamic"` without conflicting with numeric persisted document IDs.

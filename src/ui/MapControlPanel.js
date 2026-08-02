@@ -1,34 +1,136 @@
 /**
  * MapControlPanel.js - Engine-neutral application controls rendered above or beside the map.
+ *
+ * @project     Heurist mapping application
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
 import { MapDocumentSelector } from './MapDocumentSelector.js';
 import { LayerPanel } from './LayerPanel.js';
 import { BaseMapSelector } from './BaseMapSelector.js';
+
 export class MapControlPanel {
-  constructor({ api, mapContainer, options }) { this.api=api; this.mapContainer=mapContainer; this.options=options; this.listeners=[]; }
-  mount(){
-    if(this.options.enabled===false||this.options.placement==='none')return;
-    this.element=document.createElement('aside');this.element.className='heurist-map-control-panel';
-    if(this.options.position)this.element.classList.add(`position-${this.options.position}`);
-    const header=document.createElement('button');header.type='button';header.className='heurist-map-panel-header';header.textContent='Map controls';
-    const body=document.createElement('div');body.className='heurist-map-panel-body';header.addEventListener('click',()=>this.element.classList.toggle('collapsed'));
-    if(this.options.initiallyExpanded===false)this.element.classList.add('collapsed');
-    if(this.options.showMapDocuments!==false){body.append(section('Map documents',this.documentsContainer=document.createElement('div')));}
-    if(this.options.showLayers!==false){body.append(section('Layers',this.layersContainer=document.createElement('div')));}
-    if(this.options.showBaseMaps!==false){body.append(section('Base maps',this.baseMapsContainer=document.createElement('div')));}
-    this.element.append(header,body);
-    const target=this.options.placement==='external'&&this.options.containerId?document.getElementById(this.options.containerId):this.mapContainer.parentElement;
-    if(target&&globalThis.getComputedStyle?.(target).position==='static')target.style.position='relative';target?.append(this.element);
-    this.documentSelector=this.documentsContainer?new MapDocumentSelector({api:this.api,container:this.documentsContainer}):null;
-    this.layerPanel=this.layersContainer?new LayerPanel({api:this.api,container:this.layersContainer}):null;
-    this.baseMapSelector=this.baseMapsContainer?new BaseMapSelector({api:this.api,container:this.baseMapsContainer}):null;
-    this.bind('heurist-map-documents-loaded',()=>this.refresh());this.bind('heurist-map-document-activated',()=>this.refresh());
-    this.bind('heurist-map-layer-loaded',()=>this.refreshLayers());this.bind('heurist-map-layer-visibility-changed',()=>this.refreshLayers());
-    this.bind('heurist-map-layer-state-changed',()=>this.refreshLayers());this.bind('heurist-map-basemap-changed',()=>this.refresh());this.bind('heurist-map-error',()=>this.refreshLayers());this.refresh();
+  constructor({ api, mapContainer, options }) {
+    this.api = api;
+    this.mapContainer = mapContainer;
+    this.options = options;
+    this.listeners = [];
+    this.baseMapsExpanded = options.baseMapsInitiallyExpanded !== false;
   }
-  bind(name,handler){this.api.addEventListener(name,handler);this.listeners.push([name,handler]);}
-  refresh(){this.documentSelector?.render(this.api.getMapDocuments(),this.api.getActiveMapDocument()?.id);this.baseMapSelector?.render(this.api.getBaseMaps(),this.api.getActiveBaseMap()?.id);this.refreshLayers();}
-  refreshLayers(){this.layerPanel?.render(this.api.getLayers());}
-  destroy(){for(const [n,h]of this.listeners)this.api.removeEventListener(n,h);this.element?.remove();}
+
+  mount() {
+    if (this.options.enabled === false || this.options.placement === 'none') return;
+
+    this.element = document.createElement('aside');
+    this.element.className = 'heurist-map-control-panel';
+    this.element.setAttribute('aria-label', 'Map controls');
+    if (this.options.position) this.element.classList.add(`position-${this.options.position}`);
+    if (this.options.maxHeight) this.element.style.maxHeight = String(this.options.maxHeight);
+
+    const header = document.createElement('div');
+    header.className = 'heurist-map-panel-header';
+    const toggle = iconButton('fa-solid fa-layer-group', 'Show or hide map controls', () => {
+      this.element.classList.toggle('collapsed');
+      toggle.setAttribute('aria-expanded', String(!this.element.classList.contains('collapsed')));
+    });
+    toggle.classList.add('heurist-map-panel-toggle');
+    toggle.setAttribute('aria-expanded', String(this.options.initiallyExpanded !== false));
+    const title = document.createElement('strong');
+    title.textContent = 'Map controls';
+    header.append(toggle, title);
+    if (this.options.showHomeControl !== false) {
+      header.append(iconButton('fa-solid fa-house', 'Zoom to active map document', () => this.api.zoomHome()));
+    }
+
+    const body = document.createElement('div');
+    body.className = 'heurist-map-panel-body';
+    if (this.options.initiallyExpanded === false) this.element.classList.add('collapsed');
+
+    if (this.options.showMapDocuments !== false) {
+      this.documentsContainer = document.createElement('div');
+      this.documentsContainer.className = 'heurist-map-documents';
+      body.append(this.documentsContainer);
+    }
+
+    if (this.options.showBaseMaps !== false) {
+      const baseSection = document.createElement('section');
+      baseSection.className = 'heurist-map-basemap-section';
+      this.baseMapsToggle = document.createElement('button');
+      this.baseMapsToggle.type = 'button';
+      this.baseMapsToggle.className = 'heurist-map-basemap-toggle';
+      this.baseMapsToggle.addEventListener('click', () => {
+        this.baseMapsExpanded = !this.baseMapsExpanded;
+        this.updateBaseMapsExpansion();
+      });
+      this.baseMapsContainer = document.createElement('div');
+      this.baseMapsContainer.className = 'heurist-map-basemap-list';
+      baseSection.append(this.baseMapsToggle, this.baseMapsContainer);
+      body.append(baseSection);
+      this.updateBaseMapsExpansion();
+    }
+
+    this.element.append(header, body);
+    const target = this.options.placement === 'external' && this.options.containerId
+      ? document.getElementById(this.options.containerId)
+      : this.mapContainer.parentElement;
+    if (target && globalThis.getComputedStyle?.(target).position === 'static') target.style.position = 'relative';
+    target?.append(this.element);
+
+    this.documentSelector = this.documentsContainer
+      ? new MapDocumentSelector({ api: this.api, container: this.documentsContainer })
+      : null;
+    this.baseMapSelector = this.baseMapsContainer
+      ? new BaseMapSelector({ api: this.api, container: this.baseMapsContainer })
+      : null;
+
+    for (const eventName of [
+      'heurist-map-documents-loaded', 'heurist-map-documents-changed',
+      'heurist-map-document-activating', 'heurist-map-document-activated',
+      'heurist-map-document-state-changed', 'heurist-map-document-unloaded',
+      'heurist-map-layer-loaded', 'heurist-map-layer-visibility-changed',
+      'heurist-map-layer-state-changed', 'heurist-map-layer-opacity-changed',
+      'heurist-map-basemap-changed', 'heurist-map-error'
+    ]) this.bind(eventName, () => this.refresh());
+    this.refresh();
+  }
+
+  bind(name, handler) {
+    this.api.addEventListener(name, handler);
+    this.listeners.push([name, handler]);
+  }
+
+  refresh() {
+    const activeId = this.api.getActiveMapDocument()?.id;
+    this.documentSelector?.render(this.api.getMapDocuments(), activeId, () => {
+      if (this.options.showLayers === false) return null;
+      const container = document.createElement('div');
+      container.className = 'heurist-map-active-layers';
+      new LayerPanel({ api: this.api, container }).render(this.api.getLayers());
+      return container;
+    });
+    this.baseMapSelector?.render(this.api.getBaseMaps(), this.api.getActiveBaseMap()?.id);
+    this.updateBaseMapsExpansion();
+  }
+
+  updateBaseMapsExpansion() {
+    if (!this.baseMapsToggle || !this.baseMapsContainer) return;
+    this.baseMapsToggle.textContent = `Base maps ${this.baseMapsExpanded ? '▾' : '▸'}`;
+    this.baseMapsToggle.setAttribute('aria-expanded', String(this.baseMapsExpanded));
+    this.baseMapsContainer.hidden = !this.baseMapsExpanded;
+  }
+
+  destroy() {
+    for (const [name, handler] of this.listeners) this.api.removeEventListener(name, handler);
+    this.element?.remove();
+  }
 }
-function section(title,content){const s=document.createElement('section');s.className='heurist-map-panel-section';const h=document.createElement('h3');h.textContent=title;s.append(h,content);return s;}
+
+function iconButton(icon, title, handler) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'heurist-map-icon-button';
+  button.title = title;
+  button.setAttribute('aria-label', title);
+  button.innerHTML = `<span class="${icon}" aria-hidden="true"></span>`;
+  button.addEventListener('click', (event) => { event.stopPropagation(); Promise.resolve(handler(event)).catch(() => {}); });
+  return button;
+}

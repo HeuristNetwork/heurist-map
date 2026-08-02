@@ -61,6 +61,11 @@ export class MapEngineAdapter {
     return null;
   }
 
+  /** Return combined bounds of visible rendered operational layers. */
+  async getVisibleLayerBounds() {
+    return null;
+  }
+
   /**
    * Set the map center and zoom.
    * @returns {Promise<*>} Resolves when the operation completes.
