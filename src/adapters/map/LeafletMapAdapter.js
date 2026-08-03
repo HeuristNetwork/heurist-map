@@ -373,10 +373,17 @@ export class LeafletMapAdapter extends MapEngineAdapter {
 
           if (popupEnabled && !nativeLayer.getPopup?.()) {
             const popupHtml = createPopupHtml(feature, definition.popup);
-            if (popupHtml) nativeLayer.bindPopup(popupHtml);
+            if (popupHtml) {
+              // Bind lazily on the first click. Leaflet installs its own click
+              // handler when bindPopup() is called, but that handler does not
+              // participate in the click currently being dispatched. Open the
+              // popup once here; subsequent clicks are handled exclusively by
+              // Leaflet to avoid competing open/toggle handlers on markers and
+              // DivIcon markers.
+              nativeLayer.bindPopup(popupHtml);
+              nativeLayer.openPopup();
+            }
           }
-
-          if (popupEnabled && nativeLayer.getPopup?.()) nativeLayer.openPopup();
 
           this.interactionHandlers.onFeatureClick?.({
             layerId: definition.id,
@@ -644,7 +651,7 @@ function createIconFontIcon(symbol) {
 
   const fontSize = Math.min(width, height);
   const color = symbol.color || '#000000';
-  const backgroundStyle = symbol.fill &&symbol.fillColor
+  const backgroundStyle = symbol.fill && symbol.fillColor
     ? `background-color:${symbol.fillColor};`
     : 'background:none;';
 
