@@ -67,3 +67,10 @@ body {
   align-items:center;
   justify-content:center;
 }
+
+/* Phase 4 feature selection. Native Leaflet objects remain private; this class
+   is toggled by the adapter for marker/icon highlights. */
+.heurist-map-feature-selected {
+  filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px #ff0000);
+  z-index: 1000 !important;
+}

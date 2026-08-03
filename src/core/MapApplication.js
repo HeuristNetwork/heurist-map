@@ -42,6 +42,8 @@ export class MapApplication {
     this.controlPanel = null;
     this.baseMaps = new Map((config.baseMaps || []).map((item) => [String(item.id), clonePlain(item)]));
     this.activeBaseMapId = config.mapDocument?.worldBaseMap?.code || config.baseMaps?.[0]?.id || null;
+    this.selectionLayerId = null;
+    this.selectedFeatures = new Map();
   }
 
   /**
@@ -269,6 +271,129 @@ export class MapApplication {
     return value;
   }
 
+  /** Return the lightweight single-layer selection. */
+  getSelection() {
+    return this.selectionLayerId == null
+      ? null
+      : {
+          layerId: this.selectionLayerId,
+          features: [...this.selectedFeatures].map(([featureId, recordId]) => ({ featureId, recordId }))
+        };
+  }
+
+  /** Select one feature, optionally adding/toggling within the same layer. */
+  async selectFeature(layerId, featureId, { recordId = null, additive = false, toggle = false, zoom = false } = {}) {
+    const layer = this.layers.get(layerId);
+    if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
+    if (layer.selectable === false) throw new Error(`Layer "${layer.title || layerId}" is not selectable`);
+    if (layer.visible === false || layer.loadState !== 'loaded') {
+      throw new Error(`Layer "${layer.title || layerId}" must be visible and loaded before selection`);
+    }
+
+    const id = String(featureId);
+    const resolvedRecordId = recordId ?? this.mapEngine.getFeatureRecordId(layerId, id);
+    const previous = this.getSelection();
+
+    if (this.selectionLayerId !== layerId || !additive) {
+      if (this.selectionLayerId != null) {
+        await this.mapEngine.setFeatureSelection(this.selectionLayerId, []);
+      }
+      this.selectionLayerId = layerId;
+      this.selectedFeatures.clear();
+    }
+
+    if (toggle && this.selectedFeatures.has(id)) {
+      this.selectedFeatures.delete(id);
+    } else {
+      this.selectedFeatures.set(id, normalizeSelectedRecordId(resolvedRecordId));
+    }
+
+    if (this.selectedFeatures.size === 0) {
+      this.selectionLayerId = null;
+      this.dispatch('heurist-map-selection-cleared', { previous });
+      this.dispatch('heurist-map-selection-changed', { selection: null, previous });
+      return null;
+    }
+
+    await this.mapEngine.setFeatureSelection(layerId, [...this.selectedFeatures.keys()]);
+    const selection = this.getSelection();
+    this.dispatch('heurist-map-feature-selected', {
+      layerId, feature: { featureId: id, recordId: normalizeSelectedRecordId(resolvedRecordId) }, selection
+    });
+    this.dispatch('heurist-map-selection-changed', { selection, previous });
+    if (zoom) await this.zoomToSelection();
+    return selection;
+  }
+
+  /** Select all rendered geometries for one record in a selectable layer. */
+  async selectRecord(layerId, recordId, options = {}) {
+    const featureIds = this.mapEngine.getFeatureIdsByRecord(layerId, recordId);
+    if (!featureIds.length) return null;
+    await this.clearSelection();
+    for (let index = 0; index < featureIds.length; index += 1) {
+      await this.selectFeature(layerId, featureIds[index], {
+        recordId, additive: index > 0, zoom: false
+      });
+    }
+    if (options.zoom) await this.zoomToSelection();
+    return this.getSelection();
+  }
+
+  /** Clear selected features and restore their native styles. */
+  async clearSelection() {
+    const previous = this.getSelection();
+    if (this.selectionLayerId != null) {
+      try { await this.mapEngine.setFeatureSelection(this.selectionLayerId, []); } catch { /* layer may already be gone */ }
+    }
+    this.selectionLayerId = null;
+    this.selectedFeatures.clear();
+    if (previous) {
+      this.dispatch('heurist-map-selection-cleared', { previous });
+      this.dispatch('heurist-map-selection-changed', { selection: null, previous });
+    }
+    return previous;
+  }
+
+  /** Zoom to all selected geometries. */
+  async zoomToSelection() {
+    if (this.selectionLayerId == null || this.selectedFeatures.size === 0) return false;
+    const bounds = await this.mapEngine.getSelectionBounds(
+      this.selectionLayerId, [...this.selectedFeatures.keys()]
+    );
+    if (!bounds) return false;
+    await this.fitBounds(bounds, { animate: false });
+    return true;
+  }
+
+  /** Handle an engine-neutral feature click. */
+  async handleFeatureClick(detail) {
+    const payload = {
+      layerId: detail.layerId,
+      featureId: String(detail.featureId),
+      recordId: normalizeSelectedRecordId(detail.recordId),
+      latlng: detail.latlng || null,
+      selectable: detail.selectable !== false
+    };
+    this.dispatch('heurist-map-feature-click', payload);
+    this.dispatch('heurist-map-layer-click', { layerId: detail.layerId, latlng: detail.latlng || null });
+    if (detail.selectable === false || this.layers.get(detail.layerId)?.selectable === false) return;
+    try {
+      await this.selectFeature(detail.layerId, detail.featureId, {
+        recordId: detail.recordId,
+        additive: Boolean(detail.additive),
+        toggle: Boolean(detail.additive)
+      });
+    } catch (error) {
+      this.dispatch('heurist-map-error', { operation: 'select-feature', error: serializeError(error) });
+    }
+  }
+
+  /** Handle a background map click and clear current selection. */
+  async handleMapClick(detail) {
+    this.dispatch('heurist-map-map-click', { latlng: detail.latlng || null });
+    await this.clearSelection();
+  }
+
   requestEditMapDocument(documentId) {
     this.dispatch('heurist-map-edit-document-requested', { documentId: Number(documentId) });
   }
@@ -397,6 +522,7 @@ export class MapApplication {
    */
   async removeLayer(layerId) {
     this.assertActive();
+    if (this.selectionLayerId === layerId) await this.clearSelection();
 
     const pending = this.pendingLayerLoads.get(layerId);
     if (pending) {
@@ -427,6 +553,10 @@ export class MapApplication {
 
     if (!layer) {
       throw new Error(`Layer "${layerId}" is not registered`);
+    }
+
+    if (!nextVisible && this.selectionLayerId === layerId) {
+      await this.clearSelection();
     }
 
     const pending = this.pendingLayerLoads.get(layerId);
@@ -700,6 +830,7 @@ export class MapApplication {
       pending.controller.abort(new DOMException('Map application destroyed', 'AbortError'));
     }
     this.pendingLayerLoads.clear();
+    await this.clearSelection();
     this.deferredLayers.clear();
     this.layers.clear();
     this.controlPanel?.destroy();
@@ -760,6 +891,7 @@ export class MapApplication {
    * @returns {Promise<*>} Resolves when the operation completes.
    */
   async replaceMapEnvironment(mapDocument, environment, preparedLayers) {
+    await this.clearSelection();
     this.cancelPendingLayerLoads('MapDocument environment replaced');
     await this.mapEngine.destroy();
     this.deferredLayers.clear();
@@ -806,6 +938,10 @@ export class MapApplication {
         attribution: true
       },
       baseLayer: environment.baseMap
+    });
+    this.mapEngine.setInteractionHandlers?.({
+      onFeatureClick: (detail) => { void this.handleFeatureClick(detail); },
+      onMapClick: (detail) => { void this.handleMapClick(detail); }
     });
   }
 
@@ -933,6 +1069,11 @@ function addContext(error, context) {
     if (error?.[property] !== undefined) contextualError[property] = error[property];
   }
   return contextualError;
+}
+
+function normalizeSelectedRecordId(value) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 function clonePlain(value) {

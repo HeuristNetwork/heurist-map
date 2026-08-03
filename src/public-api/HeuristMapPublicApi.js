@@ -98,6 +98,25 @@ export class HeuristMapPublicApi {
   /** Set a runtime global opacity multiplier; accepts 0-1 or 0-100. */
   setLayerOpacity(layerId, opacity) { return this.application.setLayerOpacity(layerId, opacity); }
 
+  /** Return the current lightweight single-layer selection. */
+  getSelection() { return this.application.getSelection(); }
+
+  /** Select one feature in a selectable layer. */
+  selectFeature(layerId, featureId, options = {}) {
+    return this.application.selectFeature(layerId, featureId, options);
+  }
+
+  /** Select all rendered geometries belonging to one record. */
+  selectRecord(layerId, recordId, options = {}) {
+    return this.application.selectRecord(layerId, recordId, options);
+  }
+
+  /** Clear all selected features. */
+  clearSelection() { return this.application.clearSelection(); }
+
+  /** Zoom to the current selection. */
+  zoomToSelection() { return this.application.zoomToSelection(); }
+
   /** Dispatch an edit request without coupling the map to Heurist forms. */
   requestEditMapDocument(documentId) { return this.application.requestEditMapDocument(documentId); }
 

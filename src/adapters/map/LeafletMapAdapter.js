@@ -26,6 +26,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     super();
     this.map = null;
     this.layers = new Map();
+    this.interactionHandlers = {};
   }
 
   /**
@@ -44,6 +45,12 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       [options.center.latitude, options.center.longitude],
       options.zoom
     );
+
+    this.map.on('click', (event) => {
+      this.interactionHandlers.onMapClick?.({
+        latlng: toPublicLatLng(event.latlng)
+      });
+    });
 
     if (options.controls?.scale !== false) {
       L.control.scale({ position: 'bottomleft' }).addTo(this.map);
@@ -113,6 +120,52 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     entry.visible = Boolean(visible);
   }
 
+  /** Configure callbacks without exposing Leaflet event objects. */
+  setInteractionHandlers(handlers = {}) {
+    this.interactionHandlers = { ...handlers };
+  }
+
+  /** Apply selection styling to one GeoJSON layer. */
+  async setFeatureSelection(layerId, featureIds = []) {
+    const entry = this.getLayerEntry(layerId);
+    if (!entry.featureLayers) return false;
+    const selected = new Set(featureIds.map(String));
+    entry.selectedFeatureIds = selected;
+    for (const [featureId, nativeLayer] of entry.featureLayers) {
+      applyNativeSelection(nativeLayer, selected.has(featureId), entry.selectionBaseStyles, entry.opacity);
+    }
+    return true;
+  }
+
+  /** Resolve the record ID attached to one rendered feature. */
+  getFeatureRecordId(layerId, featureId) {
+    const entry = this.getLayerEntry(layerId);
+    return entry.featureRecordIds?.get(String(featureId)) ?? null;
+  }
+
+  /** Resolve all rendered feature IDs attached to one record. */
+  getFeatureIdsByRecord(layerId, recordId) {
+    const entry = this.getLayerEntry(layerId);
+    return [...(entry.recordFeatureIds?.get(Number(recordId)) || [])];
+  }
+
+  /** Return bounds of selected native features. */
+  async getSelectionBounds(layerId, featureIds = []) {
+    const entry = this.getLayerEntry(layerId);
+    if (!entry.featureLayers) return null;
+    let combined = null;
+    for (const featureId of featureIds.map(String)) {
+      const nativeLayer = entry.featureLayers.get(featureId);
+      if (!nativeLayer) continue;
+      const bounds = getNativeFeatureBounds(nativeLayer);
+      if (!bounds?.isValid?.()) continue;
+      combined = combined ? combined.extend(bounds) : L.latLngBounds(bounds);
+    }
+    return combined?.isValid?.()
+      ? { west: combined.getWest(), south: combined.getSouth(), east: combined.getEast(), north: combined.getNorth() }
+      : null;
+  }
+
   /** Replace the current base map without touching operational layers. */
   async setBaseMap(definition) {
     await this.removeLayer('__base__');
@@ -135,6 +188,13 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     }
     if (typeof nativeLayer.eachLayer === 'function') {
       nativeLayer.eachLayer((child) => applyChildOpacity(child, value, entry.baseOpacity));
+      if (entry.featureLayers && entry.selectedFeatureIds?.size) {
+        for (const [featureId, child] of entry.featureLayers) {
+          if (entry.selectedFeatureIds.has(featureId)) {
+            applyNativeSelection(child, true, entry.selectionBaseStyles, value);
+          }
+        }
+      }
     }
   }
 
@@ -232,7 +292,9 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       imageOverlays: true,
       customCrs: false,
       drawing: false,
-      markerClustering: false
+      markerClustering: false,
+      featureSelection: true,
+      multiSelection: true
     };
   }
 
@@ -273,25 +335,55 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     });
     const pointToLayer = createPointLayerFactory(symbol);
     const popupEnabled = definition.popup?.enabled !== false;
+    const selectable = definition.selectable !== false;
+    const featureLayers = new Map();
+    const featureRecordIds = new Map();
+    const recordFeatureIds = new Map();
+    const selectionBaseStyles = new WeakMap();
 
     const layer = L.geoJSON(definition.data, {
       style: () => pathStyle,
       pointToLayer,
-      // Popup HTML and Leaflet popup instances are created lazily. This avoids
-      // expensive per-feature DOM/string work while a large layer is loading.
-      onEachFeature: popupEnabled
-        ? (feature, nativeLayer) => {
-            nativeLayer.once('click', () => {
-              const popupHtml = createPopupHtml(feature, definition.popup);
-              if (popupHtml) {
-                nativeLayer.bindPopup(popupHtml).openPopup();
-              }
-            });
+      onEachFeature: (feature, nativeLayer) => {
+        const metadata = getFeatureSelectionMetadata(feature);
+        featureLayers.set(metadata.featureId, nativeLayer);
+        featureRecordIds.set(metadata.featureId, metadata.recordId);
+        if (metadata.recordId != null) {
+          if (!recordFeatureIds.has(metadata.recordId)) recordFeatureIds.set(metadata.recordId, new Set());
+          recordFeatureIds.get(metadata.recordId).add(metadata.featureId);
+        }
+        rememberSelectionBaseStyle(nativeLayer, selectionBaseStyles);
+
+        nativeLayer.on('click', (event) => {
+          if (event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
+
+          if (popupEnabled && !nativeLayer.getPopup?.()) {
+            const popupHtml = createPopupHtml(feature, definition.popup);
+            if (popupHtml) nativeLayer.bindPopup(popupHtml);
           }
-        : undefined
+
+          if (popupEnabled && nativeLayer.getPopup?.()) nativeLayer.openPopup();
+
+          this.interactionHandlers.onFeatureClick?.({
+            layerId: definition.id,
+            featureId: metadata.featureId,
+            recordId: metadata.recordId,
+            selectable,
+            additive: Boolean(event.originalEvent?.ctrlKey || event.originalEvent?.metaKey || event.originalEvent?.shiftKey),
+            latlng: toPublicLatLng(event.latlng)
+          });
+        });
+      }
     });
 
-    return this.registerLayer(definition, layer);
+    const result = this.registerLayer(definition, layer);
+    const entry = this.layers.get(definition.id);
+    entry.featureLayers = featureLayers;
+    entry.featureRecordIds = featureRecordIds;
+    entry.recordFeatureIds = recordFeatureIds;
+    entry.selectionBaseStyles = selectionBaseStyles;
+    entry.selectedFeatureIds = new Set();
+    return result;
   }
 
   /**
@@ -370,7 +462,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    */
   registerLayer(definition, layer) {
     const visible = definition.visible !== false;
-    const entry = { definition, layer, visible, opacity: 1, baseOpacity: new WeakMap() };
+    const entry = { definition, layer, visible, opacity: 1, baseOpacity: new WeakMap(), featureLayers: null, featureRecordIds: null, recordFeatureIds: null, selectionBaseStyles: new WeakMap(), selectedFeatureIds: new Set() };
 
     this.layers.set(definition.id, entry);
 
@@ -595,6 +687,65 @@ function escapeHtml(value) {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function getFeatureSelectionMetadata(feature) {
+  const metadata = feature?.properties?.heurist || {};
+  return {
+    featureId: String(metadata.featureId ?? feature?.id ?? ''),
+    recordId: Number.isInteger(Number(metadata.recordId)) ? Number(metadata.recordId) : null
+  };
+}
+
+function toPublicLatLng(latlng) {
+  return latlng ? { latitude: latlng.lat, longitude: latlng.lng } : null;
+}
+
+function rememberSelectionBaseStyle(layer, storage) {
+  const options = layer.options || {};
+  storage.set(layer, {
+    color: options.color,
+    weight: options.weight,
+    opacity: options.opacity,
+    fillColor: options.fillColor,
+    fillOpacity: options.fillOpacity,
+    radius: typeof layer.getRadius === 'function' ? layer.getRadius() : null
+  });
+}
+
+function applyNativeSelection(layer, selected, storage, opacityMultiplier = 1) {
+  const base = storage.get(layer) || {};
+  if (typeof layer.setStyle === 'function') {
+    const restoredStyle = compactOptions({
+      color: base.color,
+      weight: base.weight,
+      opacity: finiteOpacity(base.opacity, 1) * opacityMultiplier,
+      fillColor: base.fillColor,
+      fillOpacity: finiteOpacity(base.fillOpacity, 0.2) * opacityMultiplier
+    });
+    layer.setStyle(selected ? {
+      color: '#ff0000',
+      weight: Math.max(Number(base.weight) || 2, 4),
+      opacity: opacityMultiplier,
+      fillColor: '#ffff00',
+      fillOpacity: Math.max(Number(base.fillOpacity) || 0, 0.35) * opacityMultiplier
+    } : restoredStyle);
+    if (base.radius != null && typeof layer.setRadius === 'function') {
+      layer.setRadius(selected ? base.radius * 1.5 : base.radius);
+    }
+  }
+  const element = typeof layer.getElement === 'function' ? layer.getElement() : null;
+  element?.classList.toggle('heurist-map-feature-selected', selected);
+  if (selected && typeof layer.bringToFront === 'function') layer.bringToFront();
+}
+
+function getNativeFeatureBounds(layer) {
+  if (typeof layer.getBounds === 'function') return layer.getBounds();
+  if (typeof layer.getLatLng === 'function') {
+    const point = layer.getLatLng();
+    return point ? L.latLngBounds(point, point) : null;
+  }
+  return null;
 }
 
 function applyChildOpacity(layer, multiplier, baseOpacity) {

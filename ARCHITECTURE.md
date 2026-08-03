@@ -56,17 +56,15 @@ MapApplication
 
 `MapEngineAdapter` defines the engine-neutral rendering contract. `LeafletMapAdapter` owns all Leaflet maps, native layers, markers, popups, and tiles. No Leaflet object is exposed through the application or public API.
 
-## Important deferred popup requirement
+## Lazy popup behavior
 
-Phase 3A currently creates popup HTML and calls Leaflet `bindPopup()` while a GeoJSON layer is added. This is temporary and must not remain in the final implementation.
-
-**Required later change:** popup content and binding must be created lazily only when a feature selection or explicit popup-open request occurs. This is required before large SHP/KML performance testing and before Phase 4 selection is finalized.
+Popup HTML and Leaflet popup instances are created only on the first feature click. Initial GeoJSON rendering does not build popup content for every feature.
 
 ## Current phase boundaries
 
 The implementation is read-only. It includes public API integration, MapDocument and MapLayer loading, GeoJSON and tile rendering, simple symbology, normalized feature metadata, basic eager popups, cancellation, and layer inspection.
 
-Editing, timeline integration, selection synchronization, legend UI, SHP/KML/image/tiled-image loaders, thematic mapping, and wrapper widgets belong to later phases.
+Editing, timeline integration, thematic mapping, richer legends, and wrapper widgets belong to later phases. Phase 4 now provides engine-neutral feature events and single-layer multi-selection.
 
 ## Deferred hidden layers
 
@@ -77,3 +75,12 @@ MapApplication resolves MapLayer records in document order, but it does not load
 `src/ui/MapControlPanel.js` is an application overlay or external panel, not a Leaflet control. Its child components are `MapDocumentSelector`, `LayerPanel`, `LayerPanelItem`, and `BaseMapSelector`. They depend only on `HeuristMapPublicApi`, preserving map-engine isolation.
 
 `RecordTypeProvider` resolves the MapDocument concept code `3-1019`; `MapDocumentListProvider` uses the standard records endpoint. `MapApplication` retains lightweight MapDocument list state and renders only one persisted MapDocument at a time. Layer order is taken directly from the MapDocument API response and is not editable in the panel.
+
+
+## Phase 4 events and selection
+
+`MapApplication` owns a deliberately small selection registry containing one runtime layer ID and a map of `featureId` to `recordId`. Multiple features may be selected, but only within one layer at a time. Full GeoJSON features and Leaflet objects are not copied into public selection state.
+
+`LeafletMapAdapter` privately indexes native feature layers and reports serializable click details through interaction callbacks. It applies and restores native selection styles and resolves bounds for `zoomToSelection()`. `layer.selectable === false` is enforced by both the application and the adapter interaction path.
+
+All host interaction goes through `HeuristMapPublicApi` methods and DOM events; no Leaflet event object is exposed.

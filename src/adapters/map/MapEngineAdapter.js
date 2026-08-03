@@ -46,6 +46,30 @@ export class MapEngineAdapter {
     throw new Error('MapEngineAdapter.setLayerVisibility() is not implemented');
   }
 
+
+  /** Configure engine-neutral map interaction callbacks. */
+  setInteractionHandlers() {}
+
+  /** Apply selected feature IDs for one layer. */
+  async setFeatureSelection() {
+    throw new Error('MapEngineAdapter.setFeatureSelection() is not implemented');
+  }
+
+  /** Return bounds for selected features in one layer. */
+  async getSelectionBounds() {
+    return null;
+  }
+
+  /** Resolve record ID for a rendered feature without exposing native objects. */
+  getFeatureRecordId() {
+    return null;
+  }
+
+  /** Resolve rendered feature IDs for one record. */
+  getFeatureIdsByRecord() {
+    return [];
+  }
+
   /** Replace the current base map. */
   async setBaseMap() {
     throw new Error('MapEngineAdapter.setBaseMap() is not implemented');

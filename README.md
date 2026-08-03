@@ -439,3 +439,44 @@ ui: {
 ```
 
 MapDocument list entries use `kind: "record"`. The reserved future dynamic document can use `kind: "dynamic"` without conflicting with numeric persisted document IDs.
+
+## Phase 4 selection and public events
+
+Selection is engine-neutral and exposed only through `HeuristMapPublicApi`.
+The lightweight selection registry contains one layer ID and only the mandatory
+feature fields:
+
+```js
+{
+  layerId: 'map-layer-25',
+  features: [
+    { featureId: 'record-134-feature-1', recordId: 134 }
+  ]
+}
+```
+
+Multiple selected features are allowed only within one layer. Selecting a
+feature in another layer clears the previous layer selection. Layers with
+`selectable: false` still emit click events but cannot become selected.
+
+Public methods:
+
+```js
+map.getSelection();
+map.selectFeature(layerId, featureId, options);
+map.selectRecord(layerId, recordId, options);
+map.clearSelection();
+map.zoomToSelection();
+```
+
+Ctrl/Cmd/Shift-click toggles features in the current selection layer. A normal
+click replaces the selection. Clicking the map background clears it.
+
+Public events include:
+
+- `heurist-map-feature-click`
+- `heurist-map-layer-click`
+- `heurist-map-map-click`
+- `heurist-map-feature-selected`
+- `heurist-map-selection-changed`
+- `heurist-map-selection-cleared`
