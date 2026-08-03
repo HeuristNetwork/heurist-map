@@ -374,12 +374,6 @@ export class LeafletMapAdapter extends MapEngineAdapter {
           if (popupEnabled && !nativeLayer.getPopup?.()) {
             const popupHtml = createPopupHtml(feature, definition.popup);
             if (popupHtml) {
-              // Bind lazily on the first click. Leaflet installs its own click
-              // handler when bindPopup() is called, but that handler does not
-              // participate in the click currently being dispatched. Open the
-              // popup once here; subsequent clicks are handled exclusively by
-              // Leaflet to avoid competing open/toggle handlers on markers and
-              // DivIcon markers.
               nativeLayer.bindPopup(popupHtml);
               nativeLayer.openPopup();
             }

@@ -480,3 +480,53 @@ Public events include:
 - `heurist-map-feature-selected`
 - `heurist-map-selection-changed`
 - `heurist-map-selection-cleared`
+
+## Phase 6A: dynamic MapDocument and runtime layers
+
+Every map instance owns one lightweight, non-persistent MapDocument. It uses the
+same document registry, activation flow, layer loaders, panel, visibility,
+selection, opacity, and cancellation behavior as persisted MapDocuments.
+
+```js
+window.heuristMapOptions = {
+  dynamicDocument: {
+    enabled: true,
+    id: 'dynamic',
+    title: 'Dynamic map',
+    initiallyActive: false,
+    keepContent: true,
+    layers: []
+  },
+  ui: {
+    showCurrentDocument: true
+  }
+};
+```
+
+The document keeps lightweight MapLayer definitions while inactive. Native map
+layers and fetched GeoJSON are released when another MapDocument is activated.
+
+```js
+await map.activateMapDocument('dynamic');
+
+await map.addLayer(45); // persisted MapLayer record
+await map.addLayer({
+  id: 'annotations',
+  title: 'Map annotations',
+  source: { type: 'inline-geojson', data: annotationGeoJson },
+  selectable: true
+});
+
+await map.addQueryLayer('t:10', {
+  id: 'current-results',
+  title: 'Current results'
+});
+
+await map.setQueryForLayer('current-results', 't:12');
+await map.clearLayer('current-results'); // keep row/definition
+await map.removeLayer('current-results'); // remove completely
+```
+
+`addQueryLayer()` and `setQueryForLayer()` always target the dynamic document.
+General `addLayer()`, `removeLayer()`, and `clearLayer()` target the active
+MapDocument by default and accept an explicit `documentId` option.

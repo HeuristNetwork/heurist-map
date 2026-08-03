@@ -71,6 +71,9 @@ export class HeuristMapPublicApi {
   /** Return the active lightweight MapDocument entry. */
   getActiveMapDocument() { return this.application.getActiveMapDocument(); }
 
+  /** Return the predefined dynamic MapDocument entry. */
+  getDynamicDocument() { return this.application.getDynamicDocument(); }
+
   /** Reload one persisted MapDocument. */
   reloadMapDocument(documentId, options = {}) { return this.application.reloadMapDocument(documentId, options); }
 
@@ -141,16 +144,31 @@ export class HeuristMapPublicApi {
    * Add an engine-neutral runtime layer and register its application state.
    * @returns {*} Method result.
    */
-  addLayer(definition) {
-    return this.application.addLayer(definition);
+  addLayer(definition, options = {}) {
+    return this.application.addLayer(definition, options);
   }
 
   /**
    * Remove a runtime layer from the map and application registry.
    * @returns {Promise<boolean>} Resolves with whether a layer was removed.
    */
-  removeLayer(layerId) {
-    return this.application.removeLayer(layerId);
+  removeLayer(layerId, options = {}) {
+    return this.application.removeLayer(layerId, options);
+  }
+
+  /** Keep a layer definition but remove its current data/native layer. */
+  clearLayer(layerId, options = {}) {
+    return this.application.clearLayer(layerId, options);
+  }
+
+  /** Add a query-backed layer to the predefined dynamic MapDocument. */
+  addQueryLayer(query, options = {}) {
+    return this.application.addQueryLayer(query, options);
+  }
+
+  /** Replace and optionally reload one dynamic query layer. */
+  setQueryForLayer(layerId, query, options = {}) {
+    return this.application.setQueryForLayer(layerId, query, options);
   }
 
   /**

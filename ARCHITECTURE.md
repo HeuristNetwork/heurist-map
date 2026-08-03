@@ -84,3 +84,21 @@ MapApplication resolves MapLayer records in document order, but it does not load
 `LeafletMapAdapter` privately indexes native feature layers and reports serializable click details through interaction callbacks. It applies and restores native selection styles and resolves bounds for `zoomToSelection()`. `layer.selectable === false` is enforced by both the application and the adapter interaction path.
 
 All host interaction goes through `HeuristMapPublicApi` methods and DOM events; no Leaflet event object is exposed.
+
+## Dynamic MapDocument
+
+Phase 6A does not introduce a separate dynamic-document class. The predefined
+`dynamic` entry uses the same MapApplication document registry as persisted
+MapDocuments. Document entries may contain lightweight `layerDefinitions`;
+these are intentionally omitted from public document-list results.
+
+Runtime layer operations are split internally:
+
+- `renderRuntimeLayer()` renders an already prepared engine-neutral layer.
+- `addLayer()` stores a public MapLayer definition on a document and prepares it
+  through the existing LayerLoaderRegistry.
+- `removeLayer()` removes both definition and native layer.
+- `clearLayer()` removes current data/native state but retains the definition.
+
+The dynamic document retains definitions and queries while inactive, but its
+native layers and loaded feature payloads are recreated on activation.

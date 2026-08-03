@@ -38,6 +38,16 @@ export function getHeuristMapConfig() {
       autoLoad: runtime.documents?.autoLoad !== false,
       activateFirst: runtime.documents?.activateFirst !== false
     },
+    dynamicDocument: {
+      enabled: runtime.dynamicDocument?.enabled !== false,
+      id: String(runtime.dynamicDocument?.id || 'dynamic'),
+      title: String(runtime.dynamicDocument?.title || 'Dynamic map'),
+      initiallyActive: runtime.dynamicDocument?.initiallyActive === true,
+      keepContent: runtime.dynamicDocument?.keepContent !== false,
+      layers: Array.isArray(runtime.dynamicDocument?.layers)
+        ? runtime.dynamicDocument.layers.map((item) => ({ ...item }))
+        : []
+    },
     baseMaps: normalizeBaseMaps(runtime.baseMaps),
     ui: {
       enabled: runtime.ui?.enabled !== false,

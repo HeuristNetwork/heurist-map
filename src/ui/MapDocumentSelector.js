@@ -63,7 +63,9 @@ function createRow(item, active, api) {
   actions.className = 'heurist-map-row-actions';
   actions.append(iconButton('fa-solid fa-magnifying-glass-plus', 'Zoom to map document extent', () => api.zoomToMapDocument(item.id)));
   if (active) actions.append(iconButton('fa-solid fa-rotate', 'Reload map document', () => api.reloadMapDocument(item.id).catch(() => {})));
-  actions.append(iconButton('fa-solid fa-pencil', 'Edit map document', () => api.requestEditMapDocument(item.id)));
+  if (item.persistent !== false) {
+    actions.append(iconButton('fa-solid fa-pencil', 'Edit map document', () => api.requestEditMapDocument(item.id)));
+  }
   row.append(label, actions);
   return row;
 }

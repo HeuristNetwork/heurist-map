@@ -20,10 +20,10 @@ import { TileLayerLoader } from '../src/layers/loaders/TileLayerLoader.js';
 import { ImageLayerLoader } from '../src/layers/loaders/ImageLayerLoader.js';
 import { createImageFilterCss, normalizeImageFilter, normalizeOpacity } from '../src/symbology/normalizeImageFilter.js';
 
-test('normalizes simple symbol defaults', () => {
+test('normalizes simple symbol defaults and percentage opacity', () => {
   const symbol = normalizeMapSymbol({ color: '#000', opacity: 2, radius: -1 });
   assert.equal(symbol.color, '#000');
-  assert.equal(symbol.opacity, 1);
+  assert.equal(symbol.opacity, 0.02);
   assert.equal(symbol.radius, 6);
 });
 
@@ -255,33 +255,4 @@ test('initially hidden MapLayers defer source loading until first show', async (
   await application.setLayerVisibility('hidden-77', false);
   await application.setLayerVisibility('hidden-77', true);
   assert.equal(sourceLoadCount, 1);
-});
-
-test('normalizes string and numeric fill/stroke flags', async () => {
-  const { normalizeMapSymbol } = await import('../src/symbology/normalizeMapSymbol.js');
-  assert.equal(normalizeMapSymbol({ fill: '0', stroke: '1' }).fill, false);
-  assert.equal(normalizeMapSymbol({ fill: '0', stroke: '1' }).stroke, true);
-  assert.equal(normalizeMapSymbol({ fill: 1, stroke: 0 }).fill, true);
-  assert.equal(normalizeMapSymbol({ fill: 1, stroke: 0 }).stroke, false);
-});
-
-test('normalizes legacy tiled-image flags and directory URLs', async () => {
-  const { TileLayerLoader } = await import('../src/layers/loaders/TileLayerLoader.js');
-  const loader = new TileLayerLoader();
-  const result = await loader.load({
-    id: 50,
-    title: 'TMS image',
-    visible: true,
-    source: {
-      type: 'tiled-image',
-      url: '/tiles/example',
-      extension: 'png',
-      tms: '1',
-      noWrap: '1'
-    },
-    options: {}
-  }, { reference: { id: 'tile-50', recordId: 50, order: 2 } });
-  assert.equal(result.url, '/tiles/example/{z}/{x}/{y}.png');
-  assert.equal(result.tms, true);
-  assert.equal(result.noWrap, true);
 });

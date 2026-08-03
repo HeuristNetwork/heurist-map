@@ -110,7 +110,8 @@ export class MapControlPanel {
 
   refresh() {
     const activeId = this.api.getActiveMapDocument()?.id;
-    this.documentSelector?.render(this.api.getMapDocuments(), activeId, () => {
+    const documents = this.api.getMapDocuments().filter((item) => item.showInPanel !== false);
+    this.documentSelector?.render(documents, activeId, () => {
       if (this.options.showLayers === false) return null;
       const container = document.createElement('div');
       container.className = 'heurist-map-active-layers';

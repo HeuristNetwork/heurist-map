@@ -48,8 +48,18 @@
       // Phase 2 public API configuration. Replace the database before calling
       // loadMapDocument(). apiBaseUrl may also be a complete absolute URL.
       apiBaseUrl: 'heurist/api',
-      database: 'osmak_mapping'
-    };
+      database: 'osmak_mapping',
+/*
+      dynamicDocument: {
+        enabled: true,
+        id: 'dynamic',
+        title: 'Dynamic map',
+        initiallyActive: false,
+        keepContent: true,
+        layers: []
+      },      
+*/  
+  };
   </script>
 
   <script type="module" src="/src/main.js"></script>

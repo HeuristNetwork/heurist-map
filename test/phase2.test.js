@@ -138,6 +138,24 @@ test('MapApplication loads referenced query layers in document order', async () 
       queryGeoData: {
         searchAll: async () => ({ type: 'FeatureCollection', features: [], meta: {} })
       }
+    },
+    layerLoaders: {
+      async load(mapLayer, context) {
+        return {
+          id: context.reference.id,
+          recordId: mapLayer.id,
+          title: mapLayer.title,
+          type: 'geojson',
+          visible: mapLayer.visible !== false,
+          selectable: mapLayer.selectable !== false,
+          data: { type: 'FeatureCollection', features: [] },
+          source: mapLayer.source,
+          style: mapLayer.style,
+          popup: mapLayer.popup,
+          options: mapLayer.options,
+          order: context.reference.order
+        };
+      }
     }
   });
 

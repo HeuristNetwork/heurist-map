@@ -11,6 +11,7 @@
  */
 
 import { normalizeMapDocument } from '../map-document/MapDocument.js';
+import { normalizeMapLayer } from '../map-layer/MapLayer.js';
 import { createMapEnvironment } from '../map-document/createMapEnvironment.js';
 
 /**
@@ -44,6 +45,56 @@ export class MapApplication {
     this.activeBaseMapId = config.mapDocument?.worldBaseMap?.code || config.baseMaps?.[0]?.id || null;
     this.selectionLayerId = null;
     this.selectedFeatures = new Map();
+    this.runtimeLayerSerial = 0;
+    this.dynamicDocumentId = String(config.dynamicDocument?.id || 'dynamic');
+    this.initializeDynamicDocument();
+  }
+
+  /** Create the predefined non-persistent MapDocument entry. */
+  initializeDynamicDocument() {
+    if (this.config.dynamicDocument?.enabled === false) return;
+    const active = this.config.dynamicDocument?.initiallyActive === true;
+    this.mapDocuments.set(this.dynamicDocumentId, {
+      id: this.dynamicDocumentId,
+      kind: 'dynamic',
+      persistent: false,
+      title: this.config.dynamicDocument?.title || 'Dynamic map',
+      active,
+      activating: false,
+      loadState: active ? 'loaded' : 'available',
+      error: null,
+      showInPanel: this.config.ui?.showCurrentDocument === true,
+      layerDefinitions: (this.config.dynamicDocument?.layers || []).map((definition, index) => {
+        const requestedRuntimeId = definition.runtimeId ?? definition.id ?? null;
+        const mapLayer = normalizeMapLayer({
+          ...definition,
+          options: { ...(definition.options || {}), runtimeId: requestedRuntimeId }
+        });
+        return {
+          mapLayer,
+          reference: {
+            id: createRuntimeLayerId(mapLayer, index + 1),
+            recordId: mapLayer.id,
+            title: mapLayer.title,
+            order: index + 1,
+            visible: mapLayer.visible !== false
+          },
+          runtimeAdded: true
+        };
+      })
+    });
+    if (active) this.activeMapDocumentId = this.dynamicDocumentId;
+  }
+
+  /** Return the internal dynamic MapDocument entry. */
+  getDynamicDocumentEntry() {
+    return this.mapDocuments.get(this.dynamicDocumentId) || null;
+  }
+
+  /** Return the public dynamic MapDocument description. */
+  getDynamicDocument() {
+    const entry = this.getDynamicDocumentEntry();
+    return entry ? createPublicDocumentEntry(entry) : null;
   }
 
   /**
@@ -76,7 +127,9 @@ export class MapApplication {
     const previousActiveId = this.activeMapDocumentId;
     try {
       const result = await this.providers.mapDocumentList.search(query, { signal });
+      const dynamicEntry = this.getDynamicDocumentEntry();
       this.mapDocuments.clear();
+      if (dynamicEntry) this.mapDocuments.set(this.dynamicDocumentId, dynamicEntry);
       for (const entry of result.items) {
         const active = entry.id === previousActiveId;
         this.mapDocuments.set(entry.id, {
@@ -100,18 +153,22 @@ export class MapApplication {
   }
 
   /** Return available MapDocuments in API order. */
-  getMapDocuments() { return [...this.mapDocuments.values()].map(clonePlain); }
+  getMapDocuments() { return [...this.mapDocuments.values()].map(createPublicDocumentEntry); }
 
   /** Return the active MapDocument list entry. */
   getActiveMapDocument() {
     const item = this.mapDocuments.get(this.activeMapDocumentId);
-    return item ? clonePlain(item) : null;
+    return item ? createPublicDocumentEntry(item) : null;
   }
 
   /** Activate exactly one persisted MapDocument. */
   async activateMapDocument(documentId, { signal, force = false } = {}) {
+    const requestedId = String(documentId);
+    if (requestedId === this.dynamicDocumentId) {
+      return this.activateDynamicMapDocument({ signal, force });
+    }
     const id = Number(documentId);
-    const item = this.mapDocuments.get(id);
+    const item = this.mapDocuments.get(id) || this.mapDocuments.get(Number(id));
     if (!item) throw new Error(`MapDocument ${documentId} is not in the available document list`);
     if (!force && this.activeMapDocumentId === id && this.config.mapDocument?.id === id) {
       return this.config.mapDocument;
@@ -167,6 +224,68 @@ export class MapApplication {
     }
   }
 
+  /** Activate the predefined dynamic MapDocument using stored layer definitions. */
+  async activateDynamicMapDocument({ signal, force = false } = {}) {
+    const item = this.getDynamicDocumentEntry();
+    if (!item) throw new Error('Dynamic MapDocument is disabled');
+    if (!force && this.activeMapDocumentId === this.dynamicDocumentId) return this.getMapDocument();
+
+    const activationSerial = ++this.documentActivationSerial;
+    this.cancelPendingRequests('Superseded by dynamic MapDocument activation');
+    this.cancelPendingLayerLoads('Superseded by dynamic MapDocument activation');
+    item.activating = true;
+    item.loadState = 'loading';
+    item.error = null;
+    this.dispatch('heurist-map-document-activating', { document: createPublicDocumentEntry(item) });
+    this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
+
+    try {
+      const document = createDynamicMapDocument(this.config, item);
+      const preparedLayers = [];
+      for (const stored of item.layerDefinitions || []) {
+        throwIfAborted(signal);
+        if (stored.mapLayer.visible === false) {
+          preparedLayers.push({ ...stored, runtimeLayer: null });
+        } else {
+          preparedLayers.push({
+            ...stored,
+            runtimeLayer: await this.createRuntimeLayer(stored.mapLayer, stored.reference, signal)
+          });
+        }
+      }
+      if (activationSerial !== this.documentActivationSerial) {
+        throw new DOMException('Stale dynamic MapDocument activation', 'AbortError');
+      }
+      await this.replaceMapEnvironment(document, createMapEnvironment(document), preparedLayers);
+      for (const stored of item.layerDefinitions || []) {
+        if (stored.runtimeOpacity != null && this.layers.has(stored.reference.id)) {
+          await this.setLayerOpacity(stored.reference.id, stored.runtimeOpacity);
+        }
+      }
+      for (const documentItem of this.mapDocuments.values()) {
+        documentItem.active = String(documentItem.id) === this.dynamicDocumentId;
+        documentItem.activating = false;
+      }
+      this.activeMapDocumentId = this.dynamicDocumentId;
+      item.loadState = 'loaded';
+      item.error = null;
+      this.dispatch('heurist-map-document-activated', {
+        document: createPublicDocumentEntry(item), mapDocument: document
+      });
+      this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
+      return document;
+    } catch (error) {
+      if (activationSerial === this.documentActivationSerial) {
+        item.activating = false;
+        item.loadState = isAbortError(error) ? 'available' : 'error';
+        item.error = isAbortError(error) ? null : serializeError(error);
+        this.dispatch('heurist-map-document-state-changed', { document: createPublicDocumentEntry(item) });
+        this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
+      }
+      throw error;
+    }
+  }
+
   /** Reload a persisted MapDocument and keep it active. */
   async reloadMapDocument(documentId = this.activeMapDocumentId, options = {}) {
     if (!documentId) throw new Error('No MapDocument is active');
@@ -175,13 +294,13 @@ export class MapApplication {
 
   /** Unload the active MapDocument layers and restore the default base map. */
   async unloadMapDocument(documentId = this.activeMapDocumentId) {
-    const id = Number(documentId);
-    if (!id || id !== this.activeMapDocumentId) return false;
+    const id = String(documentId);
+    if (!id || id !== String(this.activeMapDocumentId)) return false;
     this.documentActivationSerial += 1;
     this.cancelPendingRequests('MapDocument unloaded');
     this.cancelPendingLayerLoads('MapDocument unloaded');
     await this.clearLayers();
-    const item = this.mapDocuments.get(id);
+    const item = this.mapDocuments.get(id) || this.mapDocuments.get(Number(id));
     if (item) { item.active = false; item.activating = false; item.loadState = 'available'; item.error = null; }
     this.activeMapDocumentId = null;
     this.config.mapDocument = normalizeMapDocument({});
@@ -193,10 +312,13 @@ export class MapApplication {
 
   /** Zoom to a document bookmark, bounds, or combined visible layer extent. */
   async zoomToMapDocument(documentId) {
+    const requestedId = String(documentId);
     const id = Number(documentId);
-    const document = this.config.mapDocument?.id === id
-      ? this.config.mapDocument
-      : await this.providers.mapDocument.getById(id);
+    const document = requestedId === this.dynamicDocumentId
+      ? createDynamicMapDocument(this.config, this.getDynamicDocumentEntry())
+      : (this.config.mapDocument?.id === id
+        ? this.config.mapDocument
+        : await this.providers.mapDocument.getById(id));
     const view = createMapEnvironment(document).initialView;
     if (view.type === 'bounds') return this.fitBounds(view.bounds, { animate: false });
     if (document.mapBookmark?.type === 'point' || (document.mapBookmark?.type === 'view' && document.mapBookmark?.raw)) {
@@ -266,6 +388,9 @@ export class MapApplication {
     const layer = this.layers.get(layerId);
     if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
     layer.opacity = value;
+    const activeDocument = this.mapDocuments.get(this.activeMapDocumentId);
+    const stored = activeDocument ? findStoredLayer(activeDocument, layerId) : null;
+    if (stored) stored.runtimeOpacity = value;
     if (!this.deferredLayers.has(layerId)) await this.mapEngine.setLayerOpacity(layerId, value);
     this.dispatch('heurist-map-layer-opacity-changed', { layerId, opacity: value, layer: this.getLayer(layerId) });
     return value;
@@ -421,8 +546,30 @@ export class MapApplication {
       const mapDocument = await this.providers.mapDocument.getById(recordId, {
         signal: combinedSignal
       });
+      const documentEntry = this.mapDocuments.get(Number(recordId));
+      const runtimeDefinitions = (documentEntry?.layerDefinitions || [])
+        .filter((item) => item.runtimeAdded === true);
       const preparedLayers = await this.prepareReferencedLayers(mapDocument, combinedSignal);
-      const environment = createMapEnvironment(mapDocument);
+      for (const stored of runtimeDefinitions) {
+        preparedLayers.push({
+          ...stored,
+          runtimeLayer: stored.mapLayer.visible === false
+            ? null
+            : await this.createRuntimeLayer(stored.mapLayer, stored.reference, combinedSignal)
+        });
+      }
+      if (documentEntry) {
+        documentEntry.layerDefinitions = [
+          ...preparedLayers
+            .filter((item) => item.runtimeAdded !== true)
+            .map(({ mapLayer, reference }) => ({ mapLayer, reference, runtimeAdded: false })),
+          ...runtimeDefinitions
+        ];
+      }
+      const environment = createMapEnvironment({
+        ...mapDocument,
+        layers: preparedLayers.map((item) => item.reference)
+      });
 
       throwIfAborted(combinedSignal);
       await this.replaceMapEnvironment(mapDocument, environment, preparedLayers);
@@ -483,7 +630,7 @@ export class MapApplication {
    * Add an engine-neutral runtime layer and register its application state.
    * @returns {Promise<*>} Resolves when the operation completes.
    */
-  async addLayer(definition) {
+  async renderRuntimeLayer(definition) {
     this.assertActive();
     if (!definition?.id) {
       throw new TypeError('Layer definition requires an id');
@@ -520,7 +667,7 @@ export class MapApplication {
    * Remove a runtime layer from the map and application registry.
    * @returns {Promise<boolean>} Resolves with whether a layer was removed.
    */
-  async removeLayer(layerId) {
+  async removeRuntimeLayer(layerId) {
     this.assertActive();
     if (this.selectionLayerId === layerId) await this.clearSelection();
 
@@ -540,6 +687,146 @@ export class MapApplication {
       this.layers.delete(layerId);
     }
     return removed;
+  }
+
+  /** Add a MapLayer definition or persisted MapLayer record to a document. */
+  async addLayer(definition, { documentId = this.activeMapDocumentId, signal } = {}) {
+    // Backward-compatible internal/runtime path used by existing integrations
+    // and tests. Public MapLayer definitions use source.type and are stored on
+    // the target document before being prepared by the loader registry.
+    if (isPreparedRuntimeLayer(definition)) {
+      return this.renderRuntimeLayer(definition);
+    }
+    const document = this.resolveMutableDocument(documentId);
+    const requestedRuntimeId = definition && typeof definition === 'object'
+      ? definition.runtimeId ?? definition.id
+      : null;
+    const mapLayer = typeof definition === 'number' || /^\d+$/.test(String(definition))
+      ? await this.providers.mapLayer.getById(Number(definition), { signal })
+      : normalizeMapLayer({
+          ...definition,
+          options: {
+            ...(definition?.options || {}),
+            runtimeId: requestedRuntimeId || definition?.options?.runtimeId || null
+          }
+        });
+    if (!mapLayer.source?.type) throw new TypeError('MapLayer definition requires source.type');
+
+    const id = createRuntimeLayerId(mapLayer, ++this.runtimeLayerSerial);
+    if (document.layerDefinitions?.some((item) => String(item.reference.id) === String(id))) {
+      throw new Error(`Layer "${id}" already exists in MapDocument "${document.id}"`);
+    }
+    const reference = {
+      id,
+      recordId: mapLayer.id,
+      title: mapLayer.title,
+      order: nextDocumentLayerOrder(document),
+      visible: mapLayer.visible !== false
+    };
+    const stored = { mapLayer, reference, runtimeAdded: true };
+    document.layerDefinitions ||= [];
+    document.layerDefinitions.push(stored);
+
+    if (String(document.id) === String(this.activeMapDocumentId)) {
+      if (mapLayer.visible === false) this.registerDeferredLayer(mapLayer, reference);
+      else {
+        const runtimeLayer = await this.createRuntimeLayer(mapLayer, reference, signal);
+        await this.renderRuntimeLayer(runtimeLayer);
+        if (stored.runtimeOpacity != null) await this.setLayerOpacity(id, stored.runtimeOpacity);
+      }
+    }
+    this.dispatch('heurist-map-document-layer-added', {
+      documentId: document.id, layerId: id, layer: this.getLayer(id)
+    });
+    this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
+    return this.getLayer(id) || { id, recordId: mapLayer.id, title: mapLayer.title };
+  }
+
+  /** Remove a layer definition and its active native representation. */
+  async removeLayer(layerId, { documentId = this.activeMapDocumentId } = {}) {
+    const document = this.resolveMutableDocument(documentId);
+    const index = findStoredLayerIndex(document, layerId);
+    if (index < 0) return false;
+    document.layerDefinitions.splice(index, 1);
+    if (String(document.id) === String(this.activeMapDocumentId) && this.layers.has(layerId)) {
+      await this.removeRuntimeLayer(layerId);
+    }
+    this.dispatch('heurist-map-document-layer-removed', { documentId: document.id, layerId });
+    this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
+    return true;
+  }
+
+  /** Keep a layer definition but remove its data/native representation. */
+  async clearLayer(layerId, { documentId = this.activeMapDocumentId } = {}) {
+    const document = this.resolveMutableDocument(documentId);
+    const stored = findStoredLayer(document, layerId);
+    if (!stored) return false;
+    if (String(document.id) === String(this.activeMapDocumentId)) {
+      if (this.layers.has(layerId)) await this.removeRuntimeLayer(layerId);
+      stored.mapLayer.visible = false;
+      stored.reference.visible = false;
+      this.registerDeferredLayer(stored.mapLayer, stored.reference);
+    }
+    this.dispatch('heurist-map-document-layer-cleared', { documentId: document.id, layerId });
+    return true;
+  }
+
+  /** Add a query-backed layer to the predefined dynamic MapDocument. */
+  async addQueryLayer(query, options = {}) {
+    const definition = {
+      id: options.id || null,
+      title: options.title || 'Query layer',
+      description: options.description || '',
+      visible: options.visible !== false,
+      selectable: options.selectable !== false,
+      source: {
+        type: 'heurist-query', query,
+        limit: options.limit,
+        simplify: options.simplify === true
+      },
+      style: options.style || {},
+      options: options.layerOptions || options.options || {}
+    };
+    return this.addLayer(definition, { documentId: this.dynamicDocumentId, signal: options.signal });
+  }
+
+  /** Replace the query for one dynamic query layer and optionally reload it. */
+  async setQueryForLayer(layerId, query, options = {}) {
+    const document = this.getDynamicDocumentEntry();
+    if (!document) throw new Error('Dynamic MapDocument is disabled');
+    const stored = findStoredLayer(document, layerId);
+    if (!stored) throw new Error(`Layer "${layerId}" is not in the dynamic MapDocument`);
+    if (stored.mapLayer.source?.type !== 'heurist-query') {
+      throw new Error(`Layer "${layerId}" is not a query layer`);
+    }
+    stored.mapLayer.source = { ...stored.mapLayer.source, query };
+    const wasVisible = this.layers.get(layerId)?.visible ?? stored.mapLayer.visible !== false;
+    if (String(this.activeMapDocumentId) === this.dynamicDocumentId) {
+      if (this.layers.has(layerId)) await this.removeRuntimeLayer(layerId);
+      if (options.reload === false || !wasVisible) {
+        stored.mapLayer.visible = false;
+        stored.reference.visible = false;
+        this.registerDeferredLayer(stored.mapLayer, stored.reference);
+      } else {
+        stored.mapLayer.visible = true;
+        stored.reference.visible = true;
+        const runtimeLayer = await this.createRuntimeLayer(stored.mapLayer, stored.reference, options.signal);
+        await this.renderRuntimeLayer(runtimeLayer);
+      }
+    }
+    this.dispatch('heurist-map-query-layer-changed', {
+      documentId: this.dynamicDocumentId, layerId, query
+    });
+    return this.getLayer(layerId) || { id: layerId, title: stored.mapLayer.title };
+  }
+
+  /** Resolve one mutable runtime MapDocument entry. */
+  resolveMutableDocument(documentId = this.activeMapDocumentId) {
+    const key = String(documentId);
+    const document = this.mapDocuments.get(key) || this.mapDocuments.get(Number(key));
+    if (!document) throw new Error(`MapDocument "${documentId}" is not available`);
+    document.layerDefinitions ||= [];
+    return document;
   }
 
   /**
@@ -576,6 +863,12 @@ export class MapApplication {
     const current = this.layers.get(layerId);
     if (current) {
       current.visible = nextVisible;
+    }
+    const activeDocument = this.mapDocuments.get(this.activeMapDocumentId);
+    const stored = activeDocument ? findStoredLayer(activeDocument, layerId) : null;
+    if (stored) {
+      stored.mapLayer.visible = nextVisible;
+      stored.reference.visible = nextVisible;
     }
 
     this.dispatch('heurist-map-layer-visibility-changed', {
@@ -735,7 +1028,7 @@ export class MapApplication {
     };
     const mapLayer = await this.providers.mapLayer.getById(current.recordId, { signal });
     const shouldBeVisible = current.visible !== false;
-    await this.removeLayer(layerId);
+    await this.removeRuntimeLayer(layerId);
 
     if (!shouldBeVisible) {
       return this.registerDeferredLayer(mapLayer, reference);
@@ -743,7 +1036,7 @@ export class MapApplication {
 
     const runtimeLayer = await this.createRuntimeLayer(mapLayer, reference, signal);
     runtimeLayer.visible = true;
-    return this.addLayer(runtimeLayer);
+    return this.renderRuntimeLayer(runtimeLayer);
   }
 
   /**
@@ -752,7 +1045,7 @@ export class MapApplication {
    */
   async clearLayers() {
     for (const layerId of [...this.layers.keys()]) {
-      await this.removeLayer(layerId);
+      await this.removeRuntimeLayer(layerId);
     }
   }
 
@@ -901,7 +1194,7 @@ export class MapApplication {
       await this.initializeMapEngine(environment);
       for (const item of preparedLayers) {
         if (item.runtimeLayer) {
-          await this.addLayer(item.runtimeLayer);
+          await this.renderRuntimeLayer(item.runtimeLayer);
         } else {
           this.registerDeferredLayer(item.mapLayer, item.reference);
         }
@@ -987,6 +1280,47 @@ export class MapApplication {
       throw new Error('The map application has been destroyed');
     }
   }
+}
+
+function isPreparedRuntimeLayer(definition) {
+  if (!definition || typeof definition !== 'object' || !definition.type) return false;
+  if (definition.type === 'geojson') return definition.data != null;
+  if (definition.type === 'tile' || definition.type === 'image') return Boolean(definition.url);
+  return false;
+}
+
+function createPublicDocumentEntry(entry) {
+  const { layerDefinitions, ...publicEntry } = entry || {};
+  return clonePlain(publicEntry);
+}
+
+function createDynamicMapDocument(config, entry) {
+  const base = normalizeMapDocument(config.mapDocument || {});
+  return {
+    ...base,
+    id: null,
+    title: entry?.title || config.dynamicDocument?.title || 'Dynamic map',
+    layers: (entry?.layerDefinitions || []).map((item) => ({ ...item.reference }))
+  };
+}
+
+function createRuntimeLayerId(mapLayer, serial) {
+  if (mapLayer?.options?.runtimeId) return String(mapLayer.options.runtimeId);
+  if (mapLayer?.id) return String(mapLayer.id);
+  return `dynamic-layer-${serial}`;
+}
+
+function nextDocumentLayerOrder(document) {
+  return Math.max(0, ...(document.layerDefinitions || []).map((item) => Number(item.reference.order) || 0)) + 1;
+}
+
+function findStoredLayerIndex(document, layerId) {
+  return (document.layerDefinitions || []).findIndex((item) => String(item.reference.id) === String(layerId));
+}
+
+function findStoredLayer(document, layerId) {
+  const index = findStoredLayerIndex(document, layerId);
+  return index < 0 ? null : document.layerDefinitions[index];
 }
 
 function createLayerState(definition) {
