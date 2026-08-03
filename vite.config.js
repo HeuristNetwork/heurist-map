@@ -21,6 +21,12 @@ export default defineConfig({
     sourcemap: true,
 
     rollupOptions: {
+      /*
+        * Use index.html as the Vite application entry.
+        * Vite will process the module reference to src/main.js
+        * and generate a production index.html.
+      input: 'index.html',      
+        */
       input: 'src/main.js',
       output: {
         entryFileNames: 'heurist-map.js',

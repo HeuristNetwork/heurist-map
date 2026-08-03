@@ -464,6 +464,51 @@ export class MapApplication {
     return this.getSelection();
   }
 
+  /** Select all rendered geometries for multiple records in one selectable layer. */
+  async selectRecords(layerId, recordIds, { replace = true, zoom = false } = {}) {
+    const layer = this.layers.get(layerId);
+    if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
+    if (layer.selectable === false) throw new Error(`Layer "${layer.title || layerId}" is not selectable`);
+    if (layer.visible === false || layer.loadState !== 'loaded') {
+      throw new Error(`Layer "${layer.title || layerId}" must be visible and loaded before selection`);
+    }
+
+    const ids = [...new Set((Array.isArray(recordIds) ? recordIds : [recordIds])
+      .map(normalizeSelectedRecordId)
+      .filter((value) => value != null))];
+    const previous = this.getSelection();
+
+    if (replace || this.selectionLayerId !== layerId) {
+      if (this.selectionLayerId != null) {
+        await this.mapEngine.setFeatureSelection(this.selectionLayerId, []);
+      }
+      this.selectionLayerId = layerId;
+      this.selectedFeatures.clear();
+    }
+
+    for (const recordId of ids) {
+      const featureIds = this.mapEngine.getFeatureIdsByRecord(layerId, recordId);
+      for (const featureId of featureIds) {
+        this.selectedFeatures.set(String(featureId), recordId);
+      }
+    }
+
+    if (this.selectedFeatures.size === 0) {
+      this.selectionLayerId = null;
+      if (previous) {
+        this.dispatch('heurist-map-selection-cleared', { previous });
+        this.dispatch('heurist-map-selection-changed', { selection: null, previous });
+      }
+      return null;
+    }
+
+    await this.mapEngine.setFeatureSelection(layerId, [...this.selectedFeatures.keys()]);
+    const selection = this.getSelection();
+    this.dispatch('heurist-map-selection-changed', { selection, previous });
+    if (zoom) await this.zoomToSelection();
+    return selection;
+  }
+
   /** Clear selected features and restore their native styles. */
   async clearSelection() {
     const previous = this.getSelection();

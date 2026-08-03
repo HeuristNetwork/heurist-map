@@ -18,9 +18,12 @@ import { normalizeMapDocument } from './map-document/MapDocument.js';
  * @returns {Object} Application configuration.
  */
 export function getHeuristMapConfig() {
-  const mapDocument = normalizeMapDocument(window.heuristMapConfig || {});
-  const runtime = window.heuristMapOptions || {};
   const url = new URL(globalThis.location?.href || 'http://localhost/');
+  const hostConfiguration = getHostConfiguration(url.searchParams.get('hostInstance'));
+  const mapDocument = normalizeMapDocument(
+    hostConfiguration?.mapDocument || window.heuristMapConfig || {}
+  );
+  const runtime = hostConfiguration?.heuristMapOptions || window.heuristMapOptions || {};
   const documentQuery = parseDocumentQuery(url.searchParams.get('doc'));
 
   return {
@@ -82,4 +85,25 @@ function normalizeBaseMaps(value) {
     { id: 'None', title: 'None', type: 'none' }
   ];
   return Array.isArray(value) && value.length ? value : defaults;
+}
+
+
+/**
+ * Resolve one same-origin wrapper configuration registered by the parent page.
+ * The registry entry is consumed once so destroyed/reloaded frames do not retain
+ * access tokens or stale runtime options in the host window.
+ */
+function getHostConfiguration(instanceId) {
+  if (!instanceId || globalThis.parent === globalThis) return null;
+
+  try {
+    const registry = globalThis.parent.HEURIST_MAP_INSTANCES;
+    const configuration = registry?.[instanceId] || null;
+    if (configuration) delete registry[instanceId];
+    return configuration;
+  } catch {
+    // Cross-origin frames cannot access the parent registry. A future
+    // postMessage-based integration can handle that case.
+    return null;
+  }
 }

@@ -114,6 +114,11 @@ export class HeuristMapPublicApi {
     return this.application.selectRecord(layerId, recordId, options);
   }
 
+  /** Select all rendered geometries belonging to multiple records in one layer. */
+  selectRecords(layerId, recordIds, options = {}) {
+    return this.application.selectRecords(layerId, recordIds, options);
+  }
+
   /** Clear all selected features. */
   clearSelection() { return this.application.clearSelection(); }
 
