@@ -58,10 +58,12 @@ export class LeafletMapAdapter extends MapEngineAdapter {
 
     if (options.baseLayer) {
       this.addTileLayer({
-        id: '__base__',
         ...options.baseLayer,
+        id: '__base__',
         visible: true
       });
+      const base = this.layers.get('__base__')?.layer;
+      if (typeof base?.bringToBack === 'function') base.bringToBack();
     }
   }
 
@@ -169,11 +171,23 @@ export class LeafletMapAdapter extends MapEngineAdapter {
   /** Replace the current base map without touching operational layers. */
   async setBaseMap(definition) {
     await this.removeLayer('__base__');
-    if (definition) {
-      this.addTileLayer({ id: '__base__', ...definition, visible: true });
-      const base = this.layers.get('__base__')?.layer;
-      if (typeof base?.bringToBack === 'function') base.bringToBack();
+
+    if (!definition) {
+      return true;
     }
+
+    this.addTileLayer({
+      ...definition,
+      id: '__base__',
+      visible: true
+    });
+
+    const base = this.layers.get('__base__')?.layer;
+    if (typeof base?.bringToBack === 'function') {
+      base.bringToBack();
+    }
+
+    return true;
   }
 
   /** Apply a global opacity multiplier without changing persisted symbology. */
@@ -406,10 +420,12 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       minZoom: definition.minZoom,
       maxZoom: definition.maxZoom,
       subdomains: definition.subdomains,
-      tms: definition.tms,
+      tms: definition.tms
+      /*
       bounds: toLeafletBounds(definition.bounds),
       noWrap: definition.noWrap,
       opacity: definition.opacity
+      */
     });
 
     const layer = L.tileLayer(definition.url, options);
@@ -628,7 +644,7 @@ function createIconFontIcon(symbol) {
 
   const fontSize = Math.min(width, height);
   const color = symbol.color || '#000000';
-  const backgroundStyle = symbol.fillColor
+  const backgroundStyle = symbol.fill &&symbol.fillColor
     ? `background-color:${symbol.fillColor};`
     : 'background:none;';
 

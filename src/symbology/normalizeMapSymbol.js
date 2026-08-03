@@ -99,7 +99,14 @@ function unitInterval(value, fallback) {
 }
 
 function booleanValue(value, fallback) {
-  return typeof value === 'boolean' ? value : fallback;
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1') return true;
+  if (value === 0 || value === '0') return false;
+
+  const text = value == null ? '' : String(value).trim().toLowerCase();
+  if (text === 'true') return true;
+  if (text === 'false') return false;
+  return fallback;
 }
 
 function nonEmptyString(value, fallback) {
