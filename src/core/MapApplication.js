@@ -31,6 +31,7 @@ export class MapApplication {
     this.layers = new Map();
     this.deferredLayers = new Map();
     this.pendingLayerLoads = new Map();
+    this.layerLoadGeneration = 0;
     this.initialized = false;
     this.destroyed = false;
     this.activeLoadController = null;
@@ -116,7 +117,19 @@ export class MapApplication {
 
     const activationSerial = ++this.documentActivationSerial;
     this.cancelPendingRequests('Superseded by a newer MapDocument activation');
-    for (const document of this.mapDocuments.values()) document.activating = false;
+    this.cancelPendingLayerLoads('Superseded by a newer MapDocument activation');
+
+    // A superseded activation does not enter its own catch branch because its
+    // serial is stale. Reset those document rows here so their loading spinner
+    // is removed immediately and the radio selector is restored.
+    for (const document of this.mapDocuments.values()) {
+      if (document.id !== id && (document.activating || document.loadState === 'loading')) {
+        document.activating = false;
+        document.loadState = document.active ? 'loaded' : 'available';
+        document.error = null;
+      }
+    }
+
     item.activating = true;
     item.loadState = 'loading';
     item.error = null;
@@ -164,6 +177,7 @@ export class MapApplication {
     if (!id || id !== this.activeMapDocumentId) return false;
     this.documentActivationSerial += 1;
     this.cancelPendingRequests('MapDocument unloaded');
+    this.cancelPendingLayerLoads('MapDocument unloaded');
     await this.clearLayers();
     const item = this.mapDocuments.get(id);
     if (item) { item.active = false; item.activating = false; item.loadState = 'available'; item.error = null; }
@@ -273,6 +287,7 @@ export class MapApplication {
     this.assertDataIntegrationConfigured();
 
     this.cancelPendingRequests('Superseded by a newer MapDocument request');
+    this.cancelPendingLayerLoads('Superseded by a newer MapDocument request');
     const controller = new AbortController();
     this.activeLoadController = controller;
     const combinedSignal = combineAbortSignals(controller.signal, signal);
@@ -317,6 +332,26 @@ export class MapApplication {
     this.activeLoadController.abort(new DOMException(reason, 'AbortError'));
     this.activeLoadController = null;
     return true;
+  }
+
+
+  /**
+   * Cancel all independently loading operational layers.
+   *
+   * The generation counter prevents a loader that ignores or races an abort
+   * signal from attaching its result after another MapDocument is activated.
+   *
+   * @param {string} reason Cancellation reason.
+   * @returns {number} Number of pending layer loads cancelled.
+   */
+  cancelPendingLayerLoads(reason = 'Layer loading cancelled') {
+    this.layerLoadGeneration += 1;
+    const pendingLoads = [...this.pendingLayerLoads.values()];
+    for (const pending of pendingLoads) {
+      pending.controller?.abort(new DOMException(reason, 'AbortError'));
+    }
+    this.pendingLayerLoads.clear();
+    return pendingLoads.length;
   }
 
   /**
@@ -365,7 +400,7 @@ export class MapApplication {
 
     const pending = this.pendingLayerLoads.get(layerId);
     if (pending) {
-      pending.abort(new DOMException('Layer was removed', 'AbortError'));
+      pending.controller?.abort(new DOMException('Layer was removed', 'AbortError'));
       this.pendingLayerLoads.delete(layerId);
     }
 
@@ -468,6 +503,8 @@ export class MapApplication {
     }
 
     const controller = new AbortController();
+    const loadGeneration = this.layerLoadGeneration;
+    const deferredEntry = deferred;
     const state = this.layers.get(layerId);
     if (state) {
       state.loadState = 'loading';
@@ -484,8 +521,18 @@ export class MapApplication {
           deferred.reference,
           controller.signal
         );
+        throwIfAborted(controller.signal);
+        if (loadGeneration !== this.layerLoadGeneration
+          || this.deferredLayers.get(layerId) !== deferredEntry) {
+          throw new DOMException('Stale layer load', 'AbortError');
+        }
         runtimeLayer.visible = true;
         await this.mapEngine.addLayer(runtimeLayer);
+        throwIfAborted(controller.signal);
+        if (loadGeneration !== this.layerLoadGeneration
+          || this.deferredLayers.get(layerId) !== deferredEntry) {
+          throw new DOMException('Stale layer render', 'AbortError');
+        }
 
         const loadedState = createLayerState(runtimeLayer);
         loadedState.visible = true;
@@ -713,6 +760,7 @@ export class MapApplication {
    * @returns {Promise<*>} Resolves when the operation completes.
    */
   async replaceMapEnvironment(mapDocument, environment, preparedLayers) {
+    this.cancelPendingLayerLoads('MapDocument environment replaced');
     await this.mapEngine.destroy();
     this.deferredLayers.clear();
     this.layers.clear();

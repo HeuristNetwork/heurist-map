@@ -56,3 +56,79 @@ test('stale MapDocument activation cannot become active', async () => {
   await assert.rejects(first, (error) => error.name === 'AbortError');
   assert.equal(application.getActiveMapDocument().id, 2);
 });
+
+test('stale deferred layer cannot attach after MapDocument switch cancellation', async () => {
+  let resolveLayer;
+  let addCount = 0;
+  const application = new MapApplication({
+    container: { dispatchEvent() {} },
+    config: { mapDocument: {}, baseMaps: [], readonly: true },
+    mapEngine: {
+      async addLayer() { addCount += 1; },
+      async removeLayer() { return true; },
+      getCapabilities() { return {}; }
+    },
+    host: { supportsEditing() { return false; } },
+    layerLoaders: {
+      load() {
+        return new Promise((resolve) => { resolveLayer = resolve; });
+      }
+    }
+  });
+
+  const mapLayer = {
+    id: 10,
+    title: 'Slow layer',
+    visible: false,
+    source: { type: 'heurist-query' },
+    style: {},
+    options: {}
+  };
+  const reference = { id: 'map-layer-10', recordId: 10, order: 0 };
+  application.registerDeferredLayer(mapLayer, reference);
+
+  const pending = application.loadDeferredLayer(reference.id);
+  application.cancelPendingLayerLoads('Document switched');
+  resolveLayer({ id: reference.id, title: 'Slow layer', type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+
+  await assert.rejects(pending, (error) => error.name === 'AbortError');
+  assert.equal(addCount, 0);
+});
+
+test('superseded MapDocument activation restores the previous radio state', async () => {
+  const { application } = createApplication();
+  application.mapDocuments.set(1, { id: 1, title: 'One', loadState: 'available', active: false, activating: false });
+  application.mapDocuments.set(2, { id: 2, title: 'Two', loadState: 'available', active: false, activating: false });
+  const resolvers = new Map();
+  application.loadMapDocument = (id) => new Promise((resolve) => resolvers.set(id, resolve));
+
+  const first = application.activateMapDocument(1);
+  assert.equal(application.mapDocuments.get(1).loadState, 'loading');
+
+  const second = application.activateMapDocument(2);
+  assert.equal(application.mapDocuments.get(1).activating, false);
+  assert.equal(application.mapDocuments.get(1).loadState, 'available');
+  assert.equal(application.mapDocuments.get(2).loadState, 'loading');
+
+  resolvers.get(2)({ id: 2, title: 'Two', layers: [], worldBaseMap: null });
+  await second;
+  resolvers.get(1)({ id: 1, title: 'One', layers: [], worldBaseMap: null });
+  await assert.rejects(first, (error) => error.name === 'AbortError');
+});
+
+test('reload MapDocument enters loading state immediately', async () => {
+  const { application } = createApplication();
+  application.mapDocuments.set(1, { id: 1, title: 'One', loadState: 'loaded', active: true, activating: false });
+  application.activeMapDocumentId = 1;
+  application.config.mapDocument = { id: 1, title: 'One', layers: [], worldBaseMap: null };
+  let resolveReload;
+  application.loadMapDocument = () => new Promise((resolve) => { resolveReload = resolve; });
+
+  const reload = application.reloadMapDocument(1);
+  assert.equal(application.mapDocuments.get(1).activating, true);
+  assert.equal(application.mapDocuments.get(1).loadState, 'loading');
+
+  resolveReload({ id: 1, title: 'One', layers: [], worldBaseMap: null });
+  await reload;
+  assert.equal(application.mapDocuments.get(1).loadState, 'loaded');
+});

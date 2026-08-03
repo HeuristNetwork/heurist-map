@@ -53,3 +53,17 @@ body {
 .heurist-map-basemap-list{padding:3px 8px 5px}
 .heurist-map-icon-button:focus-visible,.heurist-map-basemap-toggle:focus-visible,.heurist-map-row-main input:focus-visible{outline:2px solid #2864b4;outline-offset:1px}
 @media (max-width:600px){.heurist-map-control-panel{top:6px;right:6px;left:6px;width:auto;max-height:55vh}.heurist-map-control-panel.position-top-left{left:6px;right:6px}}
+/* Phase 5B panel refinements. */
+.heurist-map-active-layers{
+  margin:0 4px 4px 14px;
+  padding:2px 3px;
+  background:transparent;
+  border-radius:0;
+}
+.heurist-map-document-selector-spinner{
+  display:inline-flex;
+  width:13px;
+  min-width:13px;
+  align-items:center;
+  justify-content:center;
+}

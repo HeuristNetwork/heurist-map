@@ -33,22 +33,31 @@ function createRow(item, active, api) {
 
   const label = document.createElement('label');
   label.className = 'heurist-map-row-main';
-  const radio = document.createElement('input');
-  radio.type = 'radio';
-  radio.name = 'heurist-map-document';
-  radio.checked = active;
-  radio.disabled = item.activating === true;
-  radio.setAttribute('aria-label', `Activate ${item.title}`);
-  radio.addEventListener('change', () => {
-    if (radio.checked) api.activateMapDocument(item.id).catch(() => {});
-  });
+  const isLoading = item.activating === true || item.loadState === 'loading';
+  let selector;
+  if (isLoading) {
+    selector = document.createElement('span');
+    selector.className = 'heurist-map-document-selector-spinner';
+    selector.innerHTML = '<span class="heurist-map-spinner" aria-hidden="true"></span>';
+    selector.title = 'Loading map document';
+    selector.setAttribute('aria-label', 'Loading map document');
+  } else {
+    selector = document.createElement('input');
+    selector.type = 'radio';
+    selector.name = 'heurist-map-document';
+    selector.checked = active;
+    selector.setAttribute('aria-label', `Activate ${item.title}`);
+    selector.addEventListener('change', () => {
+      if (selector.checked) api.activateMapDocument(item.id).catch(() => {});
+    });
+  }
 
   const status = createDocumentStatus(item);
   const title = document.createElement('span');
   title.className = 'heurist-map-document-title';
   title.textContent = item.title;
   title.title = item.error?.message || item.title;
-  label.append(radio, status, title);
+  label.append(selector, status, title);
 
   const actions = document.createElement('span');
   actions.className = 'heurist-map-row-actions';
@@ -62,10 +71,7 @@ function createRow(item, active, api) {
 function createDocumentStatus(item) {
   const status = document.createElement('span');
   status.className = 'heurist-map-document-status';
-  if (item.activating || item.loadState === 'loading') {
-    status.innerHTML = '<span class="heurist-map-spinner" aria-hidden="true"></span>';
-    status.title = 'Loading map document';
-  } else if (item.loadState === 'error') {
+  if (item.loadState === 'error') {
     status.innerHTML = '<span class="fa-solid fa-triangle-exclamation" aria-hidden="true"></span>';
     status.classList.add('state-error');
     status.title = item.error?.message || 'Map document loading failed';
