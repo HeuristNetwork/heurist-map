@@ -149,6 +149,7 @@ function openOpacityPopover({ api, layer, row, trigger }) {
     document.removeEventListener('pointerdown', onOutsidePointerDown, true);
     popover.remove();
   };
+  popover._heuristCleanup = cleanup;
 
   const onOutsidePointerDown = (event) => {
     if (!popover.contains(event.target) && !trigger.contains(event.target)) {
@@ -168,5 +169,10 @@ function openOpacityPopover({ api, layer, row, trigger }) {
 }
 
 function closeOpenOpacityPopover() {
-  document.querySelector('[data-heurist-map-opacity-popover="1"]')?.remove();
+  const popover = document.querySelector('[data-heurist-map-opacity-popover="1"]');
+  if (typeof popover?._heuristCleanup === 'function') {
+    popover._heuristCleanup();
+  } else {
+    popover?.remove();
+  }
 }

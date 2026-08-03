@@ -87,9 +87,19 @@ export class MapControlPanel {
       'heurist-map-document-activating', 'heurist-map-document-activated',
       'heurist-map-document-state-changed', 'heurist-map-document-unloaded',
       'heurist-map-layer-loaded', 'heurist-map-layer-visibility-changed',
-      'heurist-map-layer-state-changed', 'heurist-map-layer-opacity-changed',
+      'heurist-map-layer-state-changed',
       'heurist-map-basemap-changed', 'heurist-map-error'
     ]) this.bind(eventName, () => this.refresh());
+
+    // The opacity slider updates continuously. Rebuilding the panel for every
+    // input event would remove the open popover, so defer that refresh until
+    // the control is closed. Programmatic opacity changes still refresh when
+    // no opacity control is open.
+    this.bind('heurist-map-layer-opacity-changed', () => {
+      if (!document.querySelector('[data-heurist-map-opacity-popover="1"]')) {
+        this.refresh();
+      }
+    });
     this.refresh();
   }
 
