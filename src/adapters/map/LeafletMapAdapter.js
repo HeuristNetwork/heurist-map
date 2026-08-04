@@ -47,6 +47,13 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     );
 
     this.map.on('click', (event) => {
+      // Leaflet may bubble a feature click to the map even after the DOM event
+      // has been stopped. Do not treat such a click as a background-map click,
+      // otherwise the selection made by onFeatureClick is cleared immediately.
+      if (event.originalEvent?._stopped) {
+        return;
+      }
+
       this.interactionHandlers.onMapClick?.({
         latlng: toPublicLatLng(event.latlng)
       });
@@ -367,6 +374,11 @@ export class LeafletMapAdapter extends MapEngineAdapter {
           recordFeatureIds.get(metadata.recordId).add(metadata.featureId);
         }
         rememberSelectionBaseStyle(nativeLayer, selectionBaseStyles);
+
+        // A click on a GeoJSON feature must not bubble to the map background.
+        // Otherwise MapApplication handles onFeatureClick and then immediately
+        // handles onMapClick, which clears the new selection.
+        nativeLayer.options.bubblingMouseEvents = false;
 
         nativeLayer.on('click', (event) => {
           if (event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);

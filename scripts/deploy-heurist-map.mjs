@@ -27,7 +27,7 @@ const sourceDirectory = path.join(
  * This is a filesystem path, not a browser URL.
  */
 const destinationDirectory =
-    'c:/xampp/htdocs/heurist/external/heurist-map';
+    'd:/xampp/htdocs/heurist/external/heurist-map';
     //'/var/www/html/heurist/external/heurist-map';
 
 async function verifyBuildDirectory() {
