@@ -37,7 +37,6 @@ export class RemoteGeoJsonLayerLoader {
     if (!source.url) {
       throw new TypeError('remote-geojson source requires url');
     }
-
     let response;
     try {
       response = await this.fetchImpl(source.url, {

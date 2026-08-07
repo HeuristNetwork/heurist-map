@@ -200,6 +200,11 @@ export class HeuristMapPublicApi {
     return this.application.getLayer(layerId);
   }
 
+  /** Return one stored MapDocument layer, including inactive/failed runtime layers. */
+  getDocumentLayer(layerId, documentId) {
+    return this.application.getDocumentLayer(layerId, documentId);
+  }
+
   /**
    * Reload a persisted MapLayer record and replace its rendered runtime layer.
    * @returns {*} Method result.

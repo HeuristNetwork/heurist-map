@@ -127,3 +127,70 @@ test('addLayer accepts a persisted MapLayer record ID for the active document', 
   assert.equal(layer.id, '45');
   assert.equal(rendered[0].recordId, 45);
 });
+
+test('getDocumentLayer exposes inactive dynamic query layer state', async () => {
+  const { application, rendered } = createApplication();
+  await application.addQueryLayer('t:10', {
+    id: 'current-results',
+    title: 'Current results',
+    visible: true
+  });
+
+  assert.equal(rendered.length, 0);
+  const stored = application.getDocumentLayer('current-results', 'dynamic');
+  assert.equal(stored.id, 'current-results');
+  assert.equal(stored.title, 'Current results');
+  assert.equal(stored.visible, true);
+  assert.equal(stored.selectable, true);
+  assert.equal(stored.source.type, 'heurist-query');
+  assert.equal(stored.source.query, 't:10');
+  assert.equal(stored.loadState, 'stored');
+  assert.equal(stored.error, null);
+});
+
+test('failed current-results load can be retried through stored layer definition', async () => {
+  let shouldFail = true;
+  const rendered = [];
+  const mapEngine = {
+    async initialize() {}, setInteractionHandlers() {}, async destroy() {},
+    async addLayer(definition) { rendered.push(definition); return { id: definition.id }; },
+    async removeLayer() { return true; }, async setLayerVisibility() {},
+    async setLayerOpacity() {}, async setBaseMap() {}, async fitBounds() {},
+    async setView() {}, async getVisibleLayerBounds() { return null; },
+    getCapabilities() { return {}; }
+  };
+  const application = new MapApplication({
+    container: { dispatchEvent() {} },
+    config: {
+      mapDocument: {},
+      dynamicDocument: { enabled: true, id: 'dynamic', title: 'Runtime map', initiallyActive: true, layers: [] },
+      ui: { showCurrentDocument: true }, baseMaps: [], readonly: true
+    },
+    mapEngine,
+    host: { async initialize() {}, async destroy() {}, supportsEditing() { return false; } },
+    providers: {},
+    layerLoaders: {
+      async load(mapLayer, context) {
+        if (shouldFail) throw new Error('Invalid GeoJSON');
+        return {
+          id: context.reference.id, title: mapLayer.title, type: 'geojson', visible: true,
+          selectable: true, data: { type: 'FeatureCollection', features: [] },
+          source: mapLayer.source, style: {}, options: {}, order: context.reference.order
+        };
+      }
+    }
+  });
+
+  await assert.rejects(
+    application.addQueryLayer('bad-query', { id: 'current-results' }),
+    /Invalid GeoJSON/
+  );
+  assert.equal(application.getLayer('current-results'), null);
+  assert.equal(application.getDocumentLayer('current-results', 'dynamic').id, 'current-results');
+
+  shouldFail = false;
+  await application.setQueryForLayer('current-results', 'good-query');
+  assert.equal(application.getLayer('current-results').loadState, 'loaded');
+  assert.equal(application.getLayer('current-results').source.query, 'good-query');
+  assert.equal(rendered.length, 1);
+});

@@ -1056,6 +1056,35 @@ export class MapApplication {
   }
 
   /**
+   * Return one layer stored in a MapDocument, including layers whose document
+   * is inactive or whose runtime rendering failed.
+   *
+   * @param {string|number} layerId Runtime layer identifier.
+   * @param {string|number} [documentId=this.activeMapDocumentId] MapDocument ID.
+   * @returns {?Object} Lightweight stored layer state, or null.
+   */
+  getDocumentLayer(layerId, documentId = this.activeMapDocumentId) {
+    const document = this.mapDocuments.get(String(documentId))
+      || this.mapDocuments.get(Number(documentId));
+    if (!document) return null;
+
+    const stored = findStoredLayer(document, layerId);
+    if (!stored) return null;
+
+    const runtime = this.layers.get(layerId);
+    return clonePlain({
+      id: stored.reference.id,
+      recordId: stored.reference.recordId ?? stored.mapLayer.id ?? null,
+      title: stored.mapLayer.title || stored.reference.title || '',
+      visible: stored.mapLayer.visible !== false && stored.reference.visible !== false,
+      selectable: stored.mapLayer.selectable !== false,
+      source: stored.mapLayer.source || null,
+      loadState: runtime?.loadState || (stored.mapLayer.visible === false ? 'deferred' : 'stored'),
+      error: runtime?.error || null
+    });
+  }
+
+  /**
    * Reload a persisted MapLayer record and replace its rendered runtime layer.
    * @returns {Promise<*>} Resolves when the operation completes.
    */
