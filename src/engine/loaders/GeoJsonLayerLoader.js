@@ -71,6 +71,8 @@ export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson) {
     description: mapLayer.description,
     type: 'geojson',
     visible: mapLayer.visible !== false,
+    visibilityMinZoom: mapLayer.options?.effectiveMinZoom ?? mapLayer.options?.minZoom,
+    visibilityMaxZoom: mapLayer.options?.effectiveMaxZoom ?? mapLayer.options?.maxZoom,
     selectable: mapLayer.selectable !== false,
     data: normalizeGeoJson(geoJson, { layerId: id, sourceType: mapLayer.source.type }),
     style: mapLayer.style,

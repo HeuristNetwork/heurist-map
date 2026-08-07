@@ -108,6 +108,7 @@ export class MapApplication {
     try {
       await this.initializeMapEngine(this.mapEnvironment);
       await this.applyInitialView(this.mapEnvironment.initialView);
+      await this.applyDocumentZoomLimits(this.mapEnvironment);
       this.initialized = true;
       this.dispatch('heurist-map-ready', { mapDocument: this.config.mapDocument });
     } catch (error) {
@@ -567,6 +568,19 @@ export class MapApplication {
       this.selectionLayerId, [...this.selectedFeatures.keys()]
     );
     if (!bounds) return false;
+
+    const isPoint = Number(bounds.west) === Number(bounds.east)
+      && Number(bounds.south) === Number(bounds.north);
+    const pointKm = Number(this.mapEnvironment?.zoomToPointInKM);
+    if (isPoint && pointKm > 0) {
+      const center = { latitude: Number(bounds.south), longitude: Number(bounds.west) };
+      const zoom = this.mapEngine.distanceKmToZoom?.(pointKm, { latitude: center.latitude });
+      if (zoom != null) {
+        await this.setView(center, zoom, { animate: false });
+        return true;
+      }
+    }
+
     await this.fitBounds(bounds, { animate: false });
     return true;
   }
@@ -985,6 +999,8 @@ export class MapApplication {
       source: mapLayer.source,
       style: mapLayer.style,
       options: mapLayer.options,
+      visibilityMinZoom: this.resolveLayerZoomRange(mapLayer).minZoom,
+      visibilityMaxZoom: this.resolveLayerZoomRange(mapLayer).maxZoom,
       order: reference.order ?? 0
     };
     const state = createLayerState(definition);
@@ -1293,7 +1309,46 @@ export class MapApplication {
     if (!this.layerLoaders) {
       throw new Error('MapLayer loader registry is not configured');
     }
-    return this.layerLoaders.load(mapLayer, { reference, signal, application: this });
+    const runtimeLayer = await this.layerLoaders.load(mapLayer, { reference, signal, application: this });
+    const zoomRange = this.resolveLayerZoomRange(mapLayer);
+    runtimeLayer.visibilityMinZoom = zoomRange.minZoom;
+    runtimeLayer.visibilityMaxZoom = zoomRange.maxZoom;
+    return runtimeLayer;
+  }
+
+  /** Resolve effective native visibility zooms for one MapLayer. */
+  resolveLayerZoomRange(mapLayer) {
+    const options = mapLayer?.options || {};
+    let minZoom = finiteNumberOrNull(options.minZoom);
+    let maxZoom = finiteNumberOrNull(options.maxZoom);
+    const latitude = layerReferenceLatitude(mapLayer, this.mapEngine.getViewState?.());
+
+    if (minZoom == null && Number(options.maximumZoomKm) > 0) {
+      minZoom = this.mapEngine.distanceKmToZoom?.(options.maximumZoomKm, { latitude }) ?? null;
+    }
+    if (maxZoom == null && Number(options.minimumZoomKm) > 0) {
+      maxZoom = this.mapEngine.distanceKmToZoom?.(options.minimumZoomKm, { latitude }) ?? null;
+    }
+    return { minZoom, maxZoom };
+  }
+
+  /** Resolve and apply MapDocument-wide native zoom limits. */
+  async applyDocumentZoomLimits(environment) {
+    const limits = environment?.zoomLimits || {};
+    let minZoom = finiteNumberOrNull(limits.minZoom);
+    let maxZoom = finiteNumberOrNull(limits.maxZoom);
+    const latitude = environmentReferenceLatitude(environment, this.mapEngine.getViewState?.());
+
+    // Distance range is inverse to native zoom: a larger visible distance is
+    // the minimum native zoom, while a smaller distance is the maximum zoom.
+    if (minZoom == null && Number(limits.maximumZoomKm) > 0) {
+      minZoom = this.mapEngine.distanceKmToZoom?.(limits.maximumZoomKm, { latitude }) ?? null;
+    }
+    if (maxZoom == null && Number(limits.minimumZoomKm) > 0) {
+      maxZoom = this.mapEngine.distanceKmToZoom?.(limits.minimumZoomKm, { latitude }) ?? null;
+    }
+    await this.mapEngine.setZoomLimits?.({ minZoom, maxZoom });
+    environment.effectiveZoomLimits = { minZoom, maxZoom };
   }
 
   /**
@@ -1320,6 +1375,7 @@ export class MapApplication {
     try {
       await this.initializeMapEngine(environment);
       await this.applyInitialView(environment.initialView);
+      await this.applyDocumentZoomLimits(environment);
     } catch (error) {
       await this.mapEngine.destroy();
       this.deferredLayers.clear();
@@ -1359,6 +1415,8 @@ export class MapApplication {
     await this.mapEngine.initialize(this.container, {
       center: initialView.center,
       zoom: initialView.zoom,
+      minZoom: environment.zoomLimits?.minZoom ?? undefined,
+      maxZoom: environment.zoomLimits?.maxZoom ?? undefined,
       crs: environment.crs,
       controls: {
         zoom: this.config.ui?.showZoomControl !== false,
@@ -1487,6 +1545,26 @@ function getFeatureCount(definition) {
     return definition.data.features.length;
   }
   return definition.data ? 1 : 0;
+}
+
+function finiteNumberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function environmentReferenceLatitude(environment, viewState) {
+  const bounds = environment?.initialView?.bounds;
+  if (bounds) return (Number(bounds.south) + Number(bounds.north)) / 2;
+  const latitude = environment?.initialView?.center?.latitude ?? viewState?.center?.latitude;
+  return Number.isFinite(Number(latitude)) ? Number(latitude) : 0;
+}
+
+function layerReferenceLatitude(mapLayer, viewState) {
+  const bounds = mapLayer?.source?.bounds;
+  if (bounds) return (Number(bounds.south) + Number(bounds.north)) / 2;
+  const latitude = viewState?.center?.latitude;
+  return Number.isFinite(Number(latitude)) ? Number(latitude) : 0;
 }
 
 function compareLayerReferences(a, b) {

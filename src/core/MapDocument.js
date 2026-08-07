@@ -41,14 +41,21 @@ export function normalizeMapDocument(value = {}) {
     ),
     bounds: normalizeBounds(source.bounds ?? source.geoObject ?? source.DT_GEO_OBJECT),
     symbology: source.symbology ?? source.DT_SYMBOLOGY ?? null,
-    minimumZoom: finiteNumberOrNull(
-      source.minimumZoom ?? source.minZoom ?? source.DT_MINIMUM_ZOOM
+    // Native map-engine zoom levels take precedence over kilometre-based values.
+    minZoom: finiteNumberOrNull(
+      source.minZoom ?? source.DT_MINIMUM_ZOOM_LEVEL
     ),
-    maximumZoom: finiteNumberOrNull(
-      source.maximumZoom ?? source.maxZoom ?? source.DT_MAXIMUM_ZOOM
+    maxZoom: finiteNumberOrNull(
+      source.maxZoom ?? source.DT_MAXIMUM_ZOOM_LEVEL
+    ),
+    minimumZoomKm: finiteNumberOrNull(
+      source.minimumZoomKm ?? source.minimumZoom ?? source.DT_MINIMUM_ZOOM
+    ),
+    maximumZoomKm: finiteNumberOrNull(
+      source.maximumZoomKm ?? source.maximumZoom ?? source.DT_MAXIMUM_ZOOM
     ),
     zoomToPointInKM: finiteNumberOrNull(
-      source.zoomToPointInKM ?? source.DT_ZOOM_KM_POINT
+      source.zoomToPointInKM ?? source.zoomToPointKm ?? source.DT_ZOOM_KM_POINT
     ),
     worldBaseMap: normalizeTermDescriptor(
       source.worldBaseMap ?? source.baseMap ?? source.baseLayer ?? source.DT_WORLD_BASEMAP,

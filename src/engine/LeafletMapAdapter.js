@@ -14,6 +14,7 @@ import L from 'leaflet';
 import { normalizeBounds as normalizeGeographicBounds } from '../utils/normalizeBounds.js';
 import { MapEngineAdapter } from './MapEngineAdapter.js';
 import { createImageFilterCss } from '../utils/normalizeImageFilter.js';
+import { normalizeZoomLimit } from '../utils/normalizeZoomLimit.js';
 
 /**
  * Leaflet implementation hidden behind the engine-neutral adapter contract.
@@ -45,6 +46,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       [options.center.latitude, options.center.longitude],
       options.zoom
     );
+
+    this.map.on('zoomend', () => {
+      this.refreshZoomRangeVisibility();
+    });
 
     this.map.on('click', (event) => {
       // Leaflet may bubble a feature click to the map even after the DOM event
@@ -119,14 +124,8 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    */
   async setLayerVisibility(layerId, visible) {
     const entry = this.getLayerEntry(layerId);
-
-    if (visible && !this.map.hasLayer(entry.layer)) {
-      entry.layer.addTo(this.map);
-    } else if (!visible && this.map.hasLayer(entry.layer)) {
-      entry.layer.removeFrom(this.map);
-    }
-
     entry.visible = Boolean(visible);
+    this.applyLayerEffectiveVisibility(entry);
   }
 
   /** Configure callbacks without exposing Leaflet event objects. */
@@ -292,6 +291,70 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       ],
       options
     );
+  }
+
+  /** Apply document-wide native zoom limits. */
+  async setZoomLimits({ minZoom = null, maxZoom = null } = {}) {
+    this.assertInitialized();
+
+    // Leaflet uses undefined to mean "no explicit document limit". Do not
+    // coerce null through Number(): Number(null) is 0 and would incorrectly
+    // lock an unrestricted MapDocument to zoom level 0.
+    const normalizedMinZoom = normalizeZoomLimit(minZoom);
+    const normalizedMaxZoom = normalizeZoomLimit(maxZoom);
+
+    this.map.setMinZoom(normalizedMinZoom ?? undefined);
+    this.map.setMaxZoom(normalizedMaxZoom ?? undefined);
+
+    const current = this.map.getZoom();
+    const effectiveMinZoom = this.map.getMinZoom();
+    const effectiveMaxZoom = this.map.getMaxZoom();
+    const next = Math.max(effectiveMinZoom, Math.min(effectiveMaxZoom, current));
+    if (next !== current) this.map.setZoom(next, { animate: false });
+    this.refreshZoomRangeVisibility();
+  }
+
+  /**
+   * Convert a target viewport width in kilometres to a Leaflet zoom level.
+   * The calculation uses Web-Mercator ground resolution at the supplied
+   * latitude and the current map container width.
+   */
+  distanceKmToZoom(distanceKm, { latitude = null } = {}) {
+    this.assertInitialized();
+    const km = Number(distanceKm);
+    if (!(km > 0)) return null;
+
+    const lat = Number.isFinite(Number(latitude))
+      ? Number(latitude)
+      : this.map.getCenter().lat;
+    const width = Math.max(1, this.map.getSize().x || 1024);
+    const metresPerPixel = (km * 1000) / width;
+    const latitudeFactor = Math.max(0.000001, Math.cos(lat * Math.PI / 180));
+    const zoom = Math.log2((156543.03392804097 * latitudeFactor) / metresPerPixel);
+    return Number.isFinite(zoom) ? Math.max(0, Math.round(zoom)) : null;
+  }
+
+  /** Re-evaluate all operational layers after a zoom change. */
+  refreshZoomRangeVisibility() {
+    if (!this.map) return;
+    for (const [id, entry] of this.layers) {
+      if (id === '__base__') continue;
+      this.applyLayerEffectiveVisibility(entry);
+    }
+  }
+
+  applyLayerEffectiveVisibility(entry) {
+    if (!this.map || !entry) return;
+    const zoom = this.map.getZoom();
+    const minZoom = normalizeZoomLimit(entry.definition?.visibilityMinZoom);
+    const maxZoom = normalizeZoomLimit(entry.definition?.visibilityMaxZoom);
+    const inRange = (minZoom == null || zoom >= minZoom)
+      && (maxZoom == null || zoom <= maxZoom);
+    const shouldShow = entry.visible && inRange;
+
+    if (shouldShow && !this.map.hasLayer(entry.layer)) entry.layer.addTo(this.map);
+    else if (!shouldShow && this.map.hasLayer(entry.layer)) entry.layer.removeFrom(this.map);
+    entry.zoomVisible = inRange;
   }
 
   /**
@@ -516,13 +579,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    */
   registerLayer(definition, layer) {
     const visible = definition.visible !== false;
-    const entry = { definition, layer, visible, opacity: 1, baseOpacity: new WeakMap(), featureLayers: null, featureRecordIds: null, recordFeatureIds: null, selectionBaseStyles: new WeakMap(), selectedFeatureIds: new Set() };
+    const entry = { definition, layer, visible, zoomVisible: true, opacity: 1, baseOpacity: new WeakMap(), featureLayers: null, featureRecordIds: null, recordFeatureIds: null, selectionBaseStyles: new WeakMap(), selectedFeatureIds: new Set() };
 
     this.layers.set(definition.id, entry);
-
-    if (visible) {
-      layer.addTo(this.map);
-    }
+    this.applyLayerEffectiveVisibility(entry);
 
     return {
       id: definition.id,
@@ -552,6 +612,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     }
   }
 }
+
 
 function validateLayerDefinition(definition) {
   if (!definition || typeof definition !== 'object') {

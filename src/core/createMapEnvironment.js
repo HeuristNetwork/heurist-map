@@ -35,9 +35,11 @@ export function createMapEnvironment(mapDocument) {
       code: mapDocument.crs?.code || 'EPSG:3857'
     },
     baseMap: resolveBaseMap(mapDocument.worldBaseMap),
-    visibilityRangeKM: {
-      minimum: mapDocument.minimumZoom,
-      maximum: mapDocument.maximumZoom
+    zoomLimits: {
+      minZoom: mapDocument.minZoom,
+      maxZoom: mapDocument.maxZoom,
+      minimumZoomKm: mapDocument.minimumZoomKm,
+      maximumZoomKm: mapDocument.maximumZoomKm
     },
     zoomToPointInKM: mapDocument.zoomToPointInKM,
     layers: mapDocument.layers

@@ -48,6 +48,8 @@ export class ImageLayerLoader {
       description: mapLayer.description,
       type: 'image',
       visible: mapLayer.visible !== false,
+    visibilityMinZoom: mapLayer.options?.effectiveMinZoom ?? mapLayer.options?.minZoom,
+    visibilityMaxZoom: mapLayer.options?.effectiveMaxZoom ?? mapLayer.options?.maxZoom,
       selectable: false,
       url: source.url,
       bounds,

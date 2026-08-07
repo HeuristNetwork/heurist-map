@@ -106,6 +106,16 @@ export class MapEngineAdapter {
     throw new Error('MapEngineAdapter.fitBounds() is not implemented');
   }
 
+  /** Apply native map zoom limits; null removes a limit. */
+  async setZoomLimits() {
+    throw new Error('MapEngineAdapter.setZoomLimits() is not implemented');
+  }
+
+  /** Convert a viewport width expressed in kilometres to a native zoom level. */
+  distanceKmToZoom() {
+    return null;
+  }
+
   /**
    * Notify the map engine that its container dimensions changed.
    * @returns {Promise<*>} Resolves when the operation completes.

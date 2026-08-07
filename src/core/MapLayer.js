@@ -35,9 +35,7 @@ export function normalizeMapLayer(value = {}) {
     source: normalizeSource(source.source),
     style: normalizeStyle(source.style),
     timeline: normalizeTimeline(source.timeline),
-    options: source.options && typeof source.options === 'object'
-      ? { ...source.options }
-      : {}
+    options: normalizeOptions(source.options)
   };
 }
 
@@ -62,6 +60,23 @@ function normalizeTimeline(value) {
     enabled: timeline.enabled === true,
     fields: Array.isArray(timeline.fields) ? [...timeline.fields] : []
   };
+}
+
+function normalizeOptions(value) {
+  const options = value && typeof value === 'object' ? { ...value } : {};
+  return {
+    ...options,
+    minZoom: finiteNumberOrNull(options.minZoom),
+    maxZoom: finiteNumberOrNull(options.maxZoom),
+    minimumZoomKm: finiteNumberOrNull(options.minimumZoomKm ?? options.minimumZoom),
+    maximumZoomKm: finiteNumberOrNull(options.maximumZoomKm ?? options.maximumZoom)
+  };
+}
+
+function finiteNumberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function positiveIntegerOrNull(value) {

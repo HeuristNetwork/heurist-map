@@ -28,6 +28,8 @@ export class TileLayerLoader {
       description: mapLayer.description,
       type: 'tile',
       visible: mapLayer.visible !== false,
+      visibilityMinZoom: mapLayer.options?.effectiveMinZoom ?? mapLayer.options?.minZoom,
+      visibilityMaxZoom: mapLayer.options?.effectiveMaxZoom ?? mapLayer.options?.maxZoom,
       selectable: false,
       url: source.url,
       tms: (source.tms===true),
