@@ -196,20 +196,40 @@ export class MapApplication {
     this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
 
     try {
-      const document = await this.loadMapDocument(id, { signal });
+      let activationPublished = false;
+      const publishActivation = async (document) => {
+        if (activationSerial !== this.documentActivationSerial) {
+          throw new DOMException('Stale MapDocument activation', 'AbortError');
+        }
+
+        for (const documentItem of this.mapDocuments.values()) {
+          documentItem.active = documentItem.id === id;
+          documentItem.activating = documentItem.id === id;
+        }
+        this.activeMapDocumentId = id;
+        await this.applyDocumentBaseMap(document);
+        this.dispatch('heurist-map-document-activated', {
+          document: clonePlain(item),
+          mapDocument: document,
+          loading: true
+        });
+        this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
+        activationPublished = true;
+      };
+
+      const document = await this.loadMapDocument(id, { signal, onEnvironmentReady: publishActivation });
       if (activationSerial !== this.documentActivationSerial) {
         throw new DOMException('Stale MapDocument activation', 'AbortError');
       }
 
+      if (!activationPublished) await publishActivation(document);
       for (const documentItem of this.mapDocuments.values()) {
         documentItem.active = documentItem.id === id;
         documentItem.activating = false;
       }
-      this.activeMapDocumentId = id;
       item.loadState = 'loaded';
       item.error = null;
-      await this.applyDocumentBaseMap(document);
-      this.dispatch('heurist-map-document-activated', { document: clonePlain(item), mapDocument: document });
+      this.dispatch('heurist-map-document-state-changed', { document: clonePlain(item) });
       this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
       return document;
     } catch (error) {
@@ -241,6 +261,26 @@ export class MapApplication {
 
     try {
       const document = createDynamicMapDocument(this.config, item);
+      const environment = createMapEnvironment(document);
+
+      // Switch the visible map immediately. Dynamic layer data may be expensive
+      // to recreate, so do not leave the previous MapDocument on screen while
+      // that work is in progress.
+      await this.beginMapEnvironment(document, environment);
+      if (activationSerial !== this.documentActivationSerial) {
+        throw new DOMException('Stale dynamic MapDocument activation', 'AbortError');
+      }
+
+      for (const documentItem of this.mapDocuments.values()) {
+        documentItem.active = String(documentItem.id) === this.dynamicDocumentId;
+        documentItem.activating = String(documentItem.id) === this.dynamicDocumentId;
+      }
+      this.activeMapDocumentId = this.dynamicDocumentId;
+      this.dispatch('heurist-map-document-activated', {
+        document: createPublicDocumentEntry(item), mapDocument: document, loading: true
+      });
+      this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
+
       const preparedLayers = [];
       for (const stored of item.layerDefinitions || []) {
         throwIfAborted(signal);
@@ -256,7 +296,7 @@ export class MapApplication {
       if (activationSerial !== this.documentActivationSerial) {
         throw new DOMException('Stale dynamic MapDocument activation', 'AbortError');
       }
-      await this.replaceMapEnvironment(document, createMapEnvironment(document), preparedLayers);
+      await this.renderPreparedLayers(preparedLayers);
       for (const stored of item.layerDefinitions || []) {
         if (stored.runtimeOpacity != null && this.layers.has(stored.reference.id)) {
           await this.setLayerOpacity(stored.reference.id, stored.runtimeOpacity);
@@ -266,12 +306,9 @@ export class MapApplication {
         documentItem.active = String(documentItem.id) === this.dynamicDocumentId;
         documentItem.activating = false;
       }
-      this.activeMapDocumentId = this.dynamicDocumentId;
       item.loadState = 'loaded';
       item.error = null;
-      this.dispatch('heurist-map-document-activated', {
-        document: createPublicDocumentEntry(item), mapDocument: document
-      });
+      this.dispatch('heurist-map-document-state-changed', { document: createPublicDocumentEntry(item) });
       this.dispatch('heurist-map-documents-changed', { documents: this.getMapDocuments() });
       return document;
     } catch (error) {
@@ -420,7 +457,10 @@ export class MapApplication {
     const previous = this.getSelection();
 
     if (this.selectionLayerId !== layerId || !additive) {
-      if (this.selectionLayerId != null) {
+      // When replacing a selection in the same layer, do not clear native
+      // selection first. setFeatureSelection() receives the final set below
+      // and the engine adapter can update only the changed features.
+      if (this.selectionLayerId != null && this.selectionLayerId !== layerId) {
         await this.mapEngine.setFeatureSelection(this.selectionLayerId, []);
       }
       this.selectionLayerId = layerId;
@@ -452,16 +492,10 @@ export class MapApplication {
 
   /** Select all rendered geometries for one record in a selectable layer. */
   async selectRecord(layerId, recordId, options = {}) {
-    const featureIds = this.mapEngine.getFeatureIdsByRecord(layerId, recordId);
-    if (!featureIds.length) return null;
-    await this.clearSelection();
-    for (let index = 0; index < featureIds.length; index += 1) {
-      await this.selectFeature(layerId, featureIds[index], {
-        recordId, additive: index > 0, zoom: false
-      });
-    }
-    if (options.zoom) await this.zoomToSelection();
-    return this.getSelection();
+    return this.selectRecords(layerId, [recordId], {
+      replace: true,
+      zoom: options.zoom === true
+    });
   }
 
   /** Select all rendered geometries for multiple records in one selectable layer. */
@@ -479,7 +513,9 @@ export class MapApplication {
     const previous = this.getSelection();
 
     if (replace || this.selectionLayerId !== layerId) {
-      if (this.selectionLayerId != null) {
+      // Same-layer replacement is sent as one final feature-id set. The map
+      // engine is responsible for applying only the selection delta.
+      if (this.selectionLayerId != null && this.selectionLayerId !== layerId) {
         await this.mapEngine.setFeatureSelection(this.selectionLayerId, []);
       }
       this.selectionLayerId = layerId;
@@ -577,7 +613,7 @@ export class MapApplication {
    * Load, prepare, and render a MapDocument and its ordered MapLayer references.
    * @returns {Promise<*>} Resolves when the operation completes.
    */
-  async loadMapDocument(recordId, { signal } = {}) {
+  async loadMapDocument(recordId, { signal, onEnvironmentReady } = {}) {
     this.assertActive();
     this.assertDataIntegrationConfigured();
 
@@ -594,6 +630,17 @@ export class MapApplication {
       const documentEntry = this.mapDocuments.get(Number(recordId));
       const runtimeDefinitions = (documentEntry?.layerDefinitions || [])
         .filter((item) => item.runtimeAdded === true);
+
+      // The MapDocument record already contains the bookmark/bounds and base-map
+      // information. Apply that shell immediately, before potentially expensive
+      // MapLayer/GeoJSON preparation, so activation is visible without delay.
+      const environment = createMapEnvironment(mapDocument);
+      throwIfAborted(combinedSignal);
+      await this.beginMapEnvironment(mapDocument, environment);
+      if (typeof onEnvironmentReady === 'function') {
+        await onEnvironmentReady(mapDocument, environment);
+      }
+
       const preparedLayers = await this.prepareReferencedLayers(mapDocument, combinedSignal);
       for (const stored of runtimeDefinitions) {
         preparedLayers.push({
@@ -611,13 +658,9 @@ export class MapApplication {
           ...runtimeDefinitions
         ];
       }
-      const environment = createMapEnvironment({
-        ...mapDocument,
-        layers: preparedLayers.map((item) => item.reference)
-      });
 
       throwIfAborted(combinedSignal);
-      await this.replaceMapEnvironment(mapDocument, environment, preparedLayers);
+      await this.renderPreparedLayers(preparedLayers);
 
       this.dispatch('heurist-map-document-loaded', {
         mapDocument,
@@ -1258,6 +1301,16 @@ export class MapApplication {
    * @returns {Promise<*>} Resolves when the operation completes.
    */
   async replaceMapEnvironment(mapDocument, environment, preparedLayers) {
+    await this.beginMapEnvironment(mapDocument, environment);
+    await this.renderPreparedLayers(preparedLayers);
+  }
+
+  /**
+   * Replace the visible MapDocument shell before loading its operational layers.
+   * This clears the previous document immediately and applies the new bookmark
+   * or bounds so a document selection always has prompt visual feedback.
+   */
+  async beginMapEnvironment(mapDocument, environment) {
     await this.clearSelection();
     this.cancelPendingLayerLoads('MapDocument environment replaced');
     await this.mapEngine.destroy();
@@ -1266,13 +1319,6 @@ export class MapApplication {
 
     try {
       await this.initializeMapEngine(environment);
-      for (const item of preparedLayers) {
-        if (item.runtimeLayer) {
-          await this.renderRuntimeLayer(item.runtimeLayer);
-        } else {
-          this.registerDeferredLayer(item.mapLayer, item.reference);
-        }
-      }
       await this.applyInitialView(environment.initialView);
     } catch (error) {
       await this.mapEngine.destroy();
@@ -1280,13 +1326,28 @@ export class MapApplication {
       this.layers.clear();
       throw addContext(
         error,
-        'Map data was loaded but the new MapDocument could not be rendered; the map must be reinitialized'
+        'The new MapDocument environment could not be initialized'
       );
     }
 
     this.config.mapDocument = normalizeMapDocument(mapDocument);
     this.mapEnvironment = environment;
     this.initialized = true;
+  }
+
+  /** Render already prepared operational layers into the active environment. */
+  async renderPreparedLayers(preparedLayers) {
+    try {
+      for (const item of preparedLayers) {
+        if (item.runtimeLayer) {
+          await this.renderRuntimeLayer(item.runtimeLayer);
+        } else {
+          this.registerDeferredLayer(item.mapLayer, item.reference);
+        }
+      }
+    } catch (error) {
+      throw addContext(error, 'MapDocument layer data could not be rendered');
+    }
   }
 
   /**

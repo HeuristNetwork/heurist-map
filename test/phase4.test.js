@@ -135,3 +135,25 @@ test('background map click clears selection and emits event', async () => {
   assert.ok(events.some((event) => event.type === 'heurist-map-map-click'));
   assert.ok(events.some((event) => event.type === 'heurist-map-selection-cleared'));
 });
+
+test('same-layer replacement sends only the final selection to the engine', async () => {
+  const { application, nativeSelections } = createSelectionApplication();
+  await application.selectFeature('layer-a', 'a1');
+  nativeSelections.length = 0;
+
+  await application.selectFeature('layer-a', 'a2');
+
+  assert.deepEqual(nativeSelections, [
+    { layerId: 'layer-a', featureIds: ['a2'] }
+  ]);
+});
+
+test('selectRecord sends all record geometries in one selection update', async () => {
+  const { application, nativeSelections } = createSelectionApplication();
+
+  await application.selectRecord('layer-a', 101);
+
+  assert.deepEqual(nativeSelections, [
+    { layerId: 'layer-a', featureIds: ['a1', 'a1-secondary'] }
+  ]);
+});

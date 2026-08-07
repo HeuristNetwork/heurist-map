@@ -134,15 +134,40 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     this.interactionHandlers = { ...handlers };
   }
 
-  /** Apply selection styling to one GeoJSON layer. */
+  /**
+   * Apply selection styling to one GeoJSON layer.
+   *
+   * Only features whose selected state changed are touched. This is important
+   * for large result layers: a normal click must not walk every rendered
+   * feature just to restore the previously selected item.
+   */
   async setFeatureSelection(layerId, featureIds = []) {
     const entry = this.getLayerEntry(layerId);
     if (!entry.featureLayers) return false;
+
+    const previous = entry.selectedFeatureIds || new Set();
     const selected = new Set(featureIds.map(String));
-    entry.selectedFeatureIds = selected;
-    for (const [featureId, nativeLayer] of entry.featureLayers) {
-      applyNativeSelection(nativeLayer, selected.has(featureId), entry.selectionBaseStyles, entry.opacity);
+
+    // Restore only features that were selected before and are no longer selected.
+    for (const featureId of previous) {
+      if (selected.has(featureId)) continue;
+      const nativeLayer = entry.featureLayers.get(featureId);
+      if (nativeLayer) {
+        applyNativeSelection(nativeLayer, false, entry.selectionBaseStyles, entry.opacity);
+      }
     }
+
+    // Apply selection styling only to newly selected features. Features that
+    // remain selected already have the correct native style.
+    for (const featureId of selected) {
+      if (previous.has(featureId)) continue;
+      const nativeLayer = entry.featureLayers.get(featureId);
+      if (nativeLayer) {
+        applyNativeSelection(nativeLayer, true, entry.selectionBaseStyles, entry.opacity);
+      }
+    }
+
+    entry.selectedFeatureIds = selected;
     return true;
   }
 

@@ -132,3 +132,65 @@ test('reload MapDocument enters loading state immediately', async () => {
   await reload;
   assert.equal(application.mapDocuments.get(1).loadState, 'loaded');
 });
+
+test('MapDocument becomes active as soon as its environment is ready, before layers finish', async () => {
+  const { application } = createApplication();
+  application.mapDocuments.set(1, {
+    id: 1, title: 'One', loadState: 'available', active: false, activating: false
+  });
+
+  let finishLayers;
+  application.loadMapDocument = async (id, { onEnvironmentReady }) => {
+    const document = { id, title: 'One', layers: [], worldBaseMap: null };
+    await onEnvironmentReady(document, {});
+    await new Promise((resolve) => { finishLayers = resolve; });
+    return document;
+  };
+
+  const activation = application.activateMapDocument(1);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(application.getActiveMapDocument().id, 1);
+  assert.equal(application.getActiveMapDocument().activating, true);
+  assert.equal(application.getActiveMapDocument().loadState, 'loading');
+
+  finishLayers();
+  await activation;
+  assert.equal(application.getActiveMapDocument().activating, false);
+  assert.equal(application.getActiveMapDocument().loadState, 'loaded');
+});
+
+test('loadMapDocument applies the document environment before preparing layer data', async () => {
+  const { application } = createApplication();
+  application.config.apiBaseUrl = '/heurist/api';
+  application.config.database = 'test_db';
+  application.providers = {
+    mapDocument: {
+      async getById() {
+        return {
+          id: 1,
+          title: 'One',
+          layers: [{ id: 'layer-1', recordId: 10, order: 0 }],
+          worldBaseMap: null,
+          bounds: { west: 10, south: 20, east: 30, north: 40 }
+        };
+      }
+    },
+    mapLayer: {},
+    queryGeoData: {}
+  };
+  application.mapDocuments.set(1, {
+    id: 1, title: 'One', loadState: 'available', layerDefinitions: []
+  });
+
+  const order = [];
+  application.beginMapEnvironment = async () => { order.push('environment'); };
+  application.prepareReferencedLayers = async () => {
+    order.push('layers');
+    return [];
+  };
+  application.renderPreparedLayers = async () => { order.push('render'); };
+
+  await application.loadMapDocument(1);
+  assert.deepEqual(order, ['environment', 'layers', 'render']);
+});
