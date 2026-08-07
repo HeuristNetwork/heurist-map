@@ -14,7 +14,7 @@ import {
   MAP_LAYER_FORMAT,
   MAP_LAYER_VERSION,
   normalizeMapLayer
-} from '../map-layer/MapLayer.js';
+} from '../core/MapLayer.js';
 import { HeuristApiError } from './HeuristApiError.js';
 
 /**

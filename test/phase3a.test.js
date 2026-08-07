@@ -12,13 +12,13 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeMapSymbol } from '../src/symbology/normalizeMapSymbol.js';
-import { normalizeGeoJson } from '../src/metadata/normalizeGeoJson.js';
-import { LayerLoaderRegistry } from '../src/layers/LayerLoaderRegistry.js';
-import { normalizeMapLayer } from '../src/map-layer/MapLayer.js';
-import { TileLayerLoader } from '../src/layers/loaders/TileLayerLoader.js';
-import { ImageLayerLoader } from '../src/layers/loaders/ImageLayerLoader.js';
-import { createImageFilterCss, normalizeImageFilter, normalizeOpacity } from '../src/symbology/normalizeImageFilter.js';
+import { normalizeMapSymbol } from '../src/utils/normalizeMapSymbol.js';
+import { normalizeGeoJson } from '../src/utils/normalizeGeoJson.js';
+import { LayerLoaderRegistry } from '../src/engine/loaders/LayerLoaderRegistry.js';
+import { normalizeMapLayer } from '../src/core/MapLayer.js';
+import { TileLayerLoader } from '../src/engine/loaders/TileLayerLoader.js';
+import { ImageLayerLoader } from '../src/engine/loaders/ImageLayerLoader.js';
+import { createImageFilterCss, normalizeImageFilter, normalizeOpacity } from '../src/utils/normalizeImageFilter.js';
 
 test('normalizes simple symbol defaults and percentage opacity', () => {
   const symbol = normalizeMapSymbol({ color: '#000', opacity: 2, radius: -1 });

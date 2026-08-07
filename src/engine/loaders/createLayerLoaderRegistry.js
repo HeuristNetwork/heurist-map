@@ -11,10 +11,10 @@
  */
 
 import { LayerLoaderRegistry } from './LayerLoaderRegistry.js';
-import { GeoJsonLayerLoader } from './loaders/GeoJsonLayerLoader.js';
-import { RemoteGeoJsonLayerLoader } from './loaders/RemoteGeoJsonLayerLoader.js';
-import { TileLayerLoader } from './loaders/TileLayerLoader.js';
-import { ImageLayerLoader } from './loaders/ImageLayerLoader.js';
+import { GeoJsonLayerLoader } from './GeoJsonLayerLoader.js';
+import { RemoteGeoJsonLayerLoader } from './RemoteGeoJsonLayerLoader.js';
+import { TileLayerLoader } from './TileLayerLoader.js';
+import { ImageLayerLoader } from './ImageLayerLoader.js';
 
 /**
  * Create layer loader registry.

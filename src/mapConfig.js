@@ -10,7 +10,7 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { normalizeMapDocument } from './map-document/MapDocument.js';
+import { normalizeMapDocument } from './core/MapDocument.js';
 
 /**
  * Read the public MapDocument and separate runtime-only application options.

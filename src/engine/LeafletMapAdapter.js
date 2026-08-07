@@ -11,9 +11,9 @@
  */
 
 import L from 'leaflet';
-import { normalizeBounds as normalizeGeographicBounds } from '../../geo/normalizeBounds.js';
+import { normalizeBounds as normalizeGeographicBounds } from '../utils/normalizeBounds.js';
 import { MapEngineAdapter } from './MapEngineAdapter.js';
-import { createImageFilterCss } from '../../symbology/normalizeImageFilter.js';
+import { createImageFilterCss } from '../utils/normalizeImageFilter.js';
 
 /**
  * Leaflet implementation hidden behind the engine-neutral adapter contract.

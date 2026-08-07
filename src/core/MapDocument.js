@@ -10,7 +10,7 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { normalizeBounds } from '../geo/normalizeBounds.js';
+import { normalizeBounds } from '../utils/normalizeBounds.js';
 
 export const MAP_DOCUMENT_FORMAT = 'heurist-map-document';
 export const MAP_DOCUMENT_VERSION = 1;

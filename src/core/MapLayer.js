@@ -10,8 +10,8 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { normalizeLayerStyle } from '../symbology/normalizeLayerStyle.js';
-import { normalizeBounds } from '../geo/normalizeBounds.js';
+import { normalizeLayerStyle } from '../utils/normalizeLayerStyle.js';
+import { normalizeBounds } from '../utils/normalizeBounds.js';
 
 export const MAP_LAYER_FORMAT = 'heurist-map-layer';
 export const MAP_LAYER_VERSION = 1;

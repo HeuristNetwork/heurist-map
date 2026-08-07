@@ -11,11 +11,11 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { normalizeBounds } from '../../geo/normalizeBounds.js';
+import { normalizeBounds } from '../../utils/normalizeBounds.js';
 import {
   normalizeImageFilter,
   normalizeOpacity
-} from '../../symbology/normalizeImageFilter.js';
+} from '../../utils/normalizeImageFilter.js';
 
 /**
  * Loads static georeferenced image MapLayers.

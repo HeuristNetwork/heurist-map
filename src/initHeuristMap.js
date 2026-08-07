@@ -11,9 +11,9 @@
  */
 
 import { MapApplication } from './core/MapApplication.js';
-import { createMapEngine } from './adapters/map/createMapEngine.js';
+import { createMapEngine } from './engine/createMapEngine.js';
 import { createHostAdapter } from './host/createHostAdapter.js';
-import { HeuristMapPublicApi } from './public-api/HeuristMapPublicApi.js';
+import { HeuristMapPublicApi } from './host/HeuristMapPublicApi.js';
 import { HeuristApiClient } from './data/HeuristApiClient.js';
 import { MapDocumentProvider } from './data/MapDocumentProvider.js';
 import { MapLayerProvider } from './data/MapLayerProvider.js';
@@ -21,7 +21,7 @@ import { QueryGeoDataProvider } from './data/QueryGeoDataProvider.js';
 import { RecordTypeProvider } from './data/RecordTypeProvider.js';
 import { MapDocumentListProvider } from './data/MapDocumentListProvider.js';
 import { MapControlPanel } from './ui/MapControlPanel.js';
-import { createLayerLoaderRegistry } from './layers/createLayerLoaderRegistry.js';
+import { createLayerLoaderRegistry } from './engine/loaders/createLayerLoaderRegistry.js';
 
 /**
  * Initialize the standalone map and expose its stable same-origin public API.

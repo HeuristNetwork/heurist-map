@@ -44,36 +44,53 @@ src/
 
   core/
     MapApplication.js
+    MapDocument.js
+    MapLayer.js
+    createMapEnvironment.js
 
   data/
     HeuristApiClient.js
     HeuristApiError.js
+    MapDocumentListProvider.js
     MapDocumentProvider.js
     MapLayerProvider.js
     QueryGeoDataProvider.js
+    RecordTypeProvider.js
 
-  map-document/
-    MapDocument.js
-    createMapEnvironment.js
-
-  map-layer/
-    MapLayer.js
-
-  timeline/
-    TimelineResponse.js
-
-  adapters/map/
+  engine/
     MapEngineAdapter.js
     LeafletMapAdapter.js
     createMapEngine.js
+    loaders/
+      LayerLoaderRegistry.js
+      createLayerLoaderRegistry.js
+      GeoJsonLayerLoader.js
+      RemoteGeoJsonLayerLoader.js
+      ImageLayerLoader.js
+      TileLayerLoader.js
 
   host/
     HostAdapter.js
     StandaloneHostAdapter.js
     createHostAdapter.js
-
-  public-api/
     HeuristMapPublicApi.js
+
+  utils/
+    normalizeBounds.js
+    normalizeGeoJson.js
+    normalizeImageFilter.js
+    normalizeLayerStyle.js
+    normalizeMapSymbol.js
+
+  timeline/
+    TimelineResponse.js
+
+  ui/
+    BaseMapSelector.js
+    LayerPanel.js
+    LayerPanelItem.js
+    MapControlPanel.js
+    MapDocumentSelector.js
 
 public/fixtures/
   map-document.json

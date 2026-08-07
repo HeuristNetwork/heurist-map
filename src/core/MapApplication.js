@@ -10,9 +10,9 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { normalizeMapDocument } from '../map-document/MapDocument.js';
-import { normalizeMapLayer } from '../map-layer/MapLayer.js';
-import { createMapEnvironment } from '../map-document/createMapEnvironment.js';
+import { normalizeMapDocument } from './MapDocument.js';
+import { normalizeMapLayer } from './MapLayer.js';
+import { createMapEnvironment } from './createMapEnvironment.js';
 
 /**
  * Engine-neutral application controller.

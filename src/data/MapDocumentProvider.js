@@ -14,7 +14,7 @@ import {
   MAP_DOCUMENT_FORMAT,
   MAP_DOCUMENT_VERSION,
   normalizeMapDocument
-} from '../map-document/MapDocument.js';
+} from '../core/MapDocument.js';
 import { HeuristApiError } from './HeuristApiError.js';
 
 /**

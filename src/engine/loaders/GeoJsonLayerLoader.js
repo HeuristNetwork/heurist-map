@@ -10,7 +10,7 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { normalizeGeoJson } from '../../metadata/normalizeGeoJson.js';
+import { normalizeGeoJson } from '../../utils/normalizeGeoJson.js';
 
 /**
  * Loads Heurist query, record, and inline GeoJSON MapLayers.
