@@ -21,6 +21,7 @@ import { QueryGeoDataProvider } from './data/QueryGeoDataProvider.js';
 import { RecordTypeProvider } from './data/RecordTypeProvider.js';
 import { MapDocumentListProvider } from './data/MapDocumentListProvider.js';
 import { MapControlPanel } from './ui/MapControlPanel.js';
+import { MapConfigurationDialog } from './ui/config/MapConfigurationDialog.js';
 import { createLayerLoaderRegistry } from './engine/loaders/createLayerLoaderRegistry.js';
 
 /**
@@ -67,6 +68,11 @@ export async function initHeuristMap(config) {
   });
 
   const publicApi = new HeuristMapPublicApi(application);
+  publicApi.setConfigurationDialogFactory((options = {}) => {
+    const dialog = new MapConfigurationDialog(options);
+    dialog.open();
+    return dialog;
+  });
   let controlPanel = null;
   const readyPromise = application.initialize().then(async () => {
     controlPanel = new MapControlPanel({

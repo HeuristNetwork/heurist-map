@@ -20,6 +20,23 @@ export class HeuristMapPublicApi {
   constructor(application) {
     this.application = application;
     this.readyPromise = null;
+    this.configurationDialogFactory = null;
+    this.configurationDialog = null;
+  }
+
+  /** Register the reusable host-facing map configuration dialog factory. */
+  setConfigurationDialogFactory(factory) {
+    this.configurationDialogFactory = typeof factory === 'function' ? factory : null;
+  }
+
+  /** Open the generalized map configuration dialog. */
+  openConfigurationDialog(options = {}) {
+    if (!this.configurationDialogFactory) {
+      throw new Error('Map configuration dialog is not available');
+    }
+    this.configurationDialog?.close?.();
+    this.configurationDialog = this.configurationDialogFactory(options);
+    return this.configurationDialog;
   }
 
   /**
@@ -266,6 +283,8 @@ export class HeuristMapPublicApi {
    * @returns {*} Method result.
    */
   destroy() {
+    this.configurationDialog?.close?.();
+    this.configurationDialog = null;
     return this.application.destroy();
   }
 }
