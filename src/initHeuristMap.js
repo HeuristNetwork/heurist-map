@@ -88,6 +88,9 @@ export async function initHeuristMap(config) {
         activateFirst: config.documents.activateFirst !== false
       });
     }
+    if (config.initialState) {
+      await publicApi.restoreState(config.initialState);
+    }
     return publicApi;
   });
   publicApi.setReadyPromise(readyPromise);

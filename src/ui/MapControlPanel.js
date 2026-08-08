@@ -25,6 +25,7 @@ export class MapControlPanel {
     this.element.setAttribute('aria-label', 'Map controls');
     if (this.options.position) this.element.classList.add(`position-${this.options.position}`);
     if (this.options.maxHeight) this.element.style.maxHeight = String(this.options.maxHeight);
+    if (this.options.controlCss) this.element.style.cssText += `;${String(this.options.controlCss)}`;
 
     const header = document.createElement('div');
     header.className = 'heurist-map-panel-header';
@@ -39,6 +40,14 @@ export class MapControlPanel {
     header.append(toggle, title);
     if (this.options.showHomeControl !== false) {
       header.append(iconButton('fa-solid fa-house', 'Zoom to active map document', () => this.api.zoomHome()));
+    }
+
+    const hostCapabilities = this.api.getHostCapabilities?.() || {};
+    if (this.options.showOptions !== false && hostCapabilities.mapPreferences) {
+      header.append(iconButton('fa-solid fa-gear', 'Map options', () => this.api.openPreferencesDialog()));
+    }
+    if (this.options.showPublish !== false && hostCapabilities.mapPublishing) {
+      header.append(iconButton('fa-solid fa-share-nodes', 'Publish map', () => this.api.openPublishDialog()));
     }
 
     const body = document.createElement('div');
@@ -127,6 +136,21 @@ export class MapControlPanel {
     this.baseMapsToggle.textContent = `Base maps ${this.baseMapsExpanded ? '▾' : '▸'}`;
     this.baseMapsToggle.setAttribute('aria-expanded', String(this.baseMapsExpanded));
     this.baseMapsContainer.hidden = !this.baseMapsExpanded;
+  }
+
+  /** Rebuild the lightweight control panel with new presentation options. */
+  applyOptions(options = {}) {
+    const next = { ...this.options, ...options };
+    const wasExpanded = this.element ? !this.element.classList.contains('collapsed') : next.initiallyExpanded !== false;
+    this.destroy();
+    this.options = next;
+    this.listeners = [];
+    this.baseMapsExpanded = next.baseMapsInitiallyExpanded !== false;
+    this.mount();
+    if (this.element && wasExpanded !== (next.initiallyExpanded !== false)) {
+      this.element.classList.toggle('collapsed', !wasExpanded);
+    }
+    return this.element || null;
   }
 
   destroy() {

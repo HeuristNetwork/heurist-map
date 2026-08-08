@@ -75,11 +75,14 @@ function normalizeOptions(source, defaults) {
       showLegend: boolean(ui.showLegend, defaults.ui.showLegend),
       showZoomControl: boolean(ui.showZoomControl, defaults.ui.showZoomControl),
       showSearch: boolean(ui.showSearch, defaults.ui.showSearch),
-      showPublish: boolean(ui.showPublish, defaults.ui.showPublish)
+      showPublish: boolean(ui.showPublish, defaults.ui.showPublish),
+      controlCss: nullableString(ui.controlCss)
     },
     mapDocuments: {
       allowed: nullableList(documents.allowed, { numeric: true }),
-      initiallyActive: nullableIdentifier(documents.initiallyActive, { numeric: true, allowDynamic: true })
+      initiallyActive: documents.initiallyActive === undefined
+        ? defaults.mapDocuments.initiallyActive
+        : nullableIdentifier(documents.initiallyActive, { numeric: true, allowDynamic: true })
     },
     baseMaps: {
       allowed: nullableList(baseMaps.allowed),
@@ -103,13 +106,15 @@ function normalizeConfig(source, defaults) {
       enabled: boolean(document.enabled, defaults.dynamicDocument.enabled),
       title: stringValue(document.title, defaults.dynamicDocument.title),
       initiallyActive: boolean(document.initiallyActive, defaults.dynamicDocument.initiallyActive),
-      minZoom: nullableNumber(document.minZoom),
-      maxZoom: nullableNumber(document.maxZoom),
+      minZoom: nullableZoom(document.minZoom),
+      maxZoom: nullableZoom(document.maxZoom),
       minimumZoomKm: nullablePositiveNumber(document.minimumZoomKm),
       maximumZoomKm: nullablePositiveNumber(document.maximumZoomKm),
       zoomToPointInKM: nullablePositiveNumber(document.zoomToPointInKM),
       bounds: normalizeBounds(document.bounds),
-      symbology: nullableJsonObject(document.symbology)
+      symbology: nullableJsonObject(document.symbology),
+      selectSymbology: nullableJsonObject(document.selectSymbology),
+      preventContinuousWorldBasemap: boolean(document.preventContinuousWorldBasemap, defaults.dynamicDocument.preventContinuousWorldBasemap)
     },
     currentResultsLayer: {
       title: stringValue(layer.title, defaults.currentResultsLayer.title),
@@ -118,10 +123,10 @@ function normalizeConfig(source, defaults) {
       style: nullableJsonObject(layer.style),
       options: {
         markerClustering: boolean(layerOptions.markerClustering, defaults.currentResultsLayer.options.markerClustering),
-        maxAllowedFeatures: positiveInteger(layerOptions.maxAllowedFeatures, defaults.currentResultsLayer.options.maxAllowedFeatures),
+        maxAllowedFeatures: allowedFeatureLimit(layerOptions.maxAllowedFeatures, defaults.currentResultsLayer.options.maxAllowedFeatures),
         dynamicRequests: boolean(layerOptions.dynamicRequests, defaults.currentResultsLayer.options.dynamicRequests),
-        minZoom: nullableNumber(layerOptions.minZoom),
-        maxZoom: nullableNumber(layerOptions.maxZoom),
+        minZoom: nullableZoom(layerOptions.minZoom),
+        maxZoom: nullableZoom(layerOptions.maxZoom),
         minimumZoomKm: nullablePositiveNumber(layerOptions.minimumZoomKm),
         maximumZoomKm: nullablePositiveNumber(layerOptions.maximumZoomKm),
         popupTemplate: nullableString(layerOptions.popupTemplate)
@@ -158,9 +163,14 @@ function nullablePositiveNumber(value) {
   return number !== null && number > 0 ? number : null;
 }
 
-function positiveInteger(value, fallback) {
+function nullableZoom(value) {
+  const number = nullableNumber(value);
+  return number !== null && number >= 0 && number <= 22 ? number : null;
+}
+
+function allowedFeatureLimit(value, fallback) {
   const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? number : fallback;
+  return [500, 1000, 2000, 5000].includes(number) ? number : fallback;
 }
 
 function nullableIdentifier(value, { numeric = false, allowDynamic = false } = {}) {

@@ -521,10 +521,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       minZoom: definition.minZoom,
       maxZoom: definition.maxZoom,
       subdomains: definition.subdomains,
-      tms: definition.tms
+      tms: definition.tms,
+      noWrap: definition.noWrap
       /*
       bounds: toLeafletBounds(definition.bounds),
-      noWrap: definition.noWrap,
       opacity: definition.opacity
       */
     });

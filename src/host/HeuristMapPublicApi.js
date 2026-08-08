@@ -10,6 +10,9 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
+import { serializeMapConfigurationSettings } from '../ui/config/mapConfigurationSchema.js';
+import { PublishedMapDialog } from '../ui/PublishedMapDialog.js';
+
 /**
  * Stable public facade for direct and same-origin iframe integrations.
  */
@@ -22,6 +25,7 @@ export class HeuristMapPublicApi {
     this.readyPromise = null;
     this.configurationDialogFactory = null;
     this.configurationDialog = null;
+    this.publishedMapDialog = null;
   }
 
   /** Register the reusable host-facing map configuration dialog factory. */
@@ -37,6 +41,86 @@ export class HeuristMapPublicApi {
     this.configurationDialog?.close?.();
     this.configurationDialog = this.configurationDialogFactory(options);
     return this.configurationDialog;
+  }
+
+
+  /** Return optional host persistence capabilities. */
+  getHostCapabilities() {
+    return this.application.getHostCapabilities();
+  }
+
+  /** Load the current user's persisted map settings through the host. */
+  loadMapPreferences() {
+    return this.application.host.loadMapPreferences();
+  }
+
+  /** Save allowlisted map settings through the host. */
+  saveMapPreferences(settings) {
+    return this.application.host.saveMapPreferences(serializeMapConfigurationSettings(settings));
+  }
+
+  /** Apply persisted settings to the live map without full reinitialization. */
+  applyConfiguration(settings) {
+    return this.application.applyConfiguration(settings);
+  }
+
+  /** Capture the current reproducible map state. */
+  captureState() {
+    return this.application.captureMapState();
+  }
+
+  /** Restore a captured map state. */
+  restoreState(state) {
+    return this.application.restoreMapState(state);
+  }
+
+  /** Publish settings plus current map state through the host. */
+  publishMap(settings) {
+    const serialized = serializeMapConfigurationSettings(settings);
+    return this.application.host.publishMap({
+      format: 'heurist-map-publish',
+      version: 1,
+      options: serialized.options,
+      config: serialized.config,
+      state: this.captureState()
+    });
+  }
+
+  /** Open preferences, loading/saving only the `heurist-map` preference key. */
+  async openPreferencesDialog(options = {}) {
+    const saved = await this.loadMapPreferences();
+    return this.openConfigurationDialog({
+      ...options,
+      mode: 'preferences',
+      value: saved || this.application.config.persistedSettings || null,
+      onSave: async (value, context) => {
+        const result = await this.saveMapPreferences(value);
+        const applied = await this.applyConfiguration(context.serialized);
+        this.application.dispatch('heurist-map-preferences-saved', { settings: context.serialized, result, applied });
+        return options.onSave ? options.onSave(value, context, result, applied) : result;
+      }
+    });
+  }
+
+  /** Open publish configuration and save a reproducible map snapshot. */
+  openPublishDialog(options = {}) {
+    return this.openConfigurationDialog({
+      ...options,
+      mode: 'publish',
+      value: options.value || this.application.config.persistedSettings || null,
+      onSave: async (value, context) => {
+        const result = await this.publishMap(value);
+        this.application.dispatch('heurist-map-published', { publication: result, settings: context.serialized });
+        if (options.onSave) await options.onSave(value, context, result);
+        // MapConfigurationDialog closes after this callback resolves. Defer the
+        // published-link dialog so it opens after the configuration overlay is gone.
+        setTimeout(() => {
+          this.publishedMapDialog?.close?.();
+          this.publishedMapDialog = new PublishedMapDialog({ publication: result }).open();
+        }, 0);
+        return result;
+      }
+    });
   }
 
   /**
@@ -285,6 +369,8 @@ export class HeuristMapPublicApi {
   destroy() {
     this.configurationDialog?.close?.();
     this.configurationDialog = null;
+    this.publishedMapDialog?.close?.();
+    this.publishedMapDialog = null;
     return this.application.destroy();
   }
 }

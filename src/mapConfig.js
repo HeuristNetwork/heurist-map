@@ -11,6 +11,7 @@
  */
 
 import { normalizeMapDocument } from './core/MapDocument.js';
+import { normalizeMapConfigurationSettings } from './ui/config/mapConfigurationSchema.js';
 
 /**
  * Read the public MapDocument and separate runtime-only application options.
@@ -24,9 +25,21 @@ export function getHeuristMapConfig() {
     hostConfiguration?.mapDocument || window.heuristMapConfig || {}
   );
   const runtime = hostConfiguration?.heuristMapOptions || window.heuristMapOptions || {};
+  const published = window.heuristMapPublished || null;
+  const persisted = normalizeMapConfigurationSettings(
+    published ? { options: published.options, config: published.config } : (runtime.heuristMapSettings || {})
+  );
+console.log(runtime.heuristMapSettings, persisted);  
   const documentQuery = parseDocumentQuery(url.searchParams.get('doc'));
+  const configuredDefaultDocumentId = runtime.documents?.initiallyActive ?? persisted.options.mapDocuments.initiallyActive;
+  const defaultDocumentId = configuredDefaultDocumentId == null ? 'dynamic' : configuredDefaultDocumentId;
+  const preventContinuousWorldBasemap = runtime.dynamicDocument?.preventContinuousWorldBasemap
+    ?? persisted.config.dynamicDocument.preventContinuousWorldBasemap;
 
   return {
+    viewerMode: runtime.viewerMode === 'configuration' ? 'configuration' : 'map',
+    configurationMode: runtime.configurationMode || 'website',
+    configurationValue: runtime.configurationValue || null,
     containerId: runtime.containerId || runtime.id || 'heurist-map',
     engine: runtime.engine || 'leaflet',
     readonly: runtime.readonly !== false,
@@ -36,33 +49,42 @@ export function getHeuristMapConfig() {
     accessToken: runtime.accessToken || null,
     requestHeaders: runtime.requestHeaders || {},
     host: runtime.host || null,
+    persistedSettings: persisted,
+    initialState: published?.state || runtime.initialState || null,
     documents: {
-      query: runtime.documents?.query ?? documentQuery ?? null,
+      query: runtime.documents?.query ?? persisted.options.mapDocuments.allowed ?? documentQuery ?? null,
       autoLoad: runtime.documents?.autoLoad !== false,
-      activateFirst: runtime.documents?.activateFirst !== false
+      activateFirst: runtime.documents?.activateFirst !== false,
+      initiallyActive: defaultDocumentId
     },
     dynamicDocument: {
-      enabled: runtime.dynamicDocument?.enabled !== false,
+      enabled: runtime.dynamicDocument?.enabled ?? persisted.config.dynamicDocument.enabled,
       id: String(runtime.dynamicDocument?.id || 'dynamic'),
-      title: String(runtime.dynamicDocument?.title || 'Dynamic map'),
-      initiallyActive: runtime.dynamicDocument?.initiallyActive === true,
+      title: String(runtime.dynamicDocument?.title || persisted.config.dynamicDocument.title || 'Dynamic map'),
+      initiallyActive: defaultDocumentId === 'dynamic',
+      selectSymbology: runtime.dynamicDocument?.selectSymbology ?? persisted.config.dynamicDocument.selectSymbology,
+      preventContinuousWorldBasemap,
       keepContent: runtime.dynamicDocument?.keepContent !== false,
       layers: Array.isArray(runtime.dynamicDocument?.layers)
         ? runtime.dynamicDocument.layers.map((item) => ({ ...item }))
         : []
     },
-    baseMaps: normalizeBaseMaps(runtime.baseMaps),
+    baseMaps: normalizeBaseMaps(runtime.baseMaps, persisted.options.baseMaps, preventContinuousWorldBasemap),
+    currentResultsLayer: persisted.config.currentResultsLayer,
     ui: {
-      enabled: runtime.ui?.enabled !== false,
-      placement: runtime.ui?.placement || 'overlay',
+      enabled: runtime.ui?.enabled ?? persisted.options.ui.enabled,
+      placement: runtime.ui?.placement || persisted.options.ui.placement || 'overlay',
       containerId: runtime.ui?.containerId || null,
-      position: runtime.ui?.position || 'top-right',
-      initiallyExpanded: runtime.ui?.initiallyExpanded !== false,
-      showCurrentDocument: runtime.ui?.showCurrentDocument === true,
-      showMapDocuments: runtime.ui?.showMapDocuments !== false,
-      showLayers: runtime.ui?.showLayers !== false,
-      showBaseMaps: runtime.ui?.showBaseMaps !== false,
-      showZoomControl: runtime.ui?.showZoomControl !== false,
+      position: runtime.ui?.position || persisted.options.ui.position || 'top-right',
+      initiallyExpanded: runtime.ui?.initiallyExpanded ?? persisted.options.ui.initiallyExpanded,
+      showCurrentDocument: runtime.ui?.showCurrentDocument ?? persisted.options.ui.showCurrentDocument,
+      showMapDocuments: runtime.ui?.showMapDocuments ?? persisted.options.ui.showMapDocuments,
+      showLayers: runtime.ui?.showLayers ?? persisted.options.ui.showLayers,
+      showBaseMaps: runtime.ui?.showBaseMaps ?? persisted.options.ui.showBaseMaps,
+      showZoomControl: runtime.ui?.showZoomControl ?? persisted.options.ui.showZoomControl,
+      showPublish: runtime.ui?.showPublish ?? persisted.options.ui.showPublish,
+      controlCss: runtime.ui?.controlCss ?? persisted.options.ui.controlCss,
+      showOptions: runtime.ui?.showOptions !== false,
       showScaleControl: runtime.ui?.showScaleControl !== false,
       showHomeControl: runtime.ui?.showHomeControl !== false,
       baseMapsInitiallyExpanded: runtime.ui?.baseMapsInitiallyExpanded !== false,
@@ -79,12 +101,24 @@ function parseDocumentQuery(value) {
   return /^\d+(?:,\d+)*$/.test(text) ? text.split(',').map(Number) : text;
 }
 
-function normalizeBaseMaps(value) {
+function normalizeBaseMaps(value, settings = {}, preventContinuousWorldBasemap = false) {
   const defaults = [
     { id: 'OpenStreetMap', title: 'OpenStreetMap', type: 'tile', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 },
     { id: 'None', title: 'None', type: 'none' }
   ];
-  return Array.isArray(value) && value.length ? value : defaults;
+  let result = Array.isArray(value) && value.length ? value : defaults;
+  if (Array.isArray(settings.allowed)) {
+    const allowed = new Set(settings.allowed.map(String));
+    result = result.filter((item) => allowed.has(String(item.id)));
+  }
+  if (preventContinuousWorldBasemap) {
+    result = result.map((item) => item.type === 'tile' ? { ...item, noWrap: true } : item);
+  }
+  if (settings.initial != null) {
+    const index = result.findIndex((item) => String(item.id) === String(settings.initial));
+    if (index > 0) result = [result[index], ...result.slice(0, index), ...result.slice(index + 1)];
+  }
+  return result;
 }
 
 

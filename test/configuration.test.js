@@ -14,6 +14,9 @@ test('map configuration defaults contain agreed large-dataset options', () => {
   assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, 1000);
   assert.equal(value.config.currentResultsLayer.options.dynamicRequests, false);
   assert.equal(value.config.currentResultsLayer.options.markerClustering, false);
+  assert.equal(value.options.mapDocuments.initiallyActive, null);
+  assert.equal(value.config.dynamicDocument.preventContinuousWorldBasemap, false);
+  assert.equal(value.options.ui.controlCss, null);
 });
 
 test('configuration normalization strips runtime and unknown properties', () => {
@@ -43,14 +46,14 @@ test('configuration normalization strips runtime and unknown properties', () => 
   assert.equal(value.config.dynamicDocument.id, undefined);
   assert.equal(value.config.dynamicDocument.title, 'Search');
   assert.equal(value.config.currentResultsLayer.id, undefined);
-  assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, 2500);
+  assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, 1000);
   assert.equal(value.config.currentResultsLayer.options.dynamicRequests, true);
 });
 
 test('configuration normalization preserves native zoom zero and null km limits', () => {
   const value = normalizeMapConfigurationSettings({
     config: {
-      dynamicDocument: { minZoom: 0, maxZoom: 18 },
+      dynamicDocument: { minZoom: 0, maxZoom: 18, selectSymbology: { color: '#f00' }, preventContinuousWorldBasemap: true },
       currentResultsLayer: { options: { minZoom: 0, maximumZoomKm: null } }
     }
   });
@@ -58,6 +61,8 @@ test('configuration normalization preserves native zoom zero and null km limits'
   assert.equal(value.config.dynamicDocument.maxZoom, 18);
   assert.equal(value.config.currentResultsLayer.options.minZoom, 0);
   assert.equal(value.config.currentResultsLayer.options.maximumZoomKm, null);
+  assert.deepEqual(value.config.dynamicDocument.selectSymbology, { color: '#f00' });
+  assert.equal(value.config.dynamicDocument.preventContinuousWorldBasemap, true);
 });
 
 test('configuration serializer creates versioned settings envelope', () => {
@@ -83,4 +88,22 @@ test('configuration dialog can be used as a persistence-neutral value object bef
   assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, 500);
   assert.equal(dialog.mode, 'website');
   assert.equal(dialog.serialize().format, 'heurist-map-settings');
+});
+
+
+test('configuration zoom limits are restricted to Leaflet 0-22 range', () => {
+  const value = normalizeMapConfigurationSettings({
+    config: { dynamicDocument: { minZoom: -1, maxZoom: 23 }, currentResultsLayer: { options: { minZoom: 22, maxZoom: 0 } } }
+  });
+  assert.equal(value.config.dynamicDocument.minZoom, null);
+  assert.equal(value.config.dynamicDocument.maxZoom, null);
+  assert.equal(value.config.currentResultsLayer.options.minZoom, 22);
+  assert.equal(value.config.currentResultsLayer.options.maxZoom, 0);
+});
+
+test('maximum allowed features accepts only configured choices', () => {
+  for (const limit of [500, 1000, 2000, 5000]) {
+    const value = normalizeMapConfigurationSettings({ config: { currentResultsLayer: { options: { maxAllowedFeatures: limit } } } });
+    assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, limit);
+  }
 });

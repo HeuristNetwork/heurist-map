@@ -28,6 +28,29 @@ export class HostAdapter {
     return false;
   }
 
+  /** Return optional host capabilities. */
+  getCapabilities() {
+    return { mapPreferences: false, mapPublishing: false };
+  }
+
+  async loadMapPreferences() { return null; }
+
+  async saveMapPreferences() {
+    throw new Error('Map preferences are not supported by this host');
+  }
+
+  async publishMap() {
+    throw new Error('Map publishing is not supported by this host');
+  }
+
+  async loadPublishedMap() {
+    throw new Error('Published maps are not supported by this host');
+  }
+
+  async deletePublishedMap() {
+    throw new Error('Published maps are not supported by this host');
+  }
+
   /**
    * Release resources, handlers, requests, layers, and host integrations.
    * @returns {Promise<*>} Resolves when the operation completes.

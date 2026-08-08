@@ -11,6 +11,7 @@
  */
 
 import { StandaloneHostAdapter } from './StandaloneHostAdapter.js';
+import { HeuristHostAdapter } from './HeuristHostAdapter.js';
 
 /**
  * Create host adapter.
@@ -18,6 +19,9 @@ import { StandaloneHostAdapter } from './StandaloneHostAdapter.js';
  * @returns {*} Function result.
  */
 export function createHostAdapter(host) {
+  if (host?.type === 'heurist') {
+    return new HeuristHostAdapter(host);
+  }
   if (host) {
     return host;
   }

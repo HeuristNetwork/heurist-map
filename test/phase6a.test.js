@@ -16,6 +16,8 @@ function createApplication({ initiallyActive = false } = {}) {
     async setBaseMap() {},
     async fitBounds() {},
     async setView() {},
+    async setZoomLimits() {},
+    getViewState() { return null; },
     async getVisibleLayerBounds() { return null; },
     getCapabilities() { return {}; }
   };
@@ -193,4 +195,38 @@ test('failed current-results load can be retried through stored layer definition
   assert.equal(application.getLayer('current-results').loadState, 'loaded');
   assert.equal(application.getLayer('current-results').source.query, 'good-query');
   assert.equal(rendered.length, 1);
+});
+
+
+test('applyConfiguration updates live UI/current-results settings without switching document', async () => {
+  const { application } = createApplication({ initiallyActive: true });
+  application.controlPanel = {
+    applied: null,
+    applyOptions(options) { this.applied = { ...options }; }
+  };
+  await application.addQueryLayer('t:10', { id: 'current-results', title: 'Old title' });
+  const activeBefore = application.activeMapDocumentId;
+
+  const result = await application.applyConfiguration({
+    options: {
+      ui: { initiallyExpanded: false, showMapDocuments: false, controlCss: 'font-size:11px' },
+      mapDocuments: { initiallyActive: 123 }
+    },
+    config: {
+      dynamicDocument: { title: 'Configured map', minimumZoomKm: 2, maximumZoomKm: 100 },
+      currentResultsLayer: {
+        title: 'Configured results', visible: true, selectable: false,
+        options: { maxAllowedFeatures: 2000, markerClustering: false }
+      }
+    }
+  });
+
+  assert.equal(result.applied, true);
+  assert.equal(result.requiresReload, false);
+  assert.equal(application.activeMapDocumentId, activeBefore);
+  assert.equal(application.getDynamicDocument().title, 'Configured map');
+  assert.equal(application.getDocumentLayer('current-results', 'dynamic').title, 'Configured results');
+  assert.equal(application.getDocumentLayer('current-results', 'dynamic').selectable, false);
+  assert.equal(application.controlPanel.applied.showMapDocuments, false);
+  assert.equal(application.config.documents.initiallyActive, 123);
 });

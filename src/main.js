@@ -27,10 +27,15 @@ import '@fortawesome/fontawesome-free/css/solid.min.css';
 
 import { getHeuristMapConfig } from './mapConfig.js';
 import { initHeuristMap } from './initHeuristMap.js';
+import { initHeuristMapConfiguration } from './initHeuristMapConfiguration.js';
 
 const config = getHeuristMapConfig();
 
-initHeuristMap(config).catch(async (error) => {
+const bootstrap = config.viewerMode === 'configuration'
+  ? initHeuristMapConfiguration(config)
+  : initHeuristMap(config);
+
+bootstrap.catch(async (error) => {
   console.error('Cannot initialize Heurist Map', error);
 
   // initHeuristMap exposes the facade before initialization so a partially

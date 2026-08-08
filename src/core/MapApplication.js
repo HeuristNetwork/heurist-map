@@ -13,6 +13,7 @@
 import { normalizeMapDocument } from './MapDocument.js';
 import { normalizeMapLayer } from './MapLayer.js';
 import { createMapEnvironment } from './createMapEnvironment.js';
+import { normalizeMapConfigurationSettings } from '../ui/config/mapConfigurationSchema.js';
 
 /**
  * Engine-neutral application controller.
@@ -140,9 +141,17 @@ export class MapApplication {
       }
       if (previousActiveId && !this.mapDocuments.has(previousActiveId)) this.activeMapDocumentId = null;
       this.dispatch('heurist-map-documents-loaded', { documents: this.getMapDocuments(), pagination: result.pagination });
-      const targetId = this.activeMapDocumentId && this.mapDocuments.has(this.activeMapDocumentId)
-        ? this.activeMapDocumentId
-        : result.items[0]?.id;
+      const configuredInitial = this.config.documents?.initiallyActive;
+      const normalizedInitial = configuredInitial === this.dynamicDocumentId
+        ? this.dynamicDocumentId
+        : (Number.isInteger(Number(configuredInitial)) && Number(configuredInitial) > 0
+          ? Number(configuredInitial)
+          : null);
+      const targetId = normalizedInitial != null && this.mapDocuments.has(normalizedInitial)
+        ? normalizedInitial
+        : (this.activeMapDocumentId && this.mapDocuments.has(this.activeMapDocumentId)
+          ? this.activeMapDocumentId
+          : result.items[0]?.id);
       if (activateFirst && targetId && this.config.mapDocument?.id !== targetId) {
         await this.activateMapDocument(targetId, { signal });
       }
@@ -1218,6 +1227,186 @@ export class MapApplication {
     return this.mapEngine.getViewState();
   }
 
+
+  /**
+   * Apply persisted map settings to the current application without rebuilding
+   * the Leaflet engine or changing the current document/view.
+   *
+   * Startup-only choices (allowed/default documents and base maps) are stored
+   * for the next initialization. Live UI and current-results settings are
+   * applied immediately where this is safe.
+   */
+  async applyConfiguration(settings = {}) {
+    this.assertActive();
+    const normalized = normalizeMapConfigurationSettings(settings);
+    const previous = this.config.persistedSettings || normalizeMapConfigurationSettings({});
+    const previousLayerSettings = previous.config.currentResultsLayer || {};
+    const nextLayerSettings = normalized.config.currentResultsLayer || {};
+    const activeDocumentId = this.activeMapDocumentId;
+    const viewState = this.mapEngine.getViewState?.() || null;
+    const selection = this.getSelection();
+
+    this.config.persistedSettings = normalized;
+    this.config.documents = {
+      ...(this.config.documents || {}),
+      query: normalized.options.mapDocuments.allowed,
+      initiallyActive: normalized.options.mapDocuments.initiallyActive == null
+        ? this.dynamicDocumentId
+        : normalized.options.mapDocuments.initiallyActive
+    };
+    this.config.ui = { ...(this.config.ui || {}), ...normalized.options.ui };
+    this.config.interaction = { ...(this.config.interaction || {}), ...normalized.options.interaction };
+    this.config.currentResultsLayer = clonePlain(nextLayerSettings);
+    this.config.dynamicDocument = {
+      ...(this.config.dynamicDocument || {}),
+      ...clonePlain(normalized.config.dynamicDocument),
+      id: this.dynamicDocumentId,
+      initiallyActive: String(this.config.documents.initiallyActive) === this.dynamicDocumentId,
+      keepContent: this.config.dynamicDocument?.keepContent !== false
+    };
+
+    const dynamicEntry = this.getDynamicDocumentEntry();
+    if (dynamicEntry) {
+      dynamicEntry.title = this.config.dynamicDocument.title || 'Current results';
+      dynamicEntry.showInPanel = this.config.ui.showCurrentDocument !== false;
+    }
+
+    // Update the current-results definition. Reload only this layer when its
+    // rendering/data options changed; never reload the MapApplication itself.
+    const stored = dynamicEntry ? findStoredLayer(dynamicEntry, 'current-results') : null;
+    if (stored) {
+      const runtime = this.layers.get('current-results');
+      const desiredVisible = nextLayerSettings.visible !== false;
+      stored.mapLayer.title = nextLayerSettings.title || 'Current results';
+      stored.mapLayer.selectable = nextLayerSettings.selectable !== false;
+      stored.mapLayer.style = clonePlain(nextLayerSettings.style || {});
+      stored.mapLayer.options = clonePlain(nextLayerSettings.options || {});
+      stored.reference.title = stored.mapLayer.title;
+
+      if (runtime) {
+        runtime.title = stored.mapLayer.title;
+        runtime.selectable = stored.mapLayer.selectable;
+        runtime.options = clonePlain(stored.mapLayer.options);
+      }
+
+      const needsReload = !sameJson(previousLayerSettings.style, nextLayerSettings.style)
+        || !sameJson(previousLayerSettings.options, nextLayerSettings.options);
+      const query = stored.mapLayer.source?.query || null;
+      if (needsReload && query && String(activeDocumentId) === this.dynamicDocumentId && desiredVisible) {
+        await this.setQueryForLayer('current-results', query, { reload: true });
+      }
+      if (this.layers.has('current-results') && this.layers.get('current-results').visible !== desiredVisible) {
+        await this.setLayerVisibility('current-results', desiredVisible);
+      } else {
+        stored.mapLayer.visible = desiredVisible;
+        stored.reference.visible = desiredVisible;
+      }
+    }
+
+    // Dynamic-document zoom limits can be changed in place. Persisted-record
+    // MapDocument limits are record data and remain untouched.
+    if (String(activeDocumentId) === this.dynamicDocumentId) {
+      const document = createDynamicMapDocument(this.config, dynamicEntry);
+      const environment = createMapEnvironment(document);
+      await this.applyDocumentZoomLimits(environment);
+      this.mapEnvironment.zoomLimits = environment.zoomLimits;
+      this.mapEnvironment.effectiveZoomLimits = environment.effectiveZoomLimits;
+    }
+
+    this.controlPanel?.applyOptions?.(this.config.ui);
+
+    // Reloading the current-results layer may clear its selection; restore the
+    // selection only when it still belongs to that layer. View is never changed
+    // by applyConfiguration, but explicitly restore it defensively after a layer reload.
+    if (selection?.layerId === 'current-results' && Array.isArray(selection.features)) {
+      const ids = [...new Set(selection.features.map((item) => item.recordId).filter((id) => id != null))];
+      if (ids.length && this.layers.has('current-results')) {
+        try { await this.selectRecords('current-results', ids, { replace: true, zoom: false }); } catch { /* layer may now be hidden */ }
+      }
+    }
+    if (viewState?.bounds) await this.fitBounds(viewState.bounds, { animate: false });
+    else if (viewState?.center && viewState?.zoom != null) await this.setView(viewState.center, viewState.zoom, { animate: false });
+
+    this.dispatch('heurist-map-configuration-applied', { settings: normalized });
+    return { applied: true, requiresReload: false, settings: normalized };
+  }
+
+  /** Return host integration capabilities. */
+  getHostCapabilities() {
+    return this.host?.getCapabilities?.() || { mapPreferences: false, mapPublishing: false };
+  }
+
+  /** Capture the reproducible, non-persistent state of the current map. */
+  captureMapState() {
+    const view = this.getViewState();
+    const currentLayer = this.getDocumentLayer('current-results', this.dynamicDocumentId);
+    const selectedRecordIds = [...new Set(
+      [...this.selectedFeatures.values()].map((item) => item.recordId).filter((id) => id != null)
+    )];
+    return {
+      extent: view?.bounds || null,
+      zoom: view?.zoom ?? null,
+      activeDocumentId: this.activeMapDocumentId ?? null,
+      baseMap: this.activeBaseMapId ?? null,
+      visibleLayerIds: this.getLayers().filter((layer) => layer.visible !== false).map((layer) => layer.id),
+      activeLayerId: this.selectionLayerId ?? null,
+      query: currentLayer?.source?.query ?? null,
+      selection: selectedRecordIds
+    };
+  }
+
+  /** Restore a previously captured published/initial map state. */
+  async restoreMapState(state = {}) {
+    if (!state || typeof state !== 'object') return false;
+
+    if (state.baseMap != null && this.baseMaps.has(String(state.baseMap))) {
+      await this.setBaseMap(state.baseMap);
+    }
+
+    const targetDocument = state.activeDocumentId;
+    if (targetDocument != null) {
+      const key = String(targetDocument);
+      const numeric = Number(targetDocument);
+      if (key === this.dynamicDocumentId || this.mapDocuments.has(numeric) || this.mapDocuments.has(key)) {
+        await this.activateMapDocument(targetDocument);
+      }
+    }
+
+    if (state.query) {
+      const layerSettings = this.config.currentResultsLayer || {};
+      const layerOptions = layerSettings.options || {};
+      const existing = this.getDocumentLayer('current-results', this.dynamicDocumentId);
+      if (existing) {
+        await this.setQueryForLayer('current-results', state.query, { reload: true });
+      } else {
+        await this.addQueryLayer(state.query, {
+          id: 'current-results',
+          title: layerSettings.title || 'Current results',
+          visible: layerSettings.visible !== false,
+          selectable: layerSettings.selectable !== false,
+          style: layerSettings.style || {},
+          options: layerOptions,
+          limit: layerOptions.maxAllowedFeatures
+        });
+      }
+    }
+
+    if (Array.isArray(state.visibleLayerIds)) {
+      const visible = new Set(state.visibleLayerIds.map(String));
+      for (const layer of this.getLayers()) {
+        await this.setLayerVisibility(layer.id, visible.has(String(layer.id)));
+      }
+    }
+
+    if (state.extent) await this.fitBounds(state.extent);
+    else if (state.zoom != null && state.center) await this.setView(state.center, state.zoom);
+
+    if (Array.isArray(state.selection) && state.selection.length && this.getLayer('current-results')) {
+      await this.selectRecords('current-results', state.selection, { replace: true, zoom: false });
+    }
+    return true;
+  }
+
   /**
    * Return the current public MapDocument representation.
    * @returns {*} Method result.
@@ -1621,6 +1810,10 @@ function addContext(error, context) {
 function normalizeSelectedRecordId(value) {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
 function clonePlain(value) {

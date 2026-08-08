@@ -19,7 +19,8 @@ export const HEURIST_MAP_OPTIONS_DEFAULTS = Object.freeze({
     showLegend: true,
     showZoomControl: true,
     showSearch: false,
-    showPublish: true
+    showPublish: true,
+    controlCss: null
   }),
   mapDocuments: Object.freeze({
     allowed: null,
@@ -48,7 +49,9 @@ export const HEURIST_MAP_CONFIG_DEFAULTS = Object.freeze({
     maximumZoomKm: null,
     zoomToPointInKM: null,
     bounds: null,
-    symbology: null
+    symbology: null,
+    selectSymbology: null,
+    preventContinuousWorldBasemap: false
   }),
   currentResultsLayer: Object.freeze({
     title: 'Current results',
