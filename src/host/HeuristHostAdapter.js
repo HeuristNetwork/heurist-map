@@ -9,10 +9,11 @@
 import { HostAdapter } from './HostAdapter.js';
 
 export class HeuristHostAdapter extends HostAdapter {
-  constructor({ baseUrl, database, fetchImpl = null } = {}) {
+  constructor({ baseUrl, database, fetchImpl = null, bridge = null } = {}) {
     super();
     this.baseUrl = String(baseUrl || '').replace(/\?$/, '');
     this.database = database || null;
+    this.bridge = bridge || null;
     this.fetchImpl = typeof fetchImpl === 'function'
       ? fetchImpl
       : (...args) => globalThis.fetch(...args);
@@ -28,9 +29,11 @@ export class HeuristHostAdapter extends HostAdapter {
   }
 
   async saveMapPreferences(settings) {
-    return this.request('UserController', 'save_prefs', {}, {
+    const result = await this.request('UserController', 'save_prefs', {}, {
       key: 'heurist-map', value: JSON.stringify(settings)
     });
+    this.bridge?.updateSettings?.(settings);
+    return result;
   }
 
   async publishMap(payload) {

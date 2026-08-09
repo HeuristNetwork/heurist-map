@@ -43,6 +43,8 @@ test('configuration-only API exposes schema operations without MapApplication', 
   const serialized = api.serializeConfiguration({ options: {}, config: {} });
   assert.equal(serialized.format, 'heurist-map-settings');
   assert.equal(serialized.version, 1);
+  assert.equal(typeof api.applyConfiguration, 'undefined',
+    'configuration-only API must not expose live MapApplication configuration');
 });
 
 
