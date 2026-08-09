@@ -29,15 +29,21 @@ export class MapControlPanel {
 
     const header = document.createElement('div');
     header.className = 'heurist-map-panel-header';
-    const toggle = iconButton('fa-solid fa-layer-group', 'Show or hide map controls', () => {
-      this.element.classList.toggle('collapsed');
-      toggle.setAttribute('aria-expanded', String(!this.element.classList.contains('collapsed')));
-    });
-    toggle.classList.add('heurist-map-panel-toggle');
-    toggle.setAttribute('aria-expanded', String(this.options.initiallyExpanded !== false));
-    const title = document.createElement('strong');
-    title.textContent = 'Map controls';
-    header.append(toggle, title);
+    const hasDocumentControls = this.options.showCurrentDocument !== false || this.options.showMapDocuments !== false;
+    const hasPanelSections = hasDocumentControls || this.options.showBaseMaps !== false;
+    if (!hasPanelSections) {
+      this.element.classList.add('controls-only');
+    } else {
+      const toggle = iconButton('fa-solid fa-layer-group', 'Show or hide map controls', () => {
+        this.element.classList.toggle('collapsed');
+        toggle.setAttribute('aria-expanded', String(!this.element.classList.contains('collapsed')));
+      });
+      toggle.classList.add('heurist-map-panel-toggle');
+      toggle.setAttribute('aria-expanded', String(this.options.initiallyExpanded !== false));
+      const title = document.createElement('strong');
+      title.textContent = 'Map controls';
+      header.append(toggle, title);
+    }
     if (this.options.showHomeControl !== false) {
       header.append(iconButton('fa-solid fa-house', 'Zoom to active map document', () => this.api.zoomHome()));
     }
@@ -54,7 +60,7 @@ export class MapControlPanel {
     body.className = 'heurist-map-panel-body';
     if (this.options.initiallyExpanded === false) this.element.classList.add('collapsed');
 
-    if (this.options.showMapDocuments !== false) {
+    if (hasDocumentControls) {
       this.documentsContainer = document.createElement('div');
       this.documentsContainer.className = 'heurist-map-documents';
       body.append(this.documentsContainer);
@@ -77,7 +83,8 @@ export class MapControlPanel {
       this.updateBaseMapsExpansion();
     }
 
-    this.element.append(header, body);
+    this.element.append(header);
+    if (hasPanelSections) this.element.append(body);
     const target = this.options.placement === 'external' && this.options.containerId
       ? document.getElementById(this.options.containerId)
       : this.mapContainer.parentElement;
@@ -119,12 +126,18 @@ export class MapControlPanel {
 
   refresh() {
     const activeId = this.api.getActiveMapDocument()?.id;
-    const documents = this.api.getMapDocuments().filter((item) => item.showInPanel !== false);
+    const allDocuments = this.api.getMapDocuments();
+    const documentActivating = allDocuments.some((item) => item.activating === true || item.loadState === 'loading');
+    const documents = allDocuments.filter((item) => {
+      if (item.showInPanel === false) return false;
+      if (item.persistent === false) return this.options.showCurrentDocument !== false;
+      return this.options.showMapDocuments !== false;
+    });
     this.documentSelector?.render(documents, activeId, () => {
       if (this.options.showLayers === false) return null;
       const container = document.createElement('div');
       container.className = 'heurist-map-active-layers';
-      new LayerPanel({ api: this.api, container }).render(this.api.getLayers());
+      new LayerPanel({ api: this.api, container }).render(this.api.getLayers(), { loading: documentActivating });
       return container;
     });
     this.baseMapSelector?.render(this.api.getBaseMaps(), this.api.getActiveBaseMap()?.id);

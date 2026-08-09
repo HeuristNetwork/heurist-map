@@ -92,3 +92,51 @@ body {
 .heurist-map-published-dialog p { margin: 0 0 8px; }
 .heurist-map-published-dialog input { box-sizing: border-box; width: 100%; padding: 6px; font: inherit; }
 .heurist-map-published-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+/* Map control panel compactness and action alignment. */
+.heurist-map-control-panel{
+  font-size:12px;
+}
+.heurist-map-panel-header{
+  box-sizing:border-box;
+}
+.heurist-map-control-panel.controls-only{
+  width:auto;
+  max-width:calc(100% - 24px);
+}
+.heurist-map-control-panel.controls-only .heurist-map-panel-header{
+  width:auto;
+  padding:4px;
+  gap:2px;
+  border-bottom:0;
+}
+.heurist-map-control-panel.controls-only .heurist-map-panel-body{
+  display:none;
+}
+.heurist-map-document-row,.heurist-map-layer-row{
+  min-height:26px;
+}
+.heurist-map-active-layers .heurist-map-layer-row{
+  min-height:25px;
+}
+/* Zoom-to-layer remains available without hover. Other layer actions retain
+   their existing hover/focus behaviour. */
+.heurist-map-layer-row>.heurist-map-row-actions{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}
+.heurist-map-layer-row>.heurist-map-row-actions>.heurist-map-icon-button:not(.heurist-map-layer-zoom-action),
+.heurist-map-layer-row>.heurist-map-row-actions>.heurist-map-opacity-control{
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+}
+.heurist-map-layer-row:hover>.heurist-map-row-actions>.heurist-map-icon-button,
+.heurist-map-layer-row:focus-within>.heurist-map-row-actions>.heurist-map-icon-button,
+.heurist-map-layer-row:hover>.heurist-map-row-actions>.heurist-map-opacity-control,
+.heurist-map-layer-row:focus-within>.heurist-map-row-actions>.heurist-map-opacity-control{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}

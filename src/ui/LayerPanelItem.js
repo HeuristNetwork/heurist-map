@@ -27,11 +27,13 @@ export class LayerPanelItem {
     const actions = document.createElement('span');
     actions.className = 'heurist-map-row-actions';
     if (this.layer.loadState === 'loaded') {
-      actions.append(button(
+      const zoomButton = button(
         'fa-solid fa-magnifying-glass-plus',
         'Zoom to layer extent',
         () => this.api.zoomToLayer(this.layer.id)
-      ));
+      );
+      zoomButton.classList.add('heurist-map-layer-zoom-action');
+      actions.append(zoomButton);
       actions.append(createOpacityControl(this.api, this.layer, row));
       actions.append(button(
         'fa-solid fa-pencil',
