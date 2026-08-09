@@ -136,7 +136,7 @@ window.heuristMapOptions = {
 };
 ```
 
-`serverUrl` may be supplied instead of `apiBaseUrl`. If it does not end with `/api`, the client appends `/api`.
+`apiBaseUrl` is the public Heurist API base URL (for example `/heurist/api`). Runtime no longer supports a separate `serverUrl` alias.
 
 Optional authenticated access:
 

@@ -1,9 +1,9 @@
 /**
  * mapConfig.js - Bootstrap configuration normalization
  *
- * Consumes one bootstrap contract: { runtime, settings, state, mapDocument }.
+ * Consumes one bootstrap contract: { runtime, settings, state }.
  * Runtime transport/host values are deliberately separate from persisted map
- * settings so configuration precedence is resolved only once by the host.
+ * settings. Basemap definitions and application mechanics are internal.
  *
  * @project     Heurist mapping application
  * @link        https://HeuristNetwork.org
@@ -15,9 +15,21 @@
 import { normalizeMapDocument } from './core/MapDocument.js';
 import { normalizeMapConfigurationSettings } from './ui/config/mapConfigurationSchema.js';
 
+const BUILT_IN_BASE_MAPS = Object.freeze([
+  Object.freeze({
+    id: 'OpenStreetMap',
+    title: 'OpenStreetMap',
+    type: 'tile',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19
+  }),
+  Object.freeze({ id: 'None', title: 'None', type: 'none' })
+]);
+
 /**
  * Return normalized application configuration from the single bootstrap object.
- * No preference/widget precedence merge is performed here.
+ * Missing settings are filled entirely from canonical configuration defaults.
  */
 export function getHeuristMapConfig() {
   const url = new URL(globalThis.location?.href || 'http://localhost/');
@@ -29,37 +41,37 @@ export function getHeuristMapConfig() {
     bootstrap?.settings || (published ? { options: published.options, config: published.config } : {})
   );
   const state = bootstrap?.state ?? published?.state ?? null;
-  const mapDocument = normalizeMapDocument(
-    bootstrap?.mapDocument || globalThis.heuristMapConfig || {}
-  );
 
   const documentQuery = parseDocumentQuery(url.searchParams.get('doc'));
   const configuredDefaultDocumentId = settings.options.mapDocuments.initiallyActive;
   const defaultDocumentId = configuredDefaultDocumentId == null ? 'dynamic' : configuredDefaultDocumentId;
   const preventContinuousWorldBasemap = settings.config.dynamicDocument.preventContinuousWorldBasemap;
-  const runtimeDocuments = runtime.documents || {};
-  const uiRuntime = runtime.uiRuntime || {};
 
   return {
     viewerMode: runtime.viewerMode === 'configuration' ? 'configuration' : 'map',
     configurationMode: runtime.configurationMode || 'website',
-    containerId: runtime.containerId || 'heurist-map',
-    engine: runtime.engine || 'leaflet',
-    readonly: runtime.readonly !== false,
+
+    // Application mechanics are internal constants rather than bootstrap options.
+    containerId: 'heurist-map',
+    engine: 'leaflet',
+    readonly: true,
+
     apiBaseUrl: runtime.apiBaseUrl || null,
-    serverUrl: runtime.serverUrl || null,
     database: runtime.database || null,
     accessToken: runtime.accessToken || null,
     requestHeaders: runtime.requestHeaders || {},
-    host: buildHostConfiguration(runtime.host, runtime.database, bridge),
+    host: buildHostConfiguration(runtime, bridge),
+
     persistedSettings: settings,
     initialState: state,
+
+    // MapDocuments are controlled only by persisted settings. The optional
+    // standalone ?doc= URL parameter remains a convenient explicit startup filter.
     documents: {
-      query: settings.options.mapDocuments.allowed ?? runtimeDocuments.query ?? documentQuery ?? null,
-      autoLoad: runtimeDocuments.autoLoad !== false,
-      activateFirst: runtimeDocuments.activateFirst !== false,
+      query: settings.options.mapDocuments.allowed ?? documentQuery ?? null,
       initiallyActive: defaultDocumentId
     },
+
     dynamicDocument: {
       enabled: settings.config.dynamicDocument.enabled,
       id: 'dynamic',
@@ -70,18 +82,25 @@ export function getHeuristMapConfig() {
       keepContent: true,
       layers: []
     },
-    baseMaps: normalizeBaseMaps(runtime.baseMaps?.available, settings.options.baseMaps, preventContinuousWorldBasemap),
+
+    // Basemap definitions come from the built-in catalog; settings only filter
+    // the catalog and select its initial item.
+    baseMaps: normalizeBaseMaps(settings.options.baseMaps, preventContinuousWorldBasemap),
     currentResultsLayer: settings.config.currentResultsLayer,
     interaction: settings.options.interaction,
     ui: {
       ...settings.options.ui,
-      showOptions: uiRuntime.showOptions !== false,
-      showScaleControl: uiRuntime.showScaleControl !== false,
-      showHomeControl: uiRuntime.showHomeControl !== false,
-      baseMapsInitiallyExpanded: uiRuntime.baseMapsInitiallyExpanded !== false,
-      maxHeight: uiRuntime.maxHeight || '70vh'
+      // Internal Map Control defaults that are not persisted configuration.
+      showOptions: true,
+      showScaleControl: true,
+      showHomeControl: true,
+      baseMapsInitiallyExpanded: true,
+      maxHeight: '70vh'
     },
-    mapDocument
+
+    // Internal mutable representation of the currently rendered MapDocument.
+    // It is intentionally not part of heuristMapBootstrap.
+    mapDocument: normalizeMapDocument({})
   };
 }
 
@@ -97,87 +116,39 @@ function getHostBridge() {
 }
 
 /**
- * Standalone compatibility path. It constructs the same bootstrap shape used by
- * mapViewer, but does not merge host preferences because no host owns them here.
+ * Standalone bootstrap. Standalone callers define window.heuristMapBootstrap
+ * using the same { runtime, settings, state } contract as mapViewer.
+ * Generated published-map pages may instead provide window.heuristMapPublished.
  */
 function getStandaloneBootstrap() {
   if (globalThis.heuristMapBootstrap && typeof globalThis.heuristMapBootstrap === 'object') {
     return globalThis.heuristMapBootstrap;
   }
 
-  const legacy = globalThis.heuristMapOptions || {};
   const published = globalThis.heuristMapPublished || null;
-  const settings = published
-    ? { format: 'heurist-map-settings', version: 1, options: published.options || {}, config: published.config || {} }
-    : (legacy.heuristMapSettings || extractLegacySettings(legacy));
+  if (published && typeof published === 'object') {
+    return {
+      runtime: published.runtime || {},
+      settings: {
+        format: 'heurist-map-settings',
+        version: 1,
+        options: published.options || {},
+        config: published.config || {}
+      },
+      state: published.state || null
+    };
+  }
 
-  return {
-    runtime: {
-      viewerMode: legacy.viewerMode,
-      configurationMode: legacy.configurationMode,
-      containerId: legacy.containerId || legacy.id,
-      engine: legacy.engine,
-      readonly: legacy.readonly,
-      database: legacy.database || legacy.db,
-      apiBaseUrl: legacy.apiBaseUrl,
-      serverUrl: legacy.serverUrl,
-      accessToken: legacy.accessToken,
-      requestHeaders: legacy.requestHeaders,
-      host: legacy.host,
-      documents: {
-        query: legacy.documents?.query,
-        autoLoad: legacy.documents?.autoLoad,
-        activateFirst: legacy.documents?.activateFirst
-      },
-      baseMaps: {
-        available: Array.isArray(legacy.baseMaps)
-          ? legacy.baseMaps
-          : (Array.isArray(legacy.baseMaps?.available) ? legacy.baseMaps.available : null)
-      },
-      uiRuntime: {
-        showOptions: legacy.ui?.showOptions,
-        showScaleControl: legacy.ui?.showScaleControl,
-        showHomeControl: legacy.ui?.showHomeControl,
-        baseMapsInitiallyExpanded: legacy.ui?.baseMapsInitiallyExpanded,
-        maxHeight: legacy.ui?.controlPanelMaxHeight || legacy.ui?.maxHeight
-      }
-    },
-    settings,
-    state: published?.state || legacy.initialState || null,
-    mapDocument: globalThis.heuristMapConfig || null
-  };
+  return { runtime: {}, settings: null, state: null };
 }
 
-function extractLegacySettings(source) {
-  const options = {};
-  const config = {};
-  if (source.ui) options.ui = { ...source.ui };
-  if (source.mapDocuments) options.mapDocuments = { ...source.mapDocuments };
-  if (source.interaction) options.interaction = { ...source.interaction };
-  if (source.baseMaps && !Array.isArray(source.baseMaps)) {
-    const baseMaps = {};
-    if (source.baseMaps.allowed !== undefined) baseMaps.allowed = source.baseMaps.allowed;
-    if (source.baseMaps.initial !== undefined) baseMaps.initial = source.baseMaps.initial;
-    if (Object.keys(baseMaps).length) options.baseMaps = baseMaps;
-  }
-  if (source.dynamicDocument) {
-    config.dynamicDocument = { ...source.dynamicDocument };
-    delete config.dynamicDocument.id;
-    delete config.dynamicDocument.keepContent;
-    delete config.dynamicDocument.layers;
-  }
-  if (source.currentResultsLayer) {
-    config.currentResultsLayer = { ...source.currentResultsLayer };
-    delete config.currentResultsLayer.id;
-  }
-  return { format: 'heurist-map-settings', version: 1, options, config };
-}
-
-function buildHostConfiguration(host, database, bridge) {
-  if (!host) return null;
+/** Build Heurist internal host persistence only when a Heurist base URL exists. */
+function buildHostConfiguration(runtime, bridge) {
+  if (!runtime?.baseUrl) return null;
   return {
-    ...host,
-    database: host.database || database || null,
+    type: 'heurist',
+    baseUrl: runtime.baseUrl,
+    database: runtime.database || null,
     bridge: bridge || null
   };
 }
@@ -189,12 +160,8 @@ function parseDocumentQuery(value) {
   return /^\d+(?:,\d+)*$/.test(text) ? text.split(',').map(Number) : text;
 }
 
-function normalizeBaseMaps(value, settings = {}, preventContinuousWorldBasemap = false) {
-  const defaults = [
-    { id: 'OpenStreetMap', title: 'OpenStreetMap', type: 'tile', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '&copy; OpenStreetMap contributors', maxZoom: 19 },
-    { id: 'None', title: 'None', type: 'none' }
-  ];
-  let result = Array.isArray(value) && value.length ? value : defaults;
+function normalizeBaseMaps(settings = {}, preventContinuousWorldBasemap = false) {
+  let result = BUILT_IN_BASE_MAPS.map((item) => ({ ...item }));
   if (Array.isArray(settings.allowed)) {
     const allowed = new Set(settings.allowed.map(String));
     result = result.filter((item) => allowed.has(String(item.id)));

@@ -27,7 +27,7 @@ import { createLayerLoaderRegistry } from './engine/loaders/createLayerLoaderReg
 /**
  * Initialize the standalone map and expose its stable same-origin public API.
  *
- * @param {Object} config Runtime configuration containing a MapDocument.
+ * @param {Object} config Normalized runtime/application configuration.
  * @returns {Promise<HeuristMapPublicApi>}
  */
 export async function initHeuristMap(config) {
@@ -40,7 +40,6 @@ export async function initHeuristMap(config) {
   const host = createHostAdapter(config.host);
   const apiClient = new HeuristApiClient({
     apiBaseUrl: config.apiBaseUrl,
-    serverUrl: config.serverUrl,
     database: config.database,
     accessToken: config.accessToken,
     headers: config.requestHeaders
@@ -83,10 +82,8 @@ export async function initHeuristMap(config) {
     controlPanel.mount();
     application.controlPanel = controlPanel;
 
-    if (config.documents.autoLoad !== false && apiClient.isConfigured()) {
-      await publicApi.loadMapDocuments(config.documents.query, {
-        activateFirst: config.documents.activateFirst !== false
-      });
+    if (apiClient.isConfigured()) {
+      await publicApi.loadMapDocuments(config.documents.query);
     }
     if (config.initialState) {
       await publicApi.restoreState(config.initialState);

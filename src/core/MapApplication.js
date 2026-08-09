@@ -1422,8 +1422,7 @@ export class MapApplication {
   getCapabilities() {
     return {
       ...this.mapEngine.getCapabilities(),
-      publicApi: Boolean(this.config.apiBaseUrl || this.config.serverUrl)
-        && Boolean(this.config.database),
+      publicApi: Boolean(this.config.apiBaseUrl) && Boolean(this.config.database),
       mapDocuments: Boolean(this.providers.mapDocument),
       queryGeoJson: Boolean(this.providers.queryGeoData),
       remoteGeoJson: true,
@@ -1638,9 +1637,9 @@ export class MapApplication {
     if (!this.providers.mapDocument || !this.providers.mapLayer || !this.providers.queryGeoData) {
       throw new Error('Heurist public API providers are not configured');
     }
-    if (!(this.config.apiBaseUrl || this.config.serverUrl) || !this.config.database) {
+    if (!this.config.apiBaseUrl || !this.config.database) {
       throw new Error(
-        'MapDocument loading requires heuristMapOptions.apiBaseUrl (or serverUrl) and database'
+        'MapDocument loading requires heuristMapBootstrap.runtime.apiBaseUrl and database'
       );
     }
   }

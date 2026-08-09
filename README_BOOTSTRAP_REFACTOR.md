@@ -1,24 +1,21 @@
-# Heurist Map bootstrap refactor
+# Bootstrap refactor
 
-This patch replaces the consumed parent registry / `hostInstance` mechanism with one persistent same-origin bootstrap bridge attached to the iframe DOM element.
+The current bootstrap contract is intentionally small:
 
-Bootstrap contract:
-
-```js
+```javascript
 {
-  runtime: { /* database/API/host/runtime-only values */ },
-  settings: { format: 'heurist-map-settings', version: 1, options: {}, config: {} },
-  state: null,
-  mapDocument: null
+  runtime: {
+    viewerMode,
+    configurationMode,
+    database,
+    apiBaseUrl,
+    baseUrl,
+    accessToken,
+    requestHeaders
+  },
+  settings,
+  state
 }
 ```
 
-Key points:
-
-- `mapViewer` owns `_mapBootstrap` for the lifetime of the widget.
-- The iframe element exposes `heuristMapHost.getConfiguration()`; the child reads it as `window.frameElement.heuristMapHost`.
-- Reloading the iframe does not consume or destroy bootstrap information.
-- Preferences + explicit widget settings are merged once in `mapViewer`.
-- `getHeuristMapConfig()` consumes normalized `settings` and no longer overlays runtime `ui`, `dynamicDocument`, etc.
-- Legacy mixed `heuristMapOptions` settings are extracted once for compatibility.
-- Saving preferences calls `bridge.updateSettings(settings)`, keeping the parent bootstrap current for later iframe reloads.
+`settings` is optional; canonical defaults are applied when it is absent. Basemap definitions, UI runtime overrides, document-loading mechanics, nested host configuration, `serverUrl`, and direct MapDocument objects are not bootstrap fields. See `docs/configuration.md` for the authoritative description.

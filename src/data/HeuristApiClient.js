@@ -32,7 +32,6 @@ export class HeuristApiClient {
    */
   constructor({
     apiBaseUrl,
-    serverUrl,
     database,
     accessToken = null,
     headers = {},
@@ -42,7 +41,7 @@ export class HeuristApiClient {
       throw new TypeError('A fetch implementation is required');
     }
 
-    this.apiBaseUrl = normalizeApiBaseUrl(apiBaseUrl || serverUrl);
+    this.apiBaseUrl = normalizeApiBaseUrl(apiBaseUrl);
     this.database = normalizeDatabase(database);
     this.accessToken = accessToken;
     this.headers = { ...headers };
@@ -171,12 +170,12 @@ export class HeuristApiClient {
   assertConfigured() {
     if (!this.apiBaseUrl) {
       throw new HeuristApiError(
-        'Heurist API base URL is not configured. Set heuristMapOptions.apiBaseUrl or serverUrl.'
+        'Heurist API base URL is not configured. Set heuristMapBootstrap.runtime.apiBaseUrl.'
       );
     }
     if (!this.database) {
       throw new HeuristApiError(
-        'Heurist database is not configured. Set heuristMapOptions.database.'
+        'Heurist database is not configured. Set heuristMapBootstrap.runtime.database.'
       );
     }
   }
