@@ -119,23 +119,14 @@ body {
 .heurist-map-active-layers .heurist-map-layer-row{
   min-height:25px;
 }
-/* Zoom-to-layer remains available without hover. Other layer actions retain
-   their existing hover/focus behaviour. */
+/* Layer actions, including zoom-to-layer, are shown on hover/focus only. */
 .heurist-map-layer-row>.heurist-map-row-actions{
-  opacity:1;
-  visibility:visible;
-  pointer-events:auto;
-}
-.heurist-map-layer-row>.heurist-map-row-actions>.heurist-map-icon-button:not(.heurist-map-layer-zoom-action),
-.heurist-map-layer-row>.heurist-map-row-actions>.heurist-map-opacity-control{
   opacity:0;
   visibility:hidden;
   pointer-events:none;
 }
-.heurist-map-layer-row:hover>.heurist-map-row-actions>.heurist-map-icon-button,
-.heurist-map-layer-row:focus-within>.heurist-map-row-actions>.heurist-map-icon-button,
-.heurist-map-layer-row:hover>.heurist-map-row-actions>.heurist-map-opacity-control,
-.heurist-map-layer-row:focus-within>.heurist-map-row-actions>.heurist-map-opacity-control{
+.heurist-map-layer-row:hover>.heurist-map-row-actions,
+.heurist-map-layer-row:focus-within>.heurist-map-row-actions{
   opacity:1;
   visibility:visible;
   pointer-events:auto;

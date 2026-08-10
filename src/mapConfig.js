@@ -36,11 +36,8 @@ export function getHeuristMapConfig() {
   const bridge = getHostBridge();
   const bootstrap = bridge?.getConfiguration?.() || getStandaloneBootstrap();
   const runtime = bootstrap?.runtime || {};
-  const published = globalThis.heuristMapPublished || null;
-  const settings = normalizeMapConfigurationSettings(
-    bootstrap?.settings || (published ? { options: published.options, config: published.config } : {})
-  );
-  const state = bootstrap?.state ?? published?.state ?? null;
+  const settings = normalizeMapConfigurationSettings(bootstrap?.settings || {});
+  const state = bootstrap?.state ?? null;
 
   const documentQuery = parseDocumentQuery(url.searchParams.get('doc'));
   const configuredDefaultDocumentId = settings.options.mapDocuments.initiallyActive;
@@ -118,24 +115,18 @@ function getHostBridge() {
 /**
  * Standalone bootstrap. Standalone callers define window.heuristMapBootstrap
  * using the same { runtime, settings, state } contract as mapViewer.
- * Generated published-map pages may instead provide window.heuristMapPublished.
  */
 function getStandaloneBootstrap() {
-  if (globalThis.heuristMapBootstrap && typeof globalThis.heuristMapBootstrap === 'object') {
-    return globalThis.heuristMapBootstrap;
-  }
-
-  const published = globalThis.heuristMapPublished || null;
-  if (published && typeof published === 'object') {
+  const bootstrap = globalThis.heuristMapBootstrap;
+  if (bootstrap && typeof bootstrap === 'object') {
     return {
-      runtime: published.runtime || {},
-      settings: {
-        format: 'heurist-map-settings',
-        version: 1,
-        options: published.options || {},
-        config: published.config || {}
-      },
-      state: published.state || null
+      runtime: bootstrap.runtime && typeof bootstrap.runtime === 'object'
+        ? bootstrap.runtime
+        : {},
+      settings: bootstrap.settings && typeof bootstrap.settings === 'object'
+        ? bootstrap.settings
+        : null,
+      state: bootstrap.state ?? null
     };
   }
 
