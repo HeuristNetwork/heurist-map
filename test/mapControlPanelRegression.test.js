@@ -18,13 +18,31 @@ test('empty layer panel reports loading while a MapDocument is activating', () =
   assert.match(layerPanelSource, /loading \? 'Loading\.\.\.' : 'No layers'/);
 });
 
-test('zoom-to-layer action stays visible without exposing all layer actions', () => {
+test('zoom-to-layer action is available but remains hover/focus-only', () => {
   assert.match(layerItemSource, /heurist-map-layer-zoom-action/);
-  assert.match(cssSource, /not\(\.heurist-map-layer-zoom-action\)/);
+  assert.doesNotMatch(cssSource, /not\(\.heurist-map-layer-zoom-action\)/);
+  assert.match(cssSource, /heurist-map-row-actions[^}]*opacity:0/);
 });
 
 test('control-only mode removes title-toggle footprint and sizes to buttons', () => {
   assert.match(panelSource, /classList\.add\('controls-only'\)/);
   assert.match(cssSource, /\.heurist-map-control-panel\.controls-only\{[\s\S]*?width:auto/);
   assert.match(cssSource, /\.heurist-map-panel-header\{[\s\S]*?box-sizing:border-box/);
+});
+
+
+test('Map Control custom CSS supports declarations and complete CSS rules', () => {
+  assert.match(panelSource, /applyControlCss\(\)/);
+  assert.match(panelSource, /if \(!css\.includes\('\{'\)\)/);
+  assert.match(panelSource, /style\.textContent = css/);
+  assert.match(panelSource, /controlCssStyle\?\.remove\(\)/);
+});
+
+test('configuration dialog keeps Interface first and uses flat Default settings layout', async () => {
+  const dialogSource = await readFile(new URL('../src/ui/config/MapConfigurationDialog.js', import.meta.url), 'utf8');
+  const interfaceIndex = dialogSource.indexOf("this.section('Interface'");
+  const currentResultsIndex = dialogSource.indexOf("this.section('Current Results Map'");
+  assert.ok(interfaceIndex >= 0 && currentResultsIndex > interfaceIndex);
+  assert.doesNotMatch(dialogSource, /legend\('Map defaults'\)|legend\('Layer defaults'\)/);
+  assert.match(dialogSource, /heurist-map-config-inline-number/);
 });

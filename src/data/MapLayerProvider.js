@@ -32,12 +32,12 @@ export class MapLayerProvider {
    * Load and validate a public API entity by record ID.
    * @returns {Promise<*>} Resolves when the operation completes.
    */
-  async getById(recordId, { signal } = {}) {
+  async getById(recordId, { signal, defaults } = {}) {
     const id = requireRecordId(recordId);
     const response = await this.apiClient.get(`/map/layer/${id}`, { signal });
 
     validateResponse(response);
-    return normalizeMapLayer(response);
+    return normalizeMapLayer(response, { defaults });
   }
 }
 

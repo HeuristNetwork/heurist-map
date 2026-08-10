@@ -4,15 +4,16 @@ This document describes the current read-only initialization flow and the main c
 
 ## Initialization workflow
 
-1. `src/main.js` reads `window.heuristMapConfig` and `window.heuristMapOptions` through `mapConfig.js`.
-2. `initHeuristMap()` locates the map container and creates the configured map engine and host adapter.
-3. `HeuristApiClient` is created with the API base URL, database, token, and request headers.
-4. `MapDocumentProvider`, `MapLayerProvider`, and `QueryGeoDataProvider` are created around the API client.
-5. `createLayerLoaderRegistry()` registers loaders for Heurist query, record, inline GeoJSON, remote GeoJSON, and tile sources.
-6. `MapApplication` is created with the map engine, host, providers, and loader registry.
-7. `HeuristMapPublicApi` wraps the application and is exposed as `window.heuristMap` for direct and same-origin iframe integrations.
-8. `MapApplication.initialize()` converts the default MapDocument into a private map environment, initializes the engine, resolves the base map, and applies the initial bookmark.
-9. `window.heuristMap.loadMapDocument(recordId)` loads the MapDocument, resolves ordered MapLayer references, loads each source, rebuilds the map environment, renders the layers, and applies the bookmark.
+1. `src/main.js` calls `getHeuristMapConfig()` in `mapConfig.js`, which reads the single launch envelope `window.heuristMapBootstrap = { runtime, settings, state }` (or the same-origin iframe bridge at `window.frameElement.heuristMapHost.getConfiguration()`) and normalizes it against the configuration schema. See `docs/configuration.md` for the full bootstrap and `heurist-map-settings` contract; `window.heuristMapConfig`/`window.heuristMapOptions` are not read anywhere in the code.
+2. `main.js` branches on `config.viewerMode`: `initHeuristMapConfiguration()` starts the lightweight `HeuristMapConfigurationApi` (configuration-editor-only, no map engine); any other mode starts the full map through `initHeuristMap()`.
+3. `initHeuristMap()` locates the map container and creates the configured map engine and host adapter (`createHostAdapter()` returns `HeuristHostAdapter` when `config.host.type === 'heurist'`, otherwise `StandaloneHostAdapter`).
+4. `HeuristApiClient` is created with the API base URL, database, token, and request headers.
+5. `MapDocumentProvider`, `MapLayerProvider`, `QueryGeoDataProvider`, `RecordTypeProvider`, and `MapDocumentListProvider` are created around the API client.
+6. `createLayerLoaderRegistry()` registers loaders for Heurist query, record, inline GeoJSON, remote GeoJSON, image, and tile sources.
+7. `MapApplication` is created with the map engine, host, providers, and loader registry.
+8. `HeuristMapPublicApi` wraps the application, is given a `MapConfigurationDialog` factory, and is exposed as `window.heuristMap` for direct and same-origin iframe integrations.
+9. `MapApplication.initialize()` converts the default MapDocument into a private map environment, initializes the engine, resolves the base map, and applies the initial bookmark; `initHeuristMap()` then mounts `MapControlPanel` and, once the API client is configured, loads the persisted MapDocument list.
+10. `window.heuristMap.loadMapDocument(recordId)` loads the MapDocument, resolves ordered MapLayer references, loads each source, rebuilds the map environment, renders the layers, and applies the bookmark.
 
 ## Class hierarchy and collaboration
 
@@ -21,7 +22,8 @@ HeuristMapPublicApi
     delegates to
 MapApplication
     ├── HostAdapter
-    │     └── StandaloneHostAdapter
+    │     ├── StandaloneHostAdapter
+    │     └── HeuristHostAdapter          (FrontController: preferences + publishing)
     ├── MapEngineAdapter
     │     └── LeafletMapAdapter
     ├── MapDocumentProvider
@@ -30,10 +32,22 @@ MapApplication
     │     └── HeuristApiClient
     ├── QueryGeoDataProvider
     │     └── HeuristApiClient
+    ├── RecordTypeProvider / MapDocumentListProvider
+    │     └── HeuristApiClient
     └── LayerLoaderRegistry
           ├── GeoJsonLayerLoader
           ├── RemoteGeoJsonLayerLoader
+          ├── ImageLayerLoader
           └── TileLayerLoader
+
+HeuristMapConfigurationApi              (started instead of MapApplication when
+    delegates to                          config.viewerMode === "configuration";
+MapConfigurationDialog                    no map engine, host, or providers)
+    uses
+mapConfigurationSchema.js / mapConfigurationDefaults.js
+
+PublishedMapDialog                      (shown after HostAdapter.publishMap();
+                                          not part of the MapApplication tree)
 ```
 
 ### Public API layer
@@ -55,6 +69,14 @@ MapApplication
 ### Rendering layer
 
 `MapEngineAdapter` defines the engine-neutral rendering contract. `LeafletMapAdapter` owns all Leaflet maps, native layers, markers, popups, and tiles. No Leaflet object is exposed through the application or public API.
+
+### Host layer
+
+`HostAdapter` defines the contract for preferences and publishing outside the public map API. `StandaloneHostAdapter` is a no-op implementation used when no Heurist root URL is configured. `HeuristHostAdapter` calls the main Heurist `FrontController` (`UserController.get_prefs`/`save_prefs`, `MapController.save`/`get`/`delete`) for persisted map preferences and published-map links; it is selected by `createHostAdapter()` whenever `heuristMapBootstrap.runtime.baseUrl` is present. `PublishedMapDialog` is a standalone UI shown by the caller after a successful `HostAdapter.publishMap()`; it is not owned by `MapApplication`.
+
+### Configuration-editor layer
+
+`heurist-map` can start in a lightweight configuration-only mode instead of a full map (`config.viewerMode === "configuration"`, set via `heuristMapBootstrap.runtime.viewerMode`). `initHeuristMapConfiguration()` creates `HeuristMapConfigurationApi` and exposes it as `window.heuristMap` in place of `HeuristMapPublicApi` — no map engine, host adapter, providers, or MapDocument is created in this mode. `HeuristMapConfigurationApi` opens `MapConfigurationDialog`, and normalizes/serializes/defaults settings through `mapConfigurationSchema.js` and `mapConfigurationDefaults.js`. `MapConfigurationDialog` is also reused inside the full map mode (via `HeuristMapPublicApi`'s configuration-dialog factory) so the same editor UI serves the `preferences`, `website`, and `publish` workflows described in `docs/configuration.md` §6.
 
 ## Lazy popup behavior
 

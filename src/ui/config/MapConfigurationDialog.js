@@ -142,43 +142,34 @@ export class MapConfigurationDialog {
 
   buildSections() {
     this.form.append(
-      this.section('Current results', (body) => this.buildCurrentResults(body), { open: true }),
+      this.section('Interface', (body) => this.buildInterface(body), { open: true }),
+      this.section('Current Results Map', (body) => this.buildCurrentResults(body), { open: true }),
+      this.section('Default settings', (body) => this.buildDefaults(body), { open: true }),
       this.section('Map documents', (body) => this.buildMapDocuments(body), { advanced: true }),
       this.section('Base maps', (body) => this.buildBaseMaps(body), { advanced: true }),
-      this.section('Interface', (body) => this.buildInterface(body), { open: true }),
       this.section('Interaction', (body) => this.buildInteraction(body), { advanced: true })
     );
   }
 
   buildCurrentResults(body) {
-    const doc = document.createElement('fieldset');
-    doc.className = 'heurist-map-config-group';
-    doc.append(legend('Default map'));
-    this.checkbox(doc, 'config.dynamicDocument.enabled', 'Enable current-results document', { hidden: true });
-    this.text(doc, 'config.dynamicDocument.title', 'Title');
-    this.checkbox(doc, 'config.dynamicDocument.initiallyActive', 'Initially active', { hidden: true });
-    this.zoomFields(doc, 'config.dynamicDocument', { kmAdvanced: true });
-    this.boundsFields(doc, 'config.dynamicDocument.bounds', { advanced: true });
-    this.json(doc, 'config.dynamicDocument.symbology', 'Default symbology');
-    this.json(doc, 'config.dynamicDocument.selectSymbology', 'Select symbology', { advanced: true });
-    this.checkbox(doc, 'config.dynamicDocument.preventContinuousWorldBasemap', 'Prevent continuous world basemap', { advanced: true });
+    this.checkbox(body, 'config.dynamicDocument.enabled', 'Enable current-results document', { hidden: true });
+    this.text(body, 'config.dynamicDocument.title', 'Title');
+    this.zoomFields(body, 'config.dynamicDocument', { allAdvanced: true });
+    this.boundsFields(body, 'config.dynamicDocument.bounds', { advanced: true });
+  }
 
-    const layer = document.createElement('fieldset');
-    layer.className = 'heurist-map-config-group';
-    layer.append(legend('Current-results layer'));
-    this.text(layer, 'config.currentResultsLayer.title', 'Title');
-    this.checkbox(layer, 'config.currentResultsLayer.visible', 'Initially visible', { advanced: true });
-    this.checkbox(layer, 'config.currentResultsLayer.selectable', 'Selectable', { advanced: true });
-    this.json(layer, 'config.currentResultsLayer.style', 'Default style');
-    this.checkbox(layer, 'config.currentResultsLayer.options.markerClustering', 'Marker clustering');
-    this.select(layer, 'config.currentResultsLayer.options.maxAllowedFeatures', 'Maximum allowed features', [
+  buildDefaults(body) {
+    const pointExtent = this.number(body, 'config.defaults.zoomToPointInKM', 'Point selection extent (km)', { min: 0 });
+    pointExtent.classList.add('heurist-map-config-inline-number', 'heurist-map-config-narrow-number');
+    this.json(body, 'config.defaults.symbology', 'Default symbology');
+    this.json(body, 'config.defaults.selectSymbology', 'Select symbology', { advanced: true });
+    this.checkbox(body, 'config.defaults.preventContinuousWorldBasemap', 'Prevent continuous world basemap', { advanced: true });
+    this.checkbox(body, 'config.defaults.markerClustering', 'Marker clustering');
+    this.select(body, 'config.defaults.maxAllowedFeatures', 'Maximum allowed features', [
       ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
     ], { kind: 'positive-int' });
-    this.checkbox(layer, 'config.currentResultsLayer.options.dynamicRequests', 'Dynamic requests', { advanced: true });
-    this.zoomFields(layer, 'config.currentResultsLayer.options', { allAdvanced: true });
-    this.textarea(layer, 'config.currentResultsLayer.options.popupTemplate', 'Popup template', { advanced: true });
-
-    body.append(doc, layer);
+    this.checkbox(body, 'config.defaults.dynamicRequests', 'Dynamic requests', { advanced: true });
+    this.textarea(body, 'config.defaults.popupTemplate', 'Popup template', { advanced: true });
   }
 
   buildMapDocuments(body) {
@@ -245,9 +236,6 @@ export class MapConfigurationDialog {
     this.number(row, `${prefix}.maxZoom`, 'Max zoom level', { min: 0, max: 22, step: 1, compact: true, advanced: options.allAdvanced === true });
     this.number(row, `${prefix}.minimumZoomKm`, 'Zoom-in limit (km)', { min: 0, compact: true, advanced: options.allAdvanced === true || options.kmAdvanced === true });
     this.number(row, `${prefix}.maximumZoomKm`, 'Zoom-out limit (km)', { min: 0, compact: true, advanced: options.allAdvanced === true || options.kmAdvanced === true });
-    if (prefix === 'config.dynamicDocument') {
-      this.number(row, `${prefix}.zoomToPointInKM`, 'Point selection extent (km)', { min: 0, compact: true });
-    }
     body.append(row);
   }
 

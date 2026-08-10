@@ -131,3 +131,8 @@ body {
   visibility:visible;
   pointer-events:auto;
 }
+
+/* Map configuration dialog compact default-value input. */
+.heurist-map-config-field.heurist-map-config-inline-number{display:flex;align-items:center;gap:8px}
+.heurist-map-config-field.heurist-map-config-inline-number>span{flex:0 0 auto}
+.heurist-map-config-field.heurist-map-config-narrow-number>input{width:72px}

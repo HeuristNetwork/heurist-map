@@ -35,7 +35,8 @@ export class GeoJsonLayerLoader {
       case 'heurist-query':
         geoJson = await this.queryGeoData.searchAll({
           query: source.query,
-          limit: source.limit || 1000,
+          limit: source.limit || mapLayer.options?.maxAllowedFeatures || 1000,
+          maxFeatures: source.limit || mapLayer.options?.maxAllowedFeatures || 1000,
           simplify: source.simplify === true,
           signal: context.signal
         });
@@ -76,14 +77,14 @@ export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson) {
     selectable: mapLayer.selectable !== false,
     data: normalizeGeoJson(geoJson, { layerId: id, sourceType: mapLayer.source.type }),
     style: mapLayer.style,
-    popup: normalizePopup(mapLayer.options?.popup),
+    popup: normalizePopup(mapLayer.options?.popup, mapLayer.options?.popupTemplate),
     options: mapLayer.options,
     source: mapLayer.source,
     order: context.reference.order ?? 0
   };
 }
 
-function normalizePopup(value) {
+function normalizePopup(value, template = null) {
   if (value === false) {
     return { enabled: false };
   }
@@ -92,6 +93,7 @@ function normalizePopup(value) {
     enabled: popup.enabled !== false,
     titleField: popup.titleField || null,
     fields: Array.isArray(popup.fields) ? [...popup.fields] : [],
-    showRecordId: popup.showRecordId !== false
+    showRecordId: popup.showRecordId !== false,
+    template: typeof template === 'string' && template.trim() ? template : null
   };
 }

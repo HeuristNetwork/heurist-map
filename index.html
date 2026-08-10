@@ -9,60 +9,19 @@
   <div id="heurist-map"></div>
 
   <script>
-    // Local/default MapDocument. A public API MapDocument can replace it later
-    // through: await window.heuristMap.loadMapDocument(recordId).
-    window.heuristMapConfig = {
-      format: 'heurist-map-document',
-      version: 1,
-      id: null,
-      title: 'Default map document',
-      mapBookmark: {
-        raw: '',
-        type: 'view',
-        center: { latitude: -33.8688, longitude: 151.2093 },
-        zoom: 3
-      },
-      bounds: null,
-      symbology: null,
-      minimumZoom: null,
-      maximumZoom: null,
-      zoomToPointInKM: 5,
-      worldBaseMap: {
-        id: null,
-        code: 'OpenStreetMap',
-        label: 'OpenStreetMap'
-      },
-      crs: {
-        id: null,
-        code: 'EPSG:3857',
-        label: 'Web Mercator'
-      },
-      layers: []
+    // Standalone launch envelope. See docs/configuration.md §1 and §4.
+    // `settings` and `state` are optional; canonical defaults are used when omitted.
+    window.heuristMapBootstrap = {
+      runtime: {
+        database: 'osmak_mapping',
+        apiBaseUrl: '/heurist/api'
+        // baseUrl omitted on purpose: this dev page uses the standalone host
+        // adapter rather than the main Heurist iframe bridge.
+      }
     };
-
-    window.heuristMapOptions = {
-      containerId: 'heurist-map',
-      engine: 'leaflet',
-      readonly: true,
-
-      // Phase 2 public API configuration. Replace the database before calling
-      // loadMapDocument(). apiBaseUrl may also be a complete absolute URL.
-      apiBaseUrl: 'heurist/api',
-      database: 'osmak_mapping',
-/*
-      dynamicDocument: {
-        enabled: true,
-        id: 'dynamic',
-        title: 'Dynamic map',
-        initiallyActive: false,
-        keepContent: true,
-        layers: []
-      },      
-*/  
-  };
   </script>
 
-  <script type="module" src="/src/main.js"></script> 
+  <script type="module" src="/src/main.js"></script>
 <!--  <script type="module" src="dist/heurist-map.js"></script>  -->
 
 
@@ -120,7 +79,7 @@
         north: -33.3
       });
     }else{
-      // Public API example after setting heuristMapOptions.database:
+      // Public API example after setting heuristMapBootstrap.runtime.database:
       // 101 - cities
       // 129 - china mosques
       // 125 - new york bromley map

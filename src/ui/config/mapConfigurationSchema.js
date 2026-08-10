@@ -97,40 +97,34 @@ function normalizeOptions(source, defaults) {
 }
 
 function normalizeConfig(source, defaults) {
+  const configuredDefaults = source.defaults || {};
   const document = source.dynamicDocument || {};
-  const layer = source.currentResultsLayer || {};
-  const layerOptions = layer.options || {};
 
   return {
+    defaults: {
+      zoomToPointInKM: nullablePositiveNumber(configuredDefaults.zoomToPointInKM),
+      symbology: nullableJsonObject(configuredDefaults.symbology),
+      selectSymbology: nullableJsonObject(configuredDefaults.selectSymbology),
+      preventContinuousWorldBasemap: boolean(
+        configuredDefaults.preventContinuousWorldBasemap,
+        defaults.defaults.preventContinuousWorldBasemap
+      ),
+      markerClustering: boolean(configuredDefaults.markerClustering, defaults.defaults.markerClustering),
+      maxAllowedFeatures: allowedFeatureLimit(
+        configuredDefaults.maxAllowedFeatures,
+        defaults.defaults.maxAllowedFeatures
+      ),
+      dynamicRequests: boolean(configuredDefaults.dynamicRequests, defaults.defaults.dynamicRequests),
+      popupTemplate: nullableString(configuredDefaults.popupTemplate)
+    },
     dynamicDocument: {
       enabled: boolean(document.enabled, defaults.dynamicDocument.enabled),
       title: stringValue(document.title, defaults.dynamicDocument.title),
-      initiallyActive: boolean(document.initiallyActive, defaults.dynamicDocument.initiallyActive),
       minZoom: nullableZoom(document.minZoom),
       maxZoom: nullableZoom(document.maxZoom),
       minimumZoomKm: nullablePositiveNumber(document.minimumZoomKm),
       maximumZoomKm: nullablePositiveNumber(document.maximumZoomKm),
-      zoomToPointInKM: nullablePositiveNumber(document.zoomToPointInKM),
-      bounds: normalizeBounds(document.bounds),
-      symbology: nullableJsonObject(document.symbology),
-      selectSymbology: nullableJsonObject(document.selectSymbology),
-      preventContinuousWorldBasemap: boolean(document.preventContinuousWorldBasemap, defaults.dynamicDocument.preventContinuousWorldBasemap)
-    },
-    currentResultsLayer: {
-      title: stringValue(layer.title, defaults.currentResultsLayer.title),
-      visible: boolean(layer.visible, defaults.currentResultsLayer.visible),
-      selectable: boolean(layer.selectable, defaults.currentResultsLayer.selectable),
-      style: nullableJsonObject(layer.style),
-      options: {
-        markerClustering: boolean(layerOptions.markerClustering, defaults.currentResultsLayer.options.markerClustering),
-        maxAllowedFeatures: allowedFeatureLimit(layerOptions.maxAllowedFeatures, defaults.currentResultsLayer.options.maxAllowedFeatures),
-        dynamicRequests: boolean(layerOptions.dynamicRequests, defaults.currentResultsLayer.options.dynamicRequests),
-        minZoom: nullableZoom(layerOptions.minZoom),
-        maxZoom: nullableZoom(layerOptions.maxZoom),
-        minimumZoomKm: nullablePositiveNumber(layerOptions.minimumZoomKm),
-        maximumZoomKm: nullablePositiveNumber(layerOptions.maximumZoomKm),
-        popupTemplate: nullableString(layerOptions.popupTemplate)
-      }
+      bounds: normalizeBounds(document.bounds)
     }
   };
 }

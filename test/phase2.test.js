@@ -94,6 +94,29 @@ test('QueryGeoDataProvider merges paginated GeoJSON', async () => {
 });
 
 
+
+
+test('QueryGeoDataProvider caps merged GeoJSON at maxAllowedFeatures', async () => {
+  const limits = [];
+  const provider = new QueryGeoDataProvider({
+    apiClient: {
+      get: async (_path, options) => {
+        limits.push(options.query.limit);
+        const count = options.query.limit;
+        return {
+          type: 'FeatureCollection',
+          features: Array.from({ length: count }, (_, index) => ({ type: 'Feature', id: index, properties: {}, geometry: null })),
+          meta: { total: 9000, offset: options.query.offset, limit: count }
+        };
+      }
+    }
+  });
+
+  const result = await provider.searchAll({ query: 't:10', limit: 2000, maxFeatures: 2000 });
+  assert.equal(result.features.length, 2000);
+  assert.deepEqual(limits, [2000]);
+});
+
 test('MapApplication loads referenced query layers in document order', async () => {
   const added = [];
   const engine = {

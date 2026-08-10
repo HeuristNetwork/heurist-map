@@ -11,20 +11,34 @@
  */
 
 import { normalizeLayerStyle } from '../utils/normalizeLayerStyle.js';
+import { normalizeMapSymbol } from '../utils/normalizeMapSymbol.js';
 import { normalizeBounds } from '../utils/normalizeBounds.js';
 
 export const MAP_LAYER_FORMAT = 'heurist-map-layer';
 export const MAP_LAYER_VERSION = 1;
 
-/**
- * Normalize map layer.
- *
- * @returns {*} Function result.
- */
-export function normalizeMapLayer(value = {}) {
+/** Normalize a MapLayer, applying configured global fallbacks only when absent. */
+export function normalizeMapLayer(value = {}, { defaults = {} } = {}) {
   const source = value && typeof value === 'object' ? value : {};
+  const sourceOptions = source.options && typeof source.options === 'object' ? source.options : {};
+  const defaulted = {
+    symbology: !hasExplicitSymbol(source.style),
+    selectSymbology: !hasExplicitSelectSymbol(source.style),
+    markerClustering: !Object.hasOwn(sourceOptions, 'markerClustering'),
+    maxAllowedFeatures: !Object.hasOwn(sourceOptions, 'maxAllowedFeatures'),
+    dynamicRequests: !Object.hasOwn(sourceOptions, 'dynamicRequests'),
+    popupTemplate: !Object.hasOwn(sourceOptions, 'popupTemplate'),
+    sourceLimit: source.source?.type === 'heurist-query'
+      && (source.source.limit === null || source.source.limit === undefined || source.source.limit === '')
+  };
 
-  return {
+  const options = normalizeOptions(sourceOptions, defaults);
+  const normalizedSource = normalizeSource(source.source);
+  if (defaulted.sourceLimit && Number(options.maxAllowedFeatures) > 0) {
+    normalizedSource.limit = Number(options.maxAllowedFeatures);
+  }
+
+  const result = {
     format: source.format || MAP_LAYER_FORMAT,
     version: Number(source.version) || MAP_LAYER_VERSION,
     id: positiveIntegerOrNull(source.id),
@@ -32,11 +46,66 @@ export function normalizeMapLayer(value = {}) {
     description: String(source.description || ''),
     visible: source.visible !== false,
     selectable: source.selectable !== false,
-    source: normalizeSource(source.source),
-    style: normalizeStyle(source.style),
+    source: normalizedSource,
+    style: normalizeStyle(source.style, defaults),
     timeline: normalizeTimeline(source.timeline),
-    options: normalizeOptions(source.options)
+    options
   };
+
+  // Internal inheritance metadata is intentionally non-enumerable: it must not
+  // leak through public API clones or persisted configuration.
+  Object.defineProperty(result, '_defaulted', {
+    value: defaulted,
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
+  return result;
+}
+
+/** Reapply changed global defaults to properties originally inherited by a layer. */
+export function reapplyMapLayerDefaults(mapLayer, defaults = {}) {
+  const inherited = mapLayer?._defaulted;
+  if (!inherited) return false;
+  let changed = false;
+
+  if (inherited.symbology) {
+    const symbol = normalizeMapSymbol(defaults.symbology ?? {});
+    if (!sameJson(mapLayer.style?.symbol, symbol)) {
+      mapLayer.style = { ...(mapLayer.style || {}), symbol };
+      changed = true;
+    }
+  }
+  if (inherited.selectSymbology) {
+    const selectSymbol = cloneObject(defaults.selectSymbology);
+    if (!sameJson(mapLayer.style?.selectSymbol, selectSymbol)) {
+      mapLayer.style = { ...(mapLayer.style || {}), selectSymbol };
+      changed = true;
+    }
+  }
+
+  const optionDefaults = {
+    markerClustering: defaults.markerClustering === true,
+    maxAllowedFeatures: positiveIntegerOrNull(defaults.maxAllowedFeatures) ?? 1000,
+    dynamicRequests: defaults.dynamicRequests === true,
+    popupTemplate: nullableString(defaults.popupTemplate)
+  };
+  for (const key of ['markerClustering', 'maxAllowedFeatures', 'dynamicRequests', 'popupTemplate']) {
+    if (!inherited[key]) continue;
+    if (!sameJson(mapLayer.options?.[key], optionDefaults[key])) {
+      mapLayer.options = { ...(mapLayer.options || {}), [key]: optionDefaults[key] };
+      changed = true;
+    }
+  }
+
+  if (inherited.sourceLimit && mapLayer.source?.type === 'heurist-query') {
+    const limit = Number(mapLayer.options?.maxAllowedFeatures) || 1000;
+    if (Number(mapLayer.source.limit) !== limit) {
+      mapLayer.source = { ...mapLayer.source, limit };
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 function normalizeSource(value) {
@@ -50,8 +119,11 @@ function normalizeSource(value) {
   };
 }
 
-function normalizeStyle(value) {
-  return normalizeLayerStyle(value);
+function normalizeStyle(value, defaults) {
+  return normalizeLayerStyle(value, {
+    symbol: defaults?.symbology ?? null,
+    selectSymbol: defaults?.selectSymbology ?? null
+  });
 }
 
 function normalizeTimeline(value) {
@@ -62,15 +134,52 @@ function normalizeTimeline(value) {
   };
 }
 
-function normalizeOptions(value) {
+function normalizeOptions(value, defaults = {}) {
   const options = value && typeof value === 'object' ? { ...value } : {};
   return {
     ...options,
     minZoom: finiteNumberOrNull(options.minZoom),
     maxZoom: finiteNumberOrNull(options.maxZoom),
     minimumZoomKm: finiteNumberOrNull(options.minimumZoomKm ?? options.minimumZoom),
-    maximumZoomKm: finiteNumberOrNull(options.maximumZoomKm ?? options.maximumZoom)
+    maximumZoomKm: finiteNumberOrNull(options.maximumZoomKm ?? options.maximumZoom),
+    markerClustering: typeof options.markerClustering === 'boolean'
+      ? options.markerClustering : defaults.markerClustering === true,
+    maxAllowedFeatures: positiveIntegerOrNull(options.maxAllowedFeatures)
+      ?? positiveIntegerOrNull(defaults.maxAllowedFeatures)
+      ?? 1000,
+    dynamicRequests: typeof options.dynamicRequests === 'boolean'
+      ? options.dynamicRequests : defaults.dynamicRequests === true,
+    popupTemplate: nullableString(options.popupTemplate) ?? nullableString(defaults.popupTemplate)
   };
+}
+
+function hasExplicitSymbol(value) {
+  const style = value && typeof value === 'object' ? value : {};
+  const candidate = style.symbol !== undefined ? style.symbol : style;
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return false;
+  const ignored = new Set(['type', 'thematic', 'selectSymbol', 'selectSymbology']);
+  return Object.keys(candidate).some((key) => !ignored.has(key));
+}
+
+function hasExplicitSelectSymbol(value) {
+  const style = value && typeof value === 'object' ? value : {};
+  const candidate = style.selectSymbol ?? style.selectSymbology;
+  return Boolean(candidate && typeof candidate === 'object' && !Array.isArray(candidate) && Object.keys(candidate).length);
+}
+
+function cloneObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? JSON.parse(JSON.stringify(value))
+    : null;
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function nullableString(value) {
+  if (value === null || value === undefined || value === '') return null;
+  return String(value);
 }
 
 function finiteNumberOrNull(value) {

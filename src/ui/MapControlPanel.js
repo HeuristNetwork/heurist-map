@@ -25,7 +25,7 @@ export class MapControlPanel {
     this.element.setAttribute('aria-label', 'Map controls');
     if (this.options.position) this.element.classList.add(`position-${this.options.position}`);
     if (this.options.maxHeight) this.element.style.maxHeight = String(this.options.maxHeight);
-    if (this.options.controlCss) this.element.style.cssText += `;${String(this.options.controlCss)}`;
+    this.applyControlCss();
 
     const header = document.createElement('div');
     header.className = 'heurist-map-panel-header';
@@ -151,6 +151,25 @@ export class MapControlPanel {
     this.baseMapsContainer.hidden = !this.baseMapsExpanded;
   }
 
+  /** Apply custom Map Control CSS as inline declarations or a complete CSS rule. */
+  applyControlCss() {
+    this.controlCssStyle?.remove();
+    this.controlCssStyle = null;
+    const css = String(this.options.controlCss || '').trim();
+    if (!css || !this.element) return;
+
+    if (!css.includes('{')) {
+      this.element.style.cssText = `${this.element.style.cssText};${css}`;
+      return;
+    }
+
+    const style = document.createElement('style');
+    style.className = 'heurist-map-control-custom-css';
+    style.textContent = css;
+    (this.element.ownerDocument?.head || document.head).append(style);
+    this.controlCssStyle = style;
+  }
+
   /** Rebuild the lightweight control panel with new presentation options. */
   applyOptions(options = {}) {
     const next = { ...this.options, ...options };
@@ -168,6 +187,8 @@ export class MapControlPanel {
 
   destroy() {
     for (const [name, handler] of this.listeners) this.api.removeEventListener(name, handler);
+    this.controlCssStyle?.remove();
+    this.controlCssStyle = null;
     this.element?.remove();
   }
 }

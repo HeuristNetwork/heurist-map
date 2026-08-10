@@ -152,7 +152,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       if (selected.has(featureId)) continue;
       const nativeLayer = entry.featureLayers.get(featureId);
       if (nativeLayer) {
-        applyNativeSelection(nativeLayer, false, entry.selectionBaseStyles, entry.opacity);
+        applyNativeSelection(nativeLayer, false, entry.selectionBaseStyles, entry.opacity, entry.selectionSymbol);
       }
     }
 
@@ -162,7 +162,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       if (previous.has(featureId)) continue;
       const nativeLayer = entry.featureLayers.get(featureId);
       if (nativeLayer) {
-        applyNativeSelection(nativeLayer, true, entry.selectionBaseStyles, entry.opacity);
+        applyNativeSelection(nativeLayer, true, entry.selectionBaseStyles, entry.opacity, entry.selectionSymbol);
       }
     }
 
@@ -236,7 +236,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       if (entry.featureLayers && entry.selectedFeatureIds?.size) {
         for (const [featureId, child] of entry.featureLayers) {
           if (entry.selectedFeatureIds.has(featureId)) {
-            applyNativeSelection(child, true, entry.selectionBaseStyles, value);
+            applyNativeSelection(child, true, entry.selectionBaseStyles, value, entry.selectionSymbol);
           }
         }
       }
@@ -497,6 +497,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     entry.featureRecordIds = featureRecordIds;
     entry.recordFeatureIds = recordFeatureIds;
     entry.selectionBaseStyles = selectionBaseStyles;
+    entry.selectionSymbol = definition.style?.selectSymbol || null;
     entry.selectedFeatureIds = new Set();
     return result;
   }
@@ -742,9 +743,9 @@ function createIconFontIcon(symbol) {
   }
 
   const fontSize = Math.min(width, height);
-  const color = symbol.color || '#000000';
+  const color = escapeHtml(symbol.color || '#000000');
   const backgroundStyle = symbol.fill && symbol.fillColor
-    ? `background-color:${symbol.fillColor};`
+    ? `background-color:${escapeHtml(symbol.fillColor)};`
     : 'background:none;';
 
   return L.divIcon({
@@ -762,6 +763,9 @@ function sanitizeClassToken(value) {
 function createPopupHtml(feature, popup) {
   const properties = feature?.properties || {};
   const metadata = properties.heurist || {};
+  if (typeof popup?.template === 'string' && popup.template.trim()) {
+    return renderPopupTemplate(popup.template, properties, metadata);
+  }
   const titleField = popup?.titleField;
   const title = titleField && properties[titleField] != null
     ? String(properties[titleField])
@@ -786,6 +790,21 @@ function createPopupHtml(feature, popup) {
   }
 
   return parts.join('');
+}
+
+function renderPopupTemplate(template, properties, metadata) {
+  const valueFor = (name) => {
+    const parts = String(name || '').trim().split('.').filter(Boolean);
+    let value = parts[0] === 'heurist' ? metadata : properties;
+    if (parts[0] === 'heurist') parts.shift();
+    for (const part of parts) {
+      if (!value || typeof value !== 'object') return '';
+      value = value[part];
+    }
+    return value == null ? '' : formatPopupValue(value);
+  };
+  const rendered = String(template).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_match, name) => valueFor(name));
+  return escapeHtml(rendered).replaceAll('\n', '<br>');
 }
 
 function formatPopupValue(value) {
@@ -828,8 +847,9 @@ function rememberSelectionBaseStyle(layer, storage) {
   });
 }
 
-function applyNativeSelection(layer, selected, storage, opacityMultiplier = 1) {
+function applyNativeSelection(layer, selected, storage, opacityMultiplier = 1, selectionSymbol = null) {
   const base = storage.get(layer) || {};
+  const symbol = selectionSymbol && typeof selectionSymbol === 'object' ? selectionSymbol : {};
   if (typeof layer.setStyle === 'function') {
     const restoredStyle = compactOptions({
       color: base.color,
@@ -838,15 +858,24 @@ function applyNativeSelection(layer, selected, storage, opacityMultiplier = 1) {
       fillColor: base.fillColor,
       fillOpacity: finiteOpacity(base.fillOpacity, 0.2) * opacityMultiplier
     });
-    layer.setStyle(selected ? {
-      color: '#ff0000',
-      weight: Math.max(Number(base.weight) || 2, 4),
-      opacity: opacityMultiplier,
-      fillColor: '#ffff00',
-      fillOpacity: Math.max(Number(base.fillOpacity) || 0, 0.35) * opacityMultiplier
-    } : restoredStyle);
+    const selectedWeight = symbol.weight ?? Math.max(Number(base.weight) || 2, 4);
+    const selectedFillOpacity = symbol.fillOpacity
+      ?? Math.max(Number(base.fillOpacity) || 0, 0.35);
+    layer.setStyle(selected ? compactOptions({
+      color: symbol.color ?? '#ff0000',
+      weight: selectedWeight,
+      opacity: finiteOpacity(symbol.opacity, 1) * opacityMultiplier,
+      fillColor: symbol.fillColor ?? '#ffff00',
+      fillOpacity: finiteOpacity(selectedFillOpacity, 0.35) * opacityMultiplier,
+      dashArray: symbol.dashArray,
+      fill: symbol.fill,
+      stroke: symbol.stroke
+    }) : restoredStyle);
     if (base.radius != null && typeof layer.setRadius === 'function') {
-      layer.setRadius(selected ? base.radius * 1.5 : base.radius);
+      const radius = Number(symbol.radius);
+      layer.setRadius(selected
+        ? (Number.isFinite(radius) && radius >= 0 ? radius : base.radius * 1.5)
+        : base.radius);
     }
   }
   const element = typeof layer.getElement === 'function' ? layer.getElement() : null;

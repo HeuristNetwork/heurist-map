@@ -28,22 +28,29 @@ const BASE_MAP_REGISTRY = Object.freeze({
  * @param {Object} mapDocument Canonical MapDocument.
  * @returns {Object} MapEnvironment consumed by MapApplication/adapters.
  */
-export function createMapEnvironment(mapDocument) {
+export function createMapEnvironment(mapDocument, defaults = {}) {
   return {
     initialView: createInitialView(mapDocument.mapBookmark, mapDocument.bounds),
     crs: {
       code: mapDocument.crs?.code || 'EPSG:3857'
     },
-    baseMap: resolveBaseMap(mapDocument.worldBaseMap),
+    baseMap: applyBaseMapDefaults(resolveBaseMap(mapDocument.worldBaseMap), defaults),
     zoomLimits: {
       minZoom: mapDocument.minZoom,
       maxZoom: mapDocument.maxZoom,
       minimumZoomKm: mapDocument.minimumZoomKm,
       maximumZoomKm: mapDocument.maximumZoomKm
     },
-    zoomToPointInKM: mapDocument.zoomToPointInKM,
+    zoomToPointInKM: mapDocument.zoomToPointInKM ?? defaults.zoomToPointInKM ?? null,
     layers: mapDocument.layers
   };
+}
+
+function applyBaseMapDefaults(baseMap, defaults) {
+  if (!baseMap || baseMap.type !== 'tile') return baseMap;
+  return defaults.preventContinuousWorldBasemap === true
+    ? { ...baseMap, noWrap: true }
+    : baseMap;
 }
 
 function createInitialView(bookmark, documentBounds) {

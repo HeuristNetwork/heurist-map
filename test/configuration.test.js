@@ -9,17 +9,22 @@ import {
 import { createMapConfigurationDefaults } from '../src/ui/config/mapConfigurationDefaults.js';
 import { MapConfigurationDialog } from '../src/ui/config/MapConfigurationDialog.js';
 
-test('map configuration defaults contain agreed large-dataset options', () => {
+test('map configuration defaults contain agreed global fallback settings', () => {
   const value = createMapConfigurationDefaults();
-  assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, 1000);
-  assert.equal(value.config.currentResultsLayer.options.dynamicRequests, false);
-  assert.equal(value.config.currentResultsLayer.options.markerClustering, false);
+  assert.equal(value.config.defaults.maxAllowedFeatures, 1000);
+  assert.equal(value.config.defaults.dynamicRequests, false);
+  assert.equal(value.config.defaults.markerClustering, false);
+  assert.equal(value.config.defaults.preventContinuousWorldBasemap, false);
+  assert.equal(value.config.defaults.symbology, null);
   assert.equal(value.options.mapDocuments.initiallyActive, null);
-  assert.equal(value.config.dynamicDocument.preventContinuousWorldBasemap, false);
+  assert.equal(value.config.dynamicDocument.enabled, true);
+  assert.equal(value.config.currentResultsLayer, undefined);
+  assert.equal(value.config.dynamicDocument.initiallyActive, undefined);
   assert.equal(value.options.ui.controlCss, null);
+  assert.equal(value.options.interaction.zoomOnSelection, false);
 });
 
-test('configuration normalization strips runtime and unknown properties', () => {
+test('configuration normalization strips runtime, obsolete, and unknown properties', () => {
   const value = normalizeMapConfigurationSettings({
     options: {
       database: 'secret-db',
@@ -28,11 +33,9 @@ test('configuration normalization strips runtime and unknown properties', () => 
       interaction: { selectionEnabled: false }
     },
     config: {
-      dynamicDocument: { title: 'Search', id: 'do-not-persist' },
-      currentResultsLayer: {
-        id: 'do-not-persist',
-        options: { maxAllowedFeatures: 2500, dynamicRequests: true }
-      }
+      defaults: { maxAllowedFeatures: 2500, dynamicRequests: true, unknown: 1 },
+      dynamicDocument: { title: 'Search', id: 'do-not-persist', initiallyActive: true },
+      currentResultsLayer: { options: { maxAllowedFeatures: 500 } }
     },
     callbacks: { onSave() {} }
   });
@@ -44,25 +47,32 @@ test('configuration normalization strips runtime and unknown properties', () => 
   assert.equal(value.options.ui.showLegend, false);
   assert.equal(value.options.interaction.selectionEnabled, false);
   assert.equal(value.config.dynamicDocument.id, undefined);
+  assert.equal(value.config.dynamicDocument.initiallyActive, undefined);
   assert.equal(value.config.dynamicDocument.title, 'Search');
-  assert.equal(value.config.currentResultsLayer.id, undefined);
-  assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, 1000);
-  assert.equal(value.config.currentResultsLayer.options.dynamicRequests, true);
+  assert.equal(value.config.currentResultsLayer, undefined);
+  assert.equal(value.config.defaults.unknown, undefined);
+  assert.equal(value.config.defaults.maxAllowedFeatures, 1000);
+  assert.equal(value.config.defaults.dynamicRequests, true);
 });
 
-test('configuration normalization preserves native zoom zero and null km limits', () => {
+test('dynamic document zoom settings remain document-specific; global defaults normalize independently', () => {
   const value = normalizeMapConfigurationSettings({
     config: {
-      dynamicDocument: { minZoom: 0, maxZoom: 18, selectSymbology: { color: '#f00' }, preventContinuousWorldBasemap: true },
-      currentResultsLayer: { options: { minZoom: 0, maximumZoomKm: null } }
+      defaults: {
+        zoomToPointInKM: 5,
+        selectSymbology: { color: '#f00' },
+        preventContinuousWorldBasemap: true
+      },
+      dynamicDocument: { minZoom: 0, maxZoom: 18, minimumZoomKm: null, maximumZoomKm: null }
     }
   });
   assert.equal(value.config.dynamicDocument.minZoom, 0);
   assert.equal(value.config.dynamicDocument.maxZoom, 18);
-  assert.equal(value.config.currentResultsLayer.options.minZoom, 0);
-  assert.equal(value.config.currentResultsLayer.options.maximumZoomKm, null);
-  assert.deepEqual(value.config.dynamicDocument.selectSymbology, { color: '#f00' });
-  assert.equal(value.config.dynamicDocument.preventContinuousWorldBasemap, true);
+  assert.equal(value.config.dynamicDocument.minimumZoomKm, null);
+  assert.equal(value.config.dynamicDocument.maximumZoomKm, null);
+  assert.equal(value.config.defaults.zoomToPointInKM, 5);
+  assert.deepEqual(value.config.defaults.selectSymbology, { color: '#f00' });
+  assert.equal(value.config.defaults.preventContinuousWorldBasemap, true);
 });
 
 test('configuration serializer creates versioned settings envelope', () => {
@@ -80,30 +90,27 @@ test('configuration dialog can be used as a persistence-neutral value object bef
     mode: 'website',
     value: {
       options: { mapDocuments: { allowed: [12, 14] } },
-      config: { currentResultsLayer: { options: { maxAllowedFeatures: 500 } } }
+      config: { defaults: { maxAllowedFeatures: 500 } }
     }
   });
   const value = dialog.getValue();
   assert.deepEqual(value.options.mapDocuments.allowed, [12, 14]);
-  assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, 500);
+  assert.equal(value.config.defaults.maxAllowedFeatures, 500);
   assert.equal(dialog.mode, 'website');
   assert.equal(dialog.serialize().format, 'heurist-map-settings');
 });
 
-
 test('configuration zoom limits are restricted to Leaflet 0-22 range', () => {
   const value = normalizeMapConfigurationSettings({
-    config: { dynamicDocument: { minZoom: -1, maxZoom: 23 }, currentResultsLayer: { options: { minZoom: 22, maxZoom: 0 } } }
+    config: { dynamicDocument: { minZoom: -1, maxZoom: 23 } }
   });
   assert.equal(value.config.dynamicDocument.minZoom, null);
   assert.equal(value.config.dynamicDocument.maxZoom, null);
-  assert.equal(value.config.currentResultsLayer.options.minZoom, 22);
-  assert.equal(value.config.currentResultsLayer.options.maxZoom, 0);
 });
 
 test('maximum allowed features accepts only configured choices', () => {
   for (const limit of [500, 1000, 2000, 5000]) {
-    const value = normalizeMapConfigurationSettings({ config: { currentResultsLayer: { options: { maxAllowedFeatures: limit } } } });
-    assert.equal(value.config.currentResultsLayer.options.maxAllowedFeatures, limit);
+    const value = normalizeMapConfigurationSettings({ config: { defaults: { maxAllowedFeatures: limit } } });
+    assert.equal(value.config.defaults.maxAllowedFeatures, limit);
   }
 });

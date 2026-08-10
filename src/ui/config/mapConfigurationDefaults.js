@@ -33,41 +33,30 @@ export const HEURIST_MAP_OPTIONS_DEFAULTS = Object.freeze({
   interaction: Object.freeze({
     selectionEnabled: true,
     popupEnabled: true,
-    zoomOnSelection: true
+    zoomOnSelection: false
   })
 });
 
-/** Public defaults for the dynamic MapDocument/current-results layer. */
+/** Public defaults shared by MapDocuments/MapLayers when they omit a value. */
 export const HEURIST_MAP_CONFIG_DEFAULTS = Object.freeze({
+  defaults: Object.freeze({
+    zoomToPointInKM: null,
+    symbology: null,
+    selectSymbology: null,
+    preventContinuousWorldBasemap: false,
+    markerClustering: false,
+    maxAllowedFeatures: 1000,
+    dynamicRequests: false,
+    popupTemplate: null
+  }),
   dynamicDocument: Object.freeze({
     enabled: true,
     title: 'Current results',
-    initiallyActive: true,
     minZoom: null,
     maxZoom: null,
     minimumZoomKm: null,
     maximumZoomKm: null,
-    zoomToPointInKM: null,
-    bounds: null,
-    symbology: null,
-    selectSymbology: null,
-    preventContinuousWorldBasemap: false
-  }),
-  currentResultsLayer: Object.freeze({
-    title: 'Current results',
-    visible: true,
-    selectable: true,
-    style: null,
-    options: Object.freeze({
-      markerClustering: false,
-      maxAllowedFeatures: 1000,
-      dynamicRequests: false,
-      minZoom: null,
-      maxZoom: null,
-      minimumZoomKm: null,
-      maximumZoomKm: null,
-      popupTemplate: null
-    })
+    bounds: null
   })
 });
 

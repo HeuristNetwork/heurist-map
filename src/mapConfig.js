@@ -42,7 +42,7 @@ export function getHeuristMapConfig() {
   const documentQuery = parseDocumentQuery(url.searchParams.get('doc'));
   const configuredDefaultDocumentId = settings.options.mapDocuments.initiallyActive;
   const defaultDocumentId = configuredDefaultDocumentId == null ? 'dynamic' : configuredDefaultDocumentId;
-  const preventContinuousWorldBasemap = settings.config.dynamicDocument.preventContinuousWorldBasemap;
+  const preventContinuousWorldBasemap = settings.config.defaults.preventContinuousWorldBasemap;
 
   return {
     viewerMode: runtime.viewerMode === 'configuration' ? 'configuration' : 'map',
@@ -69,21 +69,25 @@ export function getHeuristMapConfig() {
       initiallyActive: defaultDocumentId
     },
 
+    defaults: settings.config.defaults,
+
     dynamicDocument: {
       enabled: settings.config.dynamicDocument.enabled,
       id: 'dynamic',
-      title: String(settings.config.dynamicDocument.title || 'Dynamic map'),
-      initiallyActive: defaultDocumentId === 'dynamic',
-      selectSymbology: settings.config.dynamicDocument.selectSymbology,
-      preventContinuousWorldBasemap,
+      title: String(settings.config.dynamicDocument.title || 'Current results'),
+      minZoom: settings.config.dynamicDocument.minZoom,
+      maxZoom: settings.config.dynamicDocument.maxZoom,
+      minimumZoomKm: settings.config.dynamicDocument.minimumZoomKm,
+      maximumZoomKm: settings.config.dynamicDocument.maximumZoomKm,
+      bounds: settings.config.dynamicDocument.bounds,
       keepContent: true,
       layers: []
     },
 
     // Basemap definitions come from the built-in catalog; settings only filter
-    // the catalog and select its initial item.
+    // the catalog and select its initial item. Continuous-world behavior is a
+    // global default even though it affects the map engine rather than layers.
     baseMaps: normalizeBaseMaps(settings.options.baseMaps, preventContinuousWorldBasemap),
-    currentResultsLayer: settings.config.currentResultsLayer,
     interaction: settings.options.interaction,
     ui: {
       ...settings.options.ui,

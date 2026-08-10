@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapApplication } from '../src/core/MapApplication.js';
 
-function createApplication({ initiallyActive = false } = {}) {
+function createApplication({ initiallyActive = false, dynamicDocument = {}, defaults = {}, interaction = {} } = {}) {
   const rendered = [];
   const removed = [];
+  const zoomLimits = [];
   const mapEngine = {
     async initialize() {},
     setInteractionHandlers() {},
@@ -16,7 +17,7 @@ function createApplication({ initiallyActive = false } = {}) {
     async setBaseMap() {},
     async fitBounds() {},
     async setView() {},
-    async setZoomLimits() {},
+    async setZoomLimits(value) { zoomLimits.push(value); },
     getViewState() { return null; },
     async getVisibleLayerBounds() { return null; },
     getCapabilities() { return {}; }
@@ -33,6 +34,7 @@ function createApplication({ initiallyActive = false } = {}) {
         data: { type: 'FeatureCollection', features: [] },
         source: mapLayer.source,
         style: mapLayer.style,
+        popup: { enabled: true },
         options: mapLayer.options,
         order: context.reference.order
       };
@@ -42,13 +44,16 @@ function createApplication({ initiallyActive = false } = {}) {
     container: { dispatchEvent() {} },
     config: {
       mapDocument: {},
+      documents: { initiallyActive: initiallyActive ? 'dynamic' : null },
+      defaults,
+      interaction,
       dynamicDocument: {
         enabled: true,
         id: 'dynamic',
         title: 'Runtime map',
-        initiallyActive,
         keepContent: true,
-        layers: []
+        layers: [],
+        ...dynamicDocument
       },
       ui: { showCurrentDocument: true },
       baseMaps: [],
@@ -72,7 +77,7 @@ function createApplication({ initiallyActive = false } = {}) {
     },
     layerLoaders
   });
-  return { application, rendered, removed };
+  return { application, rendered, removed, zoomLimits };
 }
 
 test('every application has one lightweight dynamic MapDocument', () => {
@@ -88,6 +93,33 @@ test('every application has one lightweight dynamic MapDocument', () => {
     error: null,
     showInPanel: true
   });
+});
+
+test('Current Results Map applies its document-specific zoom limits', async () => {
+  const { application, zoomLimits } = createApplication({
+    dynamicDocument: { minZoom: 3, maxZoom: 11 }
+  });
+  await application.activateMapDocument('dynamic');
+  assert.deepEqual(zoomLimits.at(-1), { minZoom: 3, maxZoom: 11 });
+});
+
+test('Current Results Map startup applies its document-specific zoom limits', async () => {
+  const { application, zoomLimits } = createApplication({
+    initiallyActive: true,
+    dynamicDocument: { minZoom: 4, maxZoom: 12 }
+  });
+  await application.initialize();
+  assert.deepEqual(zoomLimits.at(-1), { minZoom: 4, maxZoom: 12 });
+});
+
+test('global interaction selection policy restricts otherwise selectable layers', async () => {
+  const { application, rendered } = createApplication({
+    initiallyActive: true,
+    interaction: { selectionEnabled: false, popupEnabled: false }
+  });
+  await application.addQueryLayer('t:10', { id: 'current-results' });
+  assert.equal(rendered.at(-1).selectable, false);
+  assert.equal(rendered.at(-1).popup.enabled, false);
 });
 
 test('query layer added while dynamic document is inactive is retained but not rendered', async () => {
@@ -165,7 +197,8 @@ test('failed current-results load can be retried through stored layer definition
     container: { dispatchEvent() {} },
     config: {
       mapDocument: {},
-      dynamicDocument: { enabled: true, id: 'dynamic', title: 'Runtime map', initiallyActive: true, layers: [] },
+      documents: { initiallyActive: 'dynamic' }, defaults: {}, interaction: {},
+      dynamicDocument: { enabled: true, id: 'dynamic', title: 'Runtime map', layers: [] },
       ui: { showCurrentDocument: true }, baseMaps: [], readonly: true
     },
     mapEngine,
@@ -213,11 +246,8 @@ test('applyConfiguration updates live UI/current-results settings without switch
       mapDocuments: { initiallyActive: 123 }
     },
     config: {
-      dynamicDocument: { title: 'Configured map', minimumZoomKm: 2, maximumZoomKm: 100 },
-      currentResultsLayer: {
-        title: 'Configured results', visible: true, selectable: false,
-        options: { maxAllowedFeatures: 2000, markerClustering: false }
-      }
+      defaults: { maxAllowedFeatures: 2000, markerClustering: false },
+      dynamicDocument: { title: 'Configured map', minimumZoomKm: 2, maximumZoomKm: 100 }
     }
   });
 
@@ -225,8 +255,25 @@ test('applyConfiguration updates live UI/current-results settings without switch
   assert.equal(result.requiresReload, false);
   assert.equal(application.activeMapDocumentId, activeBefore);
   assert.equal(application.getDynamicDocument().title, 'Configured map');
-  assert.equal(application.getDocumentLayer('current-results', 'dynamic').title, 'Configured results');
-  assert.equal(application.getDocumentLayer('current-results', 'dynamic').selectable, false);
+  assert.equal(application.getDocumentLayer('current-results', 'dynamic').title, 'Old title');
+  assert.equal(application.getDocumentLayer('current-results', 'dynamic').selectable, true);
+  assert.equal(application.config.defaults.maxAllowedFeatures, 2000);
   assert.equal(application.controlPanel.applied.showMapDocuments, false);
   assert.equal(application.config.documents.initiallyActive, 123);
+});
+
+
+test('applyConfiguration enforces interaction policy on already loaded layers', async () => {
+  const { application, rendered } = createApplication({ initiallyActive: true });
+  await application.addQueryLayer('t:10', { id: 'current-results' });
+  assert.equal(rendered.at(-1).selectable, true);
+  assert.equal(rendered.at(-1).popup.enabled, true);
+
+  await application.applyConfiguration({
+    options: { interaction: { selectionEnabled: false, popupEnabled: false, zoomOnSelection: true } },
+    config: { defaults: {} }
+  });
+
+  assert.equal(application.getLayer('current-results').selectable, false);
+  assert.equal(rendered.at(-1).popup.enabled, false);
 });

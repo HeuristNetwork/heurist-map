@@ -13,7 +13,7 @@
 import { HeuristApiError } from './HeuristApiError.js';
 
 const DEFAULT_LIMIT = 1000;
-const MAX_LIMIT = 1000;
+const MAX_LIMIT = 5000;
 
 /**
  * Loads GeoJSON from the public /map endpoints.
@@ -93,9 +93,11 @@ export class QueryGeoDataProvider {
     simplify = false,
     method = 'auto',
     signal,
-    maxPages = 100
+    maxPages = 100,
+    maxFeatures = null
   }) {
     const pageSize = normalizeLimit(limit);
+    const featureLimit = normalizeFeatureLimit(maxFeatures);
     const features = [];
     let offset = 0;
     let page = 0;
@@ -105,16 +107,25 @@ export class QueryGeoDataProvider {
     while (page < maxPages) {
       throwIfAborted(signal);
 
+      const remaining = featureLimit == null ? pageSize : Math.max(0, featureLimit - features.length);
+      if (remaining === 0) {
+        complete = true;
+        break;
+      }
+
       const response = await this.search({
         query,
-        limit: pageSize,
+        limit: Math.min(pageSize, remaining),
         offset,
         simplify,
         method,
         signal
       });
 
-      features.push(...response.features);
+      const accepted = featureLimit == null
+        ? response.features
+        : response.features.slice(0, Math.max(0, featureLimit - features.length));
+      features.push(...accepted);
       latestMeta = response.meta || {};
       page += 1;
 
@@ -122,7 +133,10 @@ export class QueryGeoDataProvider {
       const received = response.features.length;
       offset += received;
 
-      if (received === 0 || received < pageSize || (Number.isFinite(total) && offset >= total)) {
+      if ((featureLimit != null && features.length >= featureLimit)
+        || received === 0
+        || received < Math.min(pageSize, remaining)
+        || (Number.isFinite(total) && offset >= total)) {
         complete = true;
         break;
       }
@@ -171,6 +185,12 @@ function normalizeLimit(value) {
     return DEFAULT_LIMIT;
   }
   return Math.min(number, MAX_LIMIT);
+}
+
+function normalizeFeatureLimit(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? Math.min(number, MAX_LIMIT) : null;
 }
 
 function normalizeOffset(value) {

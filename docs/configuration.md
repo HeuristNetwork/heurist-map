@@ -63,7 +63,7 @@ The following are deliberately **not** runtime properties:
 - basemap availability/default;
 - Map Control/UI settings;
 - dynamic/current-results document settings;
-- current-results layer settings;
+- global map/layer defaults;
 - a direct `mapDocument` object;
 - custom basemap definitions.
 
@@ -158,47 +158,36 @@ Portable configuration is stored in the following versioned envelope:
     interaction: {
       selectionEnabled: true,
       popupEnabled: true,
-      zoomOnSelection: true
+      zoomOnSelection: false
     }
   },
 
   config: {
+    defaults: {
+      zoomToPointInKM: null,
+      symbology: null,
+      selectSymbology: null,
+      preventContinuousWorldBasemap: false,
+      markerClustering: false,
+      maxAllowedFeatures: 1000,
+      dynamicRequests: false,
+      popupTemplate: null
+    },
+
     dynamicDocument: {
       enabled: true,
       title: "Current results",
-      initiallyActive: true,
       minZoom: null,
       maxZoom: null,
       minimumZoomKm: null,
       maximumZoomKm: null,
-      zoomToPointInKM: null,
-      bounds: null,
-      symbology: null,
-      selectSymbology: null,
-      preventContinuousWorldBasemap: false
-    },
-
-    currentResultsLayer: {
-      title: "Current results",
-      visible: true,
-      selectable: true,
-      style: null,
-      options: {
-        markerClustering: false,
-        maxAllowedFeatures: 1000,
-        dynamicRequests: false,
-        minZoom: null,
-        maxZoom: null,
-        minimumZoomKm: null,
-        maximumZoomKm: null,
-        popupTemplate: null
-      }
+      bounds: null
     }
   }
 }
 ```
 
-The schema is an allowlist. Unknown properties and runtime fields are discarded during normalization and serialization.
+The schema is an allowlist. Unknown properties, obsolete configuration properties, and runtime fields are discarded during normalization and serialization.
 
 ### 2.1 `options`
 
@@ -207,27 +196,58 @@ The schema is an allowlist. Unknown properties and runtime fields are discarded 
 - Map Control visibility;
 - allowed/default MapDocuments;
 - allowed/default basemaps from the built-in catalog;
-- map interaction behaviour.
+- global interaction policy.
 
 `mapDocuments.allowed === null` means all MapDocuments are available.
 
-`mapDocuments.initiallyActive === null` means the dynamic **Current results** document is the default document.
+`mapDocuments.initiallyActive === null` means the dynamic **Current Results Map** is the default document when it is enabled. If it is disabled, the first available persisted MapDocument is used.
 
 `baseMaps.allowed === null` means the complete built-in basemap catalog is available.
 
-### 2.2 `config`
+`options.interaction` is global policy, not a set of fallback values. For example, `selectionEnabled: false` disables selection even when a particular layer is selectable, and `popupEnabled: false` disables popups globally.
 
-`config` controls the dynamic/default document and the `current-results` layer, including:
+### 2.2 `config.defaults`
 
-- title;
-- zoom restrictions;
-- initial bounds;
-- normal and selection symbology;
-- prevention of continuous-world basemap wrapping;
-- marker clustering;
-- maximum allowed features;
-- dynamic requests;
-- popup template.
+`config.defaults` contains global fallback values used when a MapDocument or MapLayer does not define the corresponding value itself.
+
+The precedence is:
+
+```text
+built-in application default
+    ↓
+config.defaults
+    ↓
+specific MapDocument / MapLayer value
+```
+
+The current global defaults are:
+
+| Property | Applies to | Rule |
+|---|---|---|
+| `zoomToPointInKM` | MapDocument/view | Used when the active MapDocument does not define `zoomToPointInKM`. |
+| `symbology` | MapLayer | Used when the layer does not define `style.symbol` (including the base symbol for thematic layers). |
+| `selectSymbology` | MapLayer selection | Used when the layer does not define `style.selectSymbol` / `style.selectSymbology`. |
+| `preventContinuousWorldBasemap` | Map viewer | Applied to built-in tile basemaps globally (`noWrap`). |
+| `markerClustering` | MapLayer options | Inherited when the layer omits the option. The current Leaflet adapter does not yet implement clustering. |
+| `maxAllowedFeatures` | Query MapLayer | Inherited when omitted and used as the query source limit. Allowed values are 500, 1000, 2000, and 5000. |
+| `dynamicRequests` | MapLayer options | Inherited when omitted. Viewport-driven/dynamic request loading is reserved for the large-data implementation. |
+| `popupTemplate` | GeoJSON MapLayer | Inherited when omitted. Templates support escaped `{{property}}` placeholders; `{{heurist.recordId}}` addresses Heurist metadata. |
+
+Fallback values are applied with nullish semantics: explicit `false` and `0` values are not replaced by defaults.
+
+### 2.3 `config.dynamicDocument`
+
+`config.dynamicDocument` contains only properties specific to the internal dynamic **Current Results Map**:
+
+- `enabled`;
+- `title`;
+- native `minZoom` / `maxZoom`;
+- kilometre `minimumZoomKm` / `maximumZoomKm`;
+- `bounds`.
+
+The document has no separate `initiallyActive` flag. Startup activation is controlled only by `options.mapDocuments.initiallyActive`.
+
+The `current-results` layer also has no separate persisted configuration object. It is an internal layer with fixed ID `current-results`, initially visible and selectable, and it inherits the layer-related values from `config.defaults`.
 
 ## 3. Why bootstrap and configuration differ
 
@@ -292,9 +312,7 @@ window.heuristMapBootstrap = {
       baseMaps: { allowed: ["OpenStreetMap", "None"], initial: "OpenStreetMap" }
     },
     config: {
-      currentResultsLayer: {
-        options: { maxAllowedFeatures: 2000 }
-      }
+      defaults: { maxAllowedFeatures: 2000 }
     }
   },
   state: {
@@ -346,7 +364,7 @@ The dialog opens with **Advanced settings** disabled.
 With Advanced settings disabled:
 
 - the **Map documents**, **Base maps**, and **Interaction** sections are hidden;
-- advanced extent and zoom controls are hidden;
+- Current Results Map extent and all of its zoom controls are hidden;
 - popup template, dynamic requests, selection symbology, continuous-world control, Map Control CSS, and other specialist settings are hidden.
 
 Advanced mode only changes form visibility. It does not define another JSON format.
@@ -413,7 +431,7 @@ When **Publish** is pressed, the stored publish JSON contains portable settings 
 
 The publish JSON deliberately does **not** persist runtime information such as database/API/base URLs. The generated published page supplies the runtime launch environment separately and combines it with the published settings/state.
 
-For example, a generated page can provide:
+The generated standalone page converts the stored publish JSON into the normal bootstrap contract before loading the bundle:
 
 ```javascript
 window.heuristMapBootstrap = {
@@ -421,17 +439,18 @@ window.heuristMapBootstrap = {
     database: "my_database",
     apiBaseUrl: "/heurist/api",
     baseUrl: "/heurist/"
-  }
-};
-
-window.heuristMapPublished = {
-  format: "heurist-map-publish",
-  version: 1,
-  options: { /* stored */ },
-  config: { /* stored */ },
-  state: { /* stored */ }
+  },
+  settings: {
+    format: "heurist-map-settings",
+    version: 1,
+    options: { /* stored publish options */ },
+    config: { /* stored publish config */ }
+  },
+  state: { /* stored publish state */ }
 };
 ```
+
+There is no separate `window.heuristMapPublished` startup path.
 
 After successful publishing, the configuration dialog closes and a small **Published map** dialog shows the public link with **Copy link**, **Open**, and **Close** actions.
 
@@ -463,9 +482,9 @@ Published state is restored after map initialisation; it is not another layer of
 When extending configuration, keep these rules:
 
 1. **Keep runtime small.** Only environment-specific launch values belong in `bootstrap.runtime`.
-2. **Do not duplicate persisted settings in runtime.** MapDocuments, basemap selection, UI, interaction, and current-results configuration belong in `heurist-map-settings` only.
+2. **Do not duplicate persisted settings in runtime.** MapDocuments, basemap selection, UI, interaction, global defaults, and dynamic-document configuration belong in `heurist-map-settings` only.
 3. **Use the built-in basemap catalog.** Persist only which built-in basemaps are allowed and which one is initial.
-4. **Do not put a MapDocument in the bootstrap.** Persisted documents are loaded through the API; the dynamic/default document is defined by `settings.config.dynamicDocument`.
+4. **Do not put a MapDocument in the bootstrap.** Persisted documents are loaded through the API; the Current Results Map is defined by `settings.config.dynamicDocument`.
 5. **Missing settings mean defaults.** `bootstrap.settings` is optional.
 6. **Merge configuration once.** The host resolves preference/widget precedence; `heurist-map` normalizes the result but does not repeat the merge.
 7. **Use state for reproducibility.** Extent, active document/layer, query, and selection belong to state when they need to be restored.

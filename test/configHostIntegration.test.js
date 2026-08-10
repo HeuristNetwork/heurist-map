@@ -38,8 +38,8 @@ test('host factory creates HeuristHostAdapter for declarative host config', () =
 test('configuration-only API exposes schema operations without MapApplication', () => {
   const api = new HeuristMapConfigurationApi();
   const defaults = api.getConfigurationDefaults();
-  assert.equal(defaults.config.currentResultsLayer.options.maxAllowedFeatures, 1000);
-  assert.equal(defaults.config.currentResultsLayer.options.dynamicRequests, false);
+  assert.equal(defaults.config.defaults.maxAllowedFeatures, 1000);
+  assert.equal(defaults.config.defaults.dynamicRequests, false);
   const serialized = api.serializeConfiguration({ options: {}, config: {} });
   assert.equal(serialized.format, 'heurist-map-settings');
   assert.equal(serialized.version, 1);

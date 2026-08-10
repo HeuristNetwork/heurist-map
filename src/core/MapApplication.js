@@ -11,7 +11,7 @@
  */
 
 import { normalizeMapDocument } from './MapDocument.js';
-import { normalizeMapLayer } from './MapLayer.js';
+import { normalizeMapLayer, reapplyMapLayerDefaults } from './MapLayer.js';
 import { createMapEnvironment } from './createMapEnvironment.js';
 import { normalizeMapConfigurationSettings } from '../ui/config/mapConfigurationSchema.js';
 
@@ -29,7 +29,6 @@ export class MapApplication {
     this.host = host;
     this.providers = providers;
     this.layerLoaders = layerLoaders;
-    this.mapEnvironment = createMapEnvironment(config.mapDocument);
     this.layers = new Map();
     this.deferredLayers = new Map();
     this.pendingLayerLoads = new Map();
@@ -49,12 +48,21 @@ export class MapApplication {
     this.runtimeLayerSerial = 0;
     this.dynamicDocumentId = String(config.dynamicDocument?.id || 'dynamic');
     this.initializeDynamicDocument();
+
+    // When Current Results is the configured startup document, initialize the
+    // engine from its real document-specific environment immediately. Previously
+    // the synthetic empty MapDocument was initialized first, so dynamic min/max
+    // zoom settings were skipped until applyConfiguration() ran.
+    const initialDocument = this.activeMapDocumentId === this.dynamicDocumentId
+      ? createDynamicMapDocument(this.config, this.getDynamicDocumentEntry())
+      : config.mapDocument;
+    this.mapEnvironment = createMapEnvironment(initialDocument, config.defaults);
   }
 
   /** Create the predefined non-persistent MapDocument entry. */
   initializeDynamicDocument() {
     if (this.config.dynamicDocument?.enabled === false) return;
-    const active = this.config.dynamicDocument?.initiallyActive === true;
+    const active = String(this.config.documents?.initiallyActive) === this.dynamicDocumentId;
     this.mapDocuments.set(this.dynamicDocumentId, {
       id: this.dynamicDocumentId,
       kind: 'dynamic',
@@ -70,7 +78,7 @@ export class MapApplication {
         const mapLayer = normalizeMapLayer({
           ...definition,
           options: { ...(definition.options || {}), runtimeId: requestedRuntimeId }
-        });
+        }, { defaults: this.config.defaults });
         return {
           mapLayer,
           reference: {
@@ -271,7 +279,7 @@ export class MapApplication {
 
     try {
       const document = createDynamicMapDocument(this.config, item);
-      const environment = createMapEnvironment(document);
+      const environment = createMapEnvironment(document, this.config.defaults);
 
       // Switch the visible map immediately. Dynamic layer data may be expensive
       // to recreate, so do not leave the previous MapDocument on screen while
@@ -366,7 +374,7 @@ export class MapApplication {
       : (this.config.mapDocument?.id === id
         ? this.config.mapDocument
         : await this.providers.mapDocument.getById(id));
-    const view = createMapEnvironment(document).initialView;
+    const view = createMapEnvironment(document, this.config.defaults).initialView;
     if (view.type === 'bounds') return this.fitBounds(view.bounds, { animate: false });
     if (document.mapBookmark?.type === 'point' || (document.mapBookmark?.type === 'view' && document.mapBookmark?.raw)) {
       return this.setView(view.center, view.zoom, { animate: false });
@@ -455,6 +463,7 @@ export class MapApplication {
 
   /** Select one feature, optionally adding/toggling within the same layer. */
   async selectFeature(layerId, featureId, { recordId = null, additive = false, toggle = false, zoom = false } = {}) {
+    if (this.config.interaction?.selectionEnabled === false) return null;
     const layer = this.layers.get(layerId);
     if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
     if (layer.selectable === false) throw new Error(`Layer "${layer.title || layerId}" is not selectable`);
@@ -510,6 +519,7 @@ export class MapApplication {
 
   /** Select all rendered geometries for multiple records in one selectable layer. */
   async selectRecords(layerId, recordIds, { replace = true, zoom = false } = {}) {
+    if (this.config.interaction?.selectionEnabled === false) return null;
     const layer = this.layers.get(layerId);
     if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
     if (layer.selectable === false) throw new Error(`Layer "${layer.title || layerId}" is not selectable`);
@@ -605,12 +615,15 @@ export class MapApplication {
     };
     this.dispatch('heurist-map-feature-click', payload);
     this.dispatch('heurist-map-layer-click', { layerId: detail.layerId, latlng: detail.latlng || null });
-    if (detail.selectable === false || this.layers.get(detail.layerId)?.selectable === false) return;
+    if (this.config.interaction?.selectionEnabled === false
+      || detail.selectable === false
+      || this.layers.get(detail.layerId)?.selectable === false) return;
     try {
       await this.selectFeature(detail.layerId, detail.featureId, {
         recordId: detail.recordId,
         additive: Boolean(detail.additive),
-        toggle: Boolean(detail.additive)
+        toggle: Boolean(detail.additive),
+        zoom: this.config.interaction?.zoomOnSelection === true
       });
     } catch (error) {
       this.dispatch('heurist-map-error', { operation: 'select-feature', error: serializeError(error) });
@@ -657,7 +670,7 @@ export class MapApplication {
       // The MapDocument record already contains the bookmark/bounds and base-map
       // information. Apply that shell immediately, before potentially expensive
       // MapLayer/GeoJSON preparation, so activation is visible without delay.
-      const environment = createMapEnvironment(mapDocument);
+      const environment = createMapEnvironment(mapDocument, this.config.defaults);
       throwIfAborted(combinedSignal);
       await this.beginMapEnvironment(mapDocument, environment);
       if (typeof onEnvironmentReady === 'function') {
@@ -813,14 +826,14 @@ export class MapApplication {
       ? definition.runtimeId ?? definition.id
       : null;
     const mapLayer = typeof definition === 'number' || /^\d+$/.test(String(definition))
-      ? await this.providers.mapLayer.getById(Number(definition), { signal })
+      ? await this.providers.mapLayer.getById(Number(definition), { signal, defaults: this.config.defaults })
       : normalizeMapLayer({
           ...definition,
           options: {
             ...(definition?.options || {}),
             runtimeId: requestedRuntimeId || definition?.options?.runtimeId || null
           }
-        });
+        }, { defaults: this.config.defaults });
     if (!mapLayer.source?.type) throw new TypeError('MapLayer definition requires source.type');
 
     const id = createRuntimeLayerId(mapLayer, ++this.runtimeLayerSerial);
@@ -1168,7 +1181,7 @@ export class MapApplication {
       recordId: current.recordId,
       order: current.order
     };
-    const mapLayer = await this.providers.mapLayer.getById(current.recordId, { signal });
+    const mapLayer = await this.providers.mapLayer.getById(current.recordId, { signal, defaults: this.config.defaults });
     const shouldBeVisible = current.visible !== false;
     await this.removeRuntimeLayer(layerId);
 
@@ -1240,8 +1253,10 @@ export class MapApplication {
     this.assertActive();
     const normalized = normalizeMapConfigurationSettings(settings);
     const previous = this.config.persistedSettings || normalizeMapConfigurationSettings({});
-    const previousLayerSettings = previous.config.currentResultsLayer || {};
-    const nextLayerSettings = normalized.config.currentResultsLayer || {};
+    const previousDefaults = previous.config.defaults || {};
+    const nextDefaults = normalized.config.defaults || {};
+    const previousInteraction = previous.options.interaction || {};
+    const nextInteraction = normalized.options.interaction || {};
     const activeDocumentId = this.activeMapDocumentId;
     const viewState = this.mapEngine.getViewState?.() || null;
     const selection = this.getSelection();
@@ -1256,12 +1271,11 @@ export class MapApplication {
     };
     this.config.ui = { ...(this.config.ui || {}), ...normalized.options.ui };
     this.config.interaction = { ...(this.config.interaction || {}), ...normalized.options.interaction };
-    this.config.currentResultsLayer = clonePlain(nextLayerSettings);
+    this.config.defaults = clonePlain(nextDefaults);
     this.config.dynamicDocument = {
       ...(this.config.dynamicDocument || {}),
       ...clonePlain(normalized.config.dynamicDocument),
       id: this.dynamicDocumentId,
-      initiallyActive: String(this.config.documents.initiallyActive) === this.dynamicDocumentId,
       keepContent: this.config.dynamicDocument?.keepContent !== false
     };
 
@@ -1271,53 +1285,77 @@ export class MapApplication {
       dynamicEntry.showInPanel = this.config.ui.showCurrentDocument !== false;
     }
 
-    // Update the current-results definition. Reload only this layer when its
-    // rendering/data options changed; never reload the MapApplication itself.
-    const stored = dynamicEntry ? findStoredLayer(dynamicEntry, 'current-results') : null;
-    if (stored) {
-      const runtime = this.layers.get('current-results');
-      const desiredVisible = nextLayerSettings.visible !== false;
-      stored.mapLayer.title = nextLayerSettings.title || 'Current results';
-      stored.mapLayer.selectable = nextLayerSettings.selectable !== false;
-      stored.mapLayer.style = clonePlain(nextLayerSettings.style || {});
-      stored.mapLayer.options = clonePlain(nextLayerSettings.options || {});
-      stored.reference.title = stored.mapLayer.title;
+    // Reapply changed global defaults only to values that each stored layer
+    // originally inherited. Explicit layer settings are never overwritten.
+    const layerDefaultsChanged = !sameJson(previousDefaults, nextDefaults);
+    const popupPolicyChanged = previousInteraction.popupEnabled !== nextInteraction.popupEnabled;
+    if (layerDefaultsChanged || popupPolicyChanged) {
+      for (const documentEntry of this.mapDocuments.values()) {
+        for (const stored of documentEntry.layerDefinitions || []) {
+          const defaultsChangedForLayer = layerDefaultsChanged
+            ? reapplyMapLayerDefaults(stored.mapLayer, nextDefaults)
+            : false;
+          const layerId = stored.reference.id;
+          if (String(documentEntry.id) !== String(activeDocumentId)) continue;
 
-      if (runtime) {
-        runtime.title = stored.mapLayer.title;
-        runtime.selectable = stored.mapLayer.selectable;
-        runtime.options = clonePlain(stored.mapLayer.options);
-      }
+          const runtime = this.layers.get(layerId);
+          if (!runtime) continue; // deferred/inactive definitions use current settings on next load
+          const popupChangedForLayer = popupPolicyChanged && runtime.popup != null;
+          if (!defaultsChangedForLayer && !popupChangedForLayer) continue;
 
-      const needsReload = !sameJson(previousLayerSettings.style, nextLayerSettings.style)
-        || !sameJson(previousLayerSettings.options, nextLayerSettings.options);
-      const query = stored.mapLayer.source?.query || null;
-      if (needsReload && query && String(activeDocumentId) === this.dynamicDocumentId && desiredVisible) {
-        await this.setQueryForLayer('current-results', query, { reload: true });
-      }
-      if (this.layers.has('current-results') && this.layers.get('current-results').visible !== desiredVisible) {
-        await this.setLayerVisibility('current-results', desiredVisible);
-      } else {
-        stored.mapLayer.visible = desiredVisible;
-        stored.reference.visible = desiredVisible;
+          const wasVisible = runtime.visible !== false;
+          await this.removeRuntimeLayer(layerId);
+          if (wasVisible) {
+            const runtimeLayer = await this.createRuntimeLayer(stored.mapLayer, stored.reference);
+            runtimeLayer.visible = true;
+            await this.renderRuntimeLayer(runtimeLayer);
+            if (stored.runtimeOpacity != null) await this.setLayerOpacity(layerId, stored.runtimeOpacity);
+          } else {
+            this.registerDeferredLayer(stored.mapLayer, stored.reference);
+          }
+        }
       }
     }
 
-    // Dynamic-document zoom limits can be changed in place. Persisted-record
-    // MapDocument limits are record data and remain untouched.
-    if (String(activeDocumentId) === this.dynamicDocumentId) {
-      const document = createDynamicMapDocument(this.config, dynamicEntry);
-      const environment = createMapEnvironment(document);
-      await this.applyDocumentZoomLimits(environment);
-      this.mapEnvironment.zoomLimits = environment.zoomLimits;
-      this.mapEnvironment.effectiveZoomLimits = environment.effectiveZoomLimits;
+    // selectionEnabled is a global policy. Reflect its effective value in the
+    // public runtime state as well as enforcing it in selection operations.
+    for (const [layerId, runtime] of this.layers) {
+      const activeEntry = this.mapDocuments.get(this.activeMapDocumentId);
+      const stored = activeEntry ? findStoredLayer(activeEntry, layerId) : null;
+      runtime.selectable = nextInteraction.selectionEnabled !== false
+        && (stored?.mapLayer?.selectable !== false);
+    }
+
+    // Recompute document-specific zoom limits and the global zoom-to-point
+    // fallback without changing the active document or current map view.
+    const activeDocument = String(activeDocumentId) === this.dynamicDocumentId
+      ? createDynamicMapDocument(this.config, dynamicEntry)
+      : this.config.mapDocument;
+    if (activeDocument) {
+      const environment = createMapEnvironment(activeDocument, this.config.defaults);
+      if (String(activeDocumentId) === this.dynamicDocumentId) {
+        await this.applyDocumentZoomLimits(environment);
+        this.mapEnvironment.zoomLimits = environment.zoomLimits;
+        this.mapEnvironment.effectiveZoomLimits = environment.effectiveZoomLimits;
+      }
+      this.mapEnvironment.zoomToPointInKM = environment.zoomToPointInKM;
+    }
+
+    // Continuous-world behavior belongs to global defaults. Update the built-in
+    // basemap definitions and recreate the active basemap only when it changed.
+    if (previousDefaults.preventContinuousWorldBasemap !== nextDefaults.preventContinuousWorldBasemap) {
+      const noWrap = nextDefaults.preventContinuousWorldBasemap === true;
+      for (const [id, item] of this.baseMaps) {
+        if (item.type === 'tile') this.baseMaps.set(id, { ...item, noWrap });
+      }
+      if (this.activeBaseMapId != null && this.baseMaps.has(String(this.activeBaseMapId))) {
+        await this.setBaseMap(this.activeBaseMapId);
+      }
     }
 
     this.controlPanel?.applyOptions?.(this.config.ui);
 
-    // Reloading the current-results layer may clear its selection; restore the
-    // selection only when it still belongs to that layer. View is never changed
-    // by applyConfiguration, but explicitly restore it defensively after a layer reload.
+    // Reloading current-results can clear its selection; restore it if possible.
     if (selection?.layerId === 'current-results' && Array.isArray(selection.features)) {
       const ids = [...new Set(selection.features.map((item) => item.recordId).filter((id) => id != null))];
       if (ids.length && this.layers.has('current-results')) {
@@ -1373,20 +1411,15 @@ export class MapApplication {
     }
 
     if (state.query) {
-      const layerSettings = this.config.currentResultsLayer || {};
-      const layerOptions = layerSettings.options || {};
       const existing = this.getDocumentLayer('current-results', this.dynamicDocumentId);
       if (existing) {
         await this.setQueryForLayer('current-results', state.query, { reload: true });
       } else {
         await this.addQueryLayer(state.query, {
           id: 'current-results',
-          title: layerSettings.title || 'Current results',
-          visible: layerSettings.visible !== false,
-          selectable: layerSettings.selectable !== false,
-          style: layerSettings.style || {},
-          options: layerOptions,
-          limit: layerOptions.maxAllowedFeatures
+          title: 'Current results',
+          visible: true,
+          selectable: true
         });
       }
     }
@@ -1466,7 +1499,7 @@ export class MapApplication {
       throwIfAborted(signal);
       let mapLayer;
       try {
-        mapLayer = await this.providers.mapLayer.getById(reference.recordId, { signal });
+        mapLayer = await this.providers.mapLayer.getById(reference.recordId, { signal, defaults: this.config.defaults });
       } catch (error) {
         throw addContext(error, `Cannot load MapLayer record ${reference.recordId}`);
       }
@@ -1498,6 +1531,10 @@ export class MapApplication {
       throw new Error('MapLayer loader registry is not configured');
     }
     const runtimeLayer = await this.layerLoaders.load(mapLayer, { reference, signal, application: this });
+    if (this.config.interaction?.selectionEnabled === false) runtimeLayer.selectable = false;
+    if (runtimeLayer.popup && this.config.interaction?.popupEnabled === false) {
+      runtimeLayer.popup = { ...runtimeLayer.popup, enabled: false };
+    }
     const zoomRange = this.resolveLayerZoomRange(mapLayer);
     runtimeLayer.visibilityMinZoom = zoomRange.minZoom;
     runtimeLayer.visibilityMaxZoom = zoomRange.maxZoom;
@@ -1677,10 +1714,16 @@ function createPublicDocumentEntry(entry) {
 
 function createDynamicMapDocument(config, entry) {
   const base = normalizeMapDocument(config.mapDocument || {});
+  const dynamic = config.dynamicDocument || {};
   return {
     ...base,
     id: null,
-    title: entry?.title || config.dynamicDocument?.title || 'Dynamic map',
+    title: entry?.title || dynamic.title || 'Current results',
+    bounds: dynamic.bounds ?? base.bounds,
+    minZoom: dynamic.minZoom ?? null,
+    maxZoom: dynamic.maxZoom ?? null,
+    minimumZoomKm: dynamic.minimumZoomKm ?? null,
+    maximumZoomKm: dynamic.maximumZoomKm ?? null,
     layers: (entry?.layerDefinitions || []).map((item) => ({ ...item.reference }))
   };
 }
