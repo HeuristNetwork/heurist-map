@@ -136,3 +136,8 @@ body {
 .heurist-map-config-field.heurist-map-config-inline-number{display:flex;align-items:center;gap:8px}
 .heurist-map-config-field.heurist-map-config-inline-number>span{flex:0 0 auto}
 .heurist-map-config-field.heurist-map-config-narrow-number>input{width:72px}
+
+/* Current-results layer count / partial-load status. */
+.heurist-map-layer-title-block{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.heurist-map-layer-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.heurist-map-layer-partial-warning{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.2;color:#9a5b00}

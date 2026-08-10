@@ -76,6 +76,7 @@ export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson) {
     visibilityMaxZoom: mapLayer.options?.effectiveMaxZoom ?? mapLayer.options?.maxZoom,
     selectable: mapLayer.selectable !== false,
     data: normalizeGeoJson(geoJson, { layerId: id, sourceType: mapLayer.source.type }),
+    resultMeta: normalizeResultMeta(geoJson?.meta),
     style: mapLayer.style,
     popup: normalizePopup(mapLayer.options?.popup, mapLayer.options?.popupTemplate),
     options: mapLayer.options,
@@ -95,5 +96,21 @@ function normalizePopup(value, template = null) {
     fields: Array.isArray(popup.fields) ? [...popup.fields] : [],
     showRecordId: popup.showRecordId !== false,
     template: typeof template === 'string' && template.trim() ? template : null
+  };
+}
+
+function normalizeResultMeta(value) {
+  if (!value || typeof value !== 'object') return null;
+  const numberOrNull = (item) => {
+    const number = Number(item);
+    return Number.isFinite(number) && number >= 0 ? number : null;
+  };
+  return {
+    totalRecords: numberOrNull(value.totalRecords ?? value.total),
+    returnedRecords: numberOrNull(value.returnedRecords),
+    returnedFeatures: numberOrNull(value.returnedFeatures),
+    offset: numberOrNull(value.offset) ?? 0,
+    limit: numberOrNull(value.limit),
+    isPartial: value.isPartial === true
   };
 }

@@ -20,9 +20,22 @@ export class LayerPanelItem {
     main.className = 'heurist-map-row-main';
     main.append(this.createStateControl());
 
+    const titleBlock = document.createElement('span');
+    titleBlock.className = 'heurist-map-layer-title-block';
     const title = document.createElement('span');
-    title.textContent = this.layer.title || String(this.layer.id);
-    main.append(title);
+    title.className = 'heurist-map-layer-title';
+    const presentation = getLayerPresentation(this.layer);
+    title.textContent = presentation.label;
+    title.title = presentation.title;
+    titleBlock.append(title);
+    if (presentation.warning) {
+      const warning = document.createElement('small');
+      warning.className = 'heurist-map-layer-partial-warning';
+      warning.textContent = presentation.warning;
+      warning.title = presentation.warning;
+      titleBlock.append(warning);
+    }
+    main.append(titleBlock);
 
     const actions = document.createElement('span');
     actions.className = 'heurist-map-row-actions';
@@ -177,4 +190,42 @@ function closeOpenOpacityPopover() {
   } else {
     popover?.remove();
   }
+}
+
+function getLayerPresentation(layer) {
+
+  let label, title;
+  let warning = null;
+
+  const meta = layer?.resultMeta || {};
+  const features = finiteCount(meta.returnedFeatures) ?? finiteCount(layer?.featureCount) ?? 0;
+  if (meta.isPartial === true) {
+    const returnedRecords = finiteCount(meta.returnedRecords);
+    const totalRecords = finiteCount(meta.totalRecords);
+    const detail = returnedRecords != null && totalRecords != null
+      ? `first ${formatCount(returnedRecords)} of ${formatCount(totalRecords)} records processed`
+      : 'only part of the result set was loaded';
+    title = `Result: ${formatCount(features)} features — ${detail}`;
+    warning = `Partial load: ${detail}.`;
+  }else{
+    title = `Result: ${formatCount(features)} features`;
+  }
+
+  if (String(layer?.id) !== 'current-results') {
+    label = layer?.title || String(layer?.id ?? '');
+  }else{
+    label = title;
+    warning = null;
+  }
+
+  return { label, title, warning: warning };
+}
+
+function finiteCount(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? Math.trunc(number) : null;
+}
+
+function formatCount(value) {
+  return new Intl.NumberFormat().format(value);
 }

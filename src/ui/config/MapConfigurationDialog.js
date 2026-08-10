@@ -166,7 +166,7 @@ export class MapConfigurationDialog {
     this.checkbox(body, 'config.defaults.preventContinuousWorldBasemap', 'Prevent continuous world basemap', { advanced: true });
     this.checkbox(body, 'config.defaults.markerClustering', 'Marker clustering');
     this.select(body, 'config.defaults.maxAllowedFeatures', 'Maximum allowed features', [
-      ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
+      ['10', '10'], ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
     ], { kind: 'positive-int' });
     this.checkbox(body, 'config.defaults.dynamicRequests', 'Dynamic requests', { advanced: true });
     this.textarea(body, 'config.defaults.popupTemplate', 'Popup template', { advanced: true });

@@ -1762,6 +1762,7 @@ function createLayerState(definition) {
     visible: definition.visible !== false,
     selectable: definition.selectable !== false,
     featureCount: getFeatureCount(definition),
+    resultMeta: clonePlain(definition.resultMeta ?? null),
     opacity: normalizeRuntimeOpacity(definition.opacity ?? 1),
     loadState: 'loading',
     error: null

@@ -164,7 +164,7 @@ function nullableZoom(value) {
 
 function allowedFeatureLimit(value, fallback) {
   const number = Number(value);
-  return [500, 1000, 2000, 5000].includes(number) ? number : fallback;
+  return [10, 500, 1000, 2000, 5000].includes(number) ? number : fallback;
 }
 
 function nullableIdentifier(value, { numeric = false, allowDynamic = false } = {}) {

@@ -129,13 +129,16 @@ export class QueryGeoDataProvider {
       latestMeta = response.meta || {};
       page += 1;
 
-      const total = Number(latestMeta.total);
+      const total = Number(latestMeta.totalRecords ?? latestMeta.total);
       const received = response.features.length;
-      offset += received;
+      const returnedRecords = Number(latestMeta.returnedRecords);
+      const recordStep = Number.isFinite(returnedRecords) && returnedRecords >= 0
+        ? returnedRecords
+        : received;
+      offset += recordStep;
 
       if ((featureLimit != null && features.length >= featureLimit)
-        || received === 0
-        || received < Math.min(pageSize, remaining)
+        || recordStep === 0
         || (Number.isFinite(total) && offset >= total)) {
         complete = true;
         break;
@@ -148,6 +151,7 @@ export class QueryGeoDataProvider {
       );
     }
 
+    const totalRecords = Number(latestMeta.totalRecords ?? latestMeta.total);
     return {
       type: 'FeatureCollection',
       features,
@@ -155,7 +159,8 @@ export class QueryGeoDataProvider {
         ...latestMeta,
         offset: 0,
         limit: pageSize,
-        returned: features.length
+        returnedFeatures: features.length,
+        isPartial: Number.isFinite(totalRecords) ? offset < totalRecords : Boolean(latestMeta.isPartial)
       }
     };
   }
