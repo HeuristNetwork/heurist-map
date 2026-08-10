@@ -46,6 +46,11 @@ export class MapApplication {
     this.selectionLayerId = null;
     this.selectedFeatures = new Map();
     this.runtimeLayerSerial = 0;
+    this.dynamicRefreshTimer = null;
+    this.dynamicRefreshController = null;
+    this.dynamicRefreshSerial = 0;
+    this.dynamicRefreshDelay = 250;
+    this.dynamicRequestKeys = new Map();
     this.dynamicDocumentId = String(config.dynamicDocument?.id || 'dynamic');
     this.initializeDynamicDocument();
 
@@ -852,8 +857,12 @@ export class MapApplication {
     document.layerDefinitions.push(stored);
 
     if (String(document.id) === String(this.activeMapDocumentId)) {
-      if (mapLayer.visible === false) this.registerDeferredLayer(mapLayer, reference);
-      else {
+      if (mapLayer.visible === false) {
+        this.registerDeferredLayer(mapLayer, reference);
+      } else if (this.isDynamicQueryLayer(mapLayer)) {
+        this.registerDeferredLayer(mapLayer, reference, { preserveVisible: true });
+        await this.refreshDynamicLayer();
+      } else {
         const runtimeLayer = await this.createRuntimeLayer(mapLayer, reference, signal);
         await this.renderRuntimeLayer(runtimeLayer);
         if (stored.runtimeOpacity != null) await this.setLayerOpacity(id, stored.runtimeOpacity);
@@ -924,8 +933,16 @@ export class MapApplication {
       throw new Error(`Layer "${layerId}" is not a query layer`);
     }
     stored.mapLayer.source = { ...stored.mapLayer.source, query };
+    this.dynamicRequestKeys.delete(String(layerId));
     const wasVisible = this.layers.get(layerId)?.visible ?? stored.mapLayer.visible !== false;
-    if (String(this.activeMapDocumentId) === this.dynamicDocumentId) {
+    if (this.isDynamicQueryLayer(stored.mapLayer)
+      && String(this.activeMapDocumentId) === this.dynamicDocumentId
+      && options.reload !== false && wasVisible) {
+      stored.mapLayer.visible = true;
+      stored.reference.visible = true;
+      if (!this.layers.has(layerId)) this.registerDeferredLayer(stored.mapLayer, stored.reference, { preserveVisible: true });
+      await this.refreshDynamicLayer();
+    } else if (String(this.activeMapDocumentId) === this.dynamicDocumentId) {
       if (this.layers.has(layerId)) await this.removeRuntimeLayer(layerId);
       if (options.reload === false || !wasVisible) {
         stored.mapLayer.visible = false;
@@ -979,7 +996,12 @@ export class MapApplication {
         layer.error = null;
       }
     } else if (nextVisible && this.deferredLayers.has(layerId)) {
-      await this.loadDeferredLayer(layerId);
+      const deferred = this.deferredLayers.get(layerId);
+      if (deferred?.dynamic) {
+        layer.visible = true;
+      } else {
+        await this.loadDeferredLayer(layerId);
+      }
     } else if (!this.deferredLayers.has(layerId)) {
       await this.mapEngine.setLayerVisibility(layerId, nextVisible);
     }
@@ -999,6 +1021,9 @@ export class MapApplication {
       layerId, visible: nextVisible, layer: this.getLayer(layerId)
     });
     this.dispatch('heurist-map-layer-state-changed', { layer: this.getLayer(layerId) });
+    if (current?.options?.dynamicRequests === true || stored?.mapLayer?.options?.dynamicRequests === true) {
+      this.scheduleDynamicLayerRefresh(null, { immediate: true });
+    }
   }
 
   /**
@@ -1008,7 +1033,7 @@ export class MapApplication {
    * @param {Object} reference MapDocument layer reference.
    * @returns {Object} Lightweight registered layer state.
    */
-  registerDeferredLayer(mapLayer, reference) {
+  registerDeferredLayer(mapLayer, reference, { preserveVisible = false } = {}) {
     const id = reference.id ?? `map-layer-${reference.recordId}`;
     const definition = {
       id,
@@ -1016,7 +1041,7 @@ export class MapApplication {
       title: mapLayer.title,
       description: mapLayer.description,
       type: mapLayer.source?.type || null,
-      visible: false,
+      visible: preserveVisible ? mapLayer.visible !== false : false,
       selectable: mapLayer.selectable !== false,
       source: mapLayer.source,
       style: mapLayer.style,
@@ -1026,10 +1051,10 @@ export class MapApplication {
       order: reference.order ?? 0
     };
     const state = createLayerState(definition);
-    state.visible = false;
+    state.visible = preserveVisible ? mapLayer.visible !== false : false;
     state.loadState = 'deferred';
     this.layers.set(id, state);
-    this.deferredLayers.set(id, { mapLayer, reference });
+    this.deferredLayers.set(id, { mapLayer, reference, dynamic: mapLayer.options?.dynamicRequests === true });
     return state;
   }
 
@@ -1289,6 +1314,7 @@ export class MapApplication {
     // originally inherited. Explicit layer settings are never overwritten.
     const layerDefaultsChanged = !sameJson(previousDefaults, nextDefaults);
     const popupPolicyChanged = previousInteraction.popupEnabled !== nextInteraction.popupEnabled;
+    let dynamicDefaultsNeedRefresh = false;
     if (layerDefaultsChanged || popupPolicyChanged) {
       for (const documentEntry of this.mapDocuments.values()) {
         for (const stored of documentEntry.layerDefinitions || []) {
@@ -1305,7 +1331,11 @@ export class MapApplication {
 
           const wasVisible = runtime.visible !== false;
           await this.removeRuntimeLayer(layerId);
-          if (wasVisible) {
+          if (this.isDynamicQueryLayer(stored.mapLayer)) {
+            this.dynamicRequestKeys.delete(String(layerId));
+            this.registerDeferredLayer(stored.mapLayer, stored.reference, { preserveVisible: wasVisible });
+            dynamicDefaultsNeedRefresh = dynamicDefaultsNeedRefresh || wasVisible;
+          } else if (wasVisible) {
             const runtimeLayer = await this.createRuntimeLayer(stored.mapLayer, stored.reference);
             runtimeLayer.visible = true;
             await this.renderRuntimeLayer(runtimeLayer);
@@ -1316,6 +1346,8 @@ export class MapApplication {
         }
       }
     }
+
+    if (dynamicDefaultsNeedRefresh) await this.refreshDynamicLayer();
 
     // selectionEnabled is a global policy. Reflect its effective value in the
     // public runtime state as well as enforcing it in selection operations.
@@ -1473,6 +1505,11 @@ export class MapApplication {
       return;
     }
     this.cancelPendingRequests('Map application destroyed');
+    if (this.dynamicRefreshTimer) clearTimeout(this.dynamicRefreshTimer);
+    this.dynamicRefreshTimer = null;
+    this.dynamicRefreshController?.abort(new DOMException('Map application destroyed', 'AbortError'));
+    this.dynamicRefreshController = null;
+    this.dynamicRequestKeys.clear();
     for (const pending of this.pendingLayerLoads.values()) {
       pending.controller.abort(new DOMException('Map application destroyed', 'AbortError'));
     }
@@ -1493,7 +1530,7 @@ export class MapApplication {
    */
   async prepareReferencedLayers(mapDocument, signal) {
     const references = [...mapDocument.layers].sort(compareLayerReferences);
-    const result = [];
+    const prepared = [];
 
     for (const reference of references) {
       throwIfAborted(signal);
@@ -1503,9 +1540,22 @@ export class MapApplication {
       } catch (error) {
         throw addContext(error, `Cannot load MapLayer record ${reference.recordId}`);
       }
+      prepared.push({ mapLayer, reference });
+    }
 
+    const view = this.mapEngine.getViewState?.() || null;
+    const dynamicWinner = this.selectDynamicLayer(prepared, view);
+    const result = [];
+
+    for (const item of prepared) {
+      const { mapLayer, reference } = item;
       if (mapLayer.visible === false) {
         result.push({ mapLayer, reference, runtimeLayer: null });
+        continue;
+      }
+
+      if (this.isDynamicQueryLayer(mapLayer) && item !== dynamicWinner) {
+        result.push({ mapLayer, reference, runtimeLayer: null, dynamicDeferred: true });
         continue;
       }
 
@@ -1513,7 +1563,9 @@ export class MapApplication {
         result.push({
           mapLayer,
           reference,
-          runtimeLayer: await this.createRuntimeLayer(mapLayer, reference, signal)
+          runtimeLayer: await this.createRuntimeLayer(mapLayer, reference, signal, {
+            viewport: this.isDynamicQueryLayer(mapLayer) ? view?.bounds : null
+          })
         });
       } catch (error) {
         throw addContext(error, `Cannot prepare MapLayer record ${reference.recordId}`);
@@ -1522,15 +1574,126 @@ export class MapApplication {
     return result;
   }
 
+  isDynamicQueryLayer(mapLayer) {
+    return mapLayer?.source?.type === 'heurist-query' && mapLayer?.options?.dynamicRequests === true;
+  }
+
+  selectDynamicLayer(items, view = this.mapEngine.getViewState?.()) {
+    const zoom = Number(view?.zoom);
+    const candidates = items.filter((item) => {
+      const mapLayer = item.mapLayer || item;
+      const reference = item.reference || {};
+      if (!this.isDynamicQueryLayer(mapLayer) || mapLayer.visible === false || reference.visible === false) return false;
+      const range = this.resolveLayerZoomRange(mapLayer);
+      return (!Number.isFinite(zoom) || ((range.minZoom == null || zoom >= range.minZoom)
+        && (range.maxZoom == null || zoom <= range.maxZoom)));
+    });
+    if (candidates.length < 2) return candidates[0] || null;
+
+    candidates.sort((a, b) => Number(b.reference?.order ?? b.order ?? 0) - Number(a.reference?.order ?? a.order ?? 0));
+    const winner = candidates[0];
+    const names = candidates.map((item) => item.mapLayer?.title || item.reference?.title || item.reference?.id || 'dynamic layer');
+    const message = `Dynamic layer zoom ranges overlap at zoom ${view?.zoom ?? '?'}: ${names.join(', ')}. Only "${names[0]}" is loaded.`;
+    console.warn(message);
+    this.dispatch('heurist-map-warning', { code: 'dynamic-layer-overlap', message, layerIds: candidates.map((item) => item.reference?.id) });
+    return winner;
+  }
+
+  scheduleDynamicLayerRefresh(view = null, { immediate = false } = {}) {
+    if (this.destroyed || !this.initialized) return;
+    if (this.dynamicRefreshTimer) clearTimeout(this.dynamicRefreshTimer);
+    const run = () => {
+      this.dynamicRefreshTimer = null;
+      void this.refreshDynamicLayer(view).catch((error) => {
+        if (!isAbortError(error)) this.dispatch('heurist-map-error', { operation: 'dynamic-layer-refresh', error: serializeError(error) });
+      });
+    };
+    if (immediate) run();
+    else this.dynamicRefreshTimer = setTimeout(run, this.dynamicRefreshDelay);
+  }
+
+  async refreshDynamicLayer(view = null) {
+    const document = this.mapDocuments.get(this.activeMapDocumentId);
+    if (!document) return null;
+    const currentView = view?.bounds ? view : (this.mapEngine.getViewState?.() || null);
+    if (!currentView?.bounds) return null;
+
+    const entries = (document.layerDefinitions || []).map((stored) => ({ mapLayer: stored.mapLayer, reference: stored.reference }));
+    const winner = this.selectDynamicLayer(entries, currentView);
+    const winnerId = winner?.reference?.id != null ? String(winner.reference.id) : null;
+
+    for (const item of entries) {
+      if (!this.isDynamicQueryLayer(item.mapLayer)) continue;
+      const id = String(item.reference.id);
+      const runtime = this.layers.get(id);
+      if (id !== winnerId && runtime && !this.deferredLayers.has(id)) {
+        if (this.selectionLayerId === id) await this.clearSelection();
+        await this.mapEngine.setLayerVisibility(id, false);
+      }
+    }
+    if (!winner) return null;
+
+    const requestKey = dynamicViewportKey(currentView);
+    const currentState = this.layers.get(winnerId);
+    if (requestKey && this.dynamicRequestKeys.get(winnerId) === requestKey
+      && currentState?.loadState === 'loaded' && !this.deferredLayers.has(winnerId)) {
+      await this.mapEngine.setLayerVisibility(winnerId, true);
+      return this.getLayer(winnerId);
+    }
+
+    this.dynamicRefreshController?.abort(new DOMException('Superseded by a newer viewport request', 'AbortError'));
+    const controller = new AbortController();
+    this.dynamicRefreshController = controller;
+    const serial = ++this.dynamicRefreshSerial;
+    const layerId = winnerId;
+    const selectedRecordIds = this.selectionLayerId === layerId
+      ? [...new Set(this.selectedFeatures.values())]
+      : [];
+    const existingState = this.layers.get(layerId);
+    if (existingState) {
+      existingState.loadState = 'loading';
+      existingState.error = null;
+      this.dispatch('heurist-map-layer-state-changed', { layer: this.getLayer(layerId) });
+    }
+
+    try {
+      const runtimeLayer = await this.createRuntimeLayer(winner.mapLayer, winner.reference, controller.signal, { viewport: currentView.bounds });
+      throwIfAborted(controller.signal);
+      if (serial !== this.dynamicRefreshSerial || String(this.activeMapDocumentId) !== String(document.id)) {
+        throw new DOMException('Stale dynamic viewport response', 'AbortError');
+      }
+
+      if (this.deferredLayers.has(layerId)) {
+        this.deferredLayers.delete(layerId);
+        this.layers.delete(layerId);
+      } else if (this.layers.has(layerId)) {
+        await this.mapEngine.removeLayer(layerId);
+        this.layers.delete(layerId);
+      }
+      runtimeLayer.visible = true;
+      await this.renderRuntimeLayer(runtimeLayer);
+      if (requestKey) this.dynamicRequestKeys.set(layerId, requestKey);
+      if (selectedRecordIds.length) {
+        try { await this.selectRecords(layerId, selectedRecordIds, { replace: true, zoom: false }); } catch { /* selected records may be outside the new viewport */ }
+      }
+      return this.getLayer(layerId);
+    } finally {
+      if (this.dynamicRefreshController === controller) this.dynamicRefreshController = null;
+    }
+  }
+
   /**
    * Create runtime layer.
    * @returns {Promise<*>} Resolves when the operation completes.
    */
-  async createRuntimeLayer(mapLayer, reference, signal) {
+  async createRuntimeLayer(mapLayer, reference, signal, { viewport = null } = {}) {
+    if (this.isDynamicQueryLayer(mapLayer) && !viewport) {
+      viewport = this.mapEngine.getViewState?.()?.bounds || null;
+    }
     if (!this.layerLoaders) {
       throw new Error('MapLayer loader registry is not configured');
     }
-    const runtimeLayer = await this.layerLoaders.load(mapLayer, { reference, signal, application: this });
+    const runtimeLayer = await this.layerLoaders.load(mapLayer, { reference, signal, application: this, viewport });
     if (this.config.interaction?.selectionEnabled === false) runtimeLayer.selectable = false;
     if (runtimeLayer.popup && this.config.interaction?.popupEnabled === false) {
       runtimeLayer.popup = { ...runtimeLayer.popup, enabled: false };
@@ -1596,6 +1759,7 @@ export class MapApplication {
     await this.mapEngine.destroy();
     this.deferredLayers.clear();
     this.layers.clear();
+    this.dynamicRequestKeys.clear();
 
     try {
       await this.initializeMapEngine(environment);
@@ -1623,7 +1787,7 @@ export class MapApplication {
         if (item.runtimeLayer) {
           await this.renderRuntimeLayer(item.runtimeLayer);
         } else {
-          this.registerDeferredLayer(item.mapLayer, item.reference);
+          this.registerDeferredLayer(item.mapLayer, item.reference, { preserveVisible: item.dynamicDeferred === true });
         }
       }
     } catch (error) {
@@ -1652,7 +1816,8 @@ export class MapApplication {
     });
     this.mapEngine.setInteractionHandlers?.({
       onFeatureClick: (detail) => { void this.handleFeatureClick(detail); },
-      onMapClick: (detail) => { void this.handleMapClick(detail); }
+      onMapClick: (detail) => { void this.handleMapClick(detail); },
+      onViewChange: (detail) => { this.scheduleDynamicLayerRefresh(detail); }
     });
   }
 
@@ -1797,6 +1962,16 @@ function layerReferenceLatitude(mapLayer, viewState) {
   if (bounds) return (Number(bounds.south) + Number(bounds.north)) / 2;
   const latitude = viewState?.center?.latitude;
   return Number.isFinite(Number(latitude)) ? Number(latitude) : 0;
+}
+
+
+function dynamicViewportKey(view) {
+  const bounds = view?.bounds;
+  const zoom = Number(view?.zoom);
+  if (!bounds || !Number.isFinite(zoom)) return null;
+  const values = [bounds.west, bounds.south, bounds.east, bounds.north].map((value) => Number(value));
+  if (!values.every(Number.isFinite)) return null;
+  return `${zoom}|${values.map((value) => value.toFixed(5)).join(',')}`;
 }
 
 function compareLayerReferences(a, b) {

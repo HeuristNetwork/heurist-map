@@ -34,7 +34,7 @@ export class GeoJsonLayerLoader {
     switch (source.type) {
       case 'heurist-query':
         geoJson = await this.queryGeoData.searchAll({
-          query: source.query,
+          query: context.viewport ? addViewportToQuery(source.query, context.viewport) : source.query,
           limit: source.limit || mapLayer.options?.maxAllowedFeatures || 1000,
           maxFeatures: source.limit || mapLayer.options?.maxAllowedFeatures || 1000,
           simplify: source.simplify === true,
@@ -113,4 +113,45 @@ function normalizeResultMeta(value) {
     limit: numberOrNull(value.limit),
     isPartial: value.isPartial === true
   };
+}
+
+
+/** Build a temporary viewport-constrained query without mutating the stored source query. */
+export function addViewportToQuery(query, bounds) {
+  const viewport = normalizeViewport(bounds);
+  if (!viewport) return query;
+  const geo = { geo: viewport };
+
+  if (Array.isArray(query)) return [...query, geo];
+
+  if (typeof query === 'string') {
+    const trimmed = query.trim();
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return [...parsed, geo];
+      } catch { /* legacy/plain query */ }
+    }
+    return `${query}${query && !/\s$/.test(query) ? ' ' : ''}geo:"${viewport.west},${viewport.south},${viewport.east},${viewport.north}"`;
+  }
+  return query;
+}
+
+function normalizeViewport(bounds) {
+  if (!bounds || typeof bounds !== 'object') return null;
+  const west = Number(bounds.west);
+  const south = Number(bounds.south);
+  const east = Number(bounds.east);
+  const north = Number(bounds.north);
+  if (![west, south, east, north].every(Number.isFinite)) return null;
+  return {
+    west: clamp(west, -180, 180),
+    south: clamp(south, -90, 90),
+    east: clamp(east, -180, 180),
+    north: clamp(north, -90, 90)
+  };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }

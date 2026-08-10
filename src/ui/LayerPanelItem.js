@@ -199,6 +199,7 @@ function getLayerPresentation(layer) {
 
   const meta = layer?.resultMeta || {};
   const features = finiteCount(meta.returnedFeatures) ?? finiteCount(layer?.featureCount) ?? 0;
+console.log('getLayerPresentation meta:', meta);  
   if (meta.isPartial === true) {
     const returnedRecords = finiteCount(meta.returnedRecords);
     const totalRecords = finiteCount(meta.totalRecords);

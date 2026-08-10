@@ -547,3 +547,30 @@ await map.removeLayer('current-results'); // remove completely
 `addQueryLayer()` and `setQueryForLayer()` always target the dynamic document.
 General `addLayer()`, `removeLayer()`, and `clearLayer()` target the active
 MapDocument by default and accept an explicit `documentId` option.
+
+
+# Phase 7B dynamic viewport layers
+
+Base used for this patch:
+- latest hm5-based client source from `mapconfig-cosmetics-startup-fix-complete.zip`;
+- Phase 7A.3 client-only changes applied on top;
+- user's corrected `LayerPanelItem.js` applied on top and left unchanged.
+
+Changed production files only:
+- `src/core/MapApplication.js` — dynamic layer arbitration, debounce, AbortController, viewport refresh lifecycle, overlap protection, live Apply integration, selection preservation.
+- `src/engine/LeafletMapAdapter.js` — emits engine-neutral view-change callback on Leaflet `moveend`.
+- `src/engine/loaders/GeoJsonLayerLoader.js` — adds temporary viewport predicate to JSON/plain Heurist queries without mutating stored queries.
+
+Tests:
+- `test/phase7bDynamic.test.js`
+
+Runtime rules:
+- Multiple `dynamicRequests:true` query layers may be configured in one MapDocument.
+- At any zoom, at most one visible/in-range dynamic layer issues requests.
+- If dynamic ranges overlap, the highest layer order wins and `heurist-map-warning` is emitted.
+- View changes are debounced by 250 ms.
+- A newer viewport aborts the previous client request with AbortController.
+- Identical zoom+bounds do not repeat a request.
+- JSON query arrays receive `{ "geo": {west,south,east,north} }`.
+- Plain queries receive `geo:"west,south,east,north"`.
+- Stored `layer.source.query` is never modified by viewport filtering.

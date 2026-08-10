@@ -51,6 +51,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       this.refreshZoomRangeVisibility();
     });
 
+    this.map.on('moveend', () => {
+      this.interactionHandlers.onViewChange?.(this.getViewState());
+    });
+
     this.map.on('click', (event) => {
       // Leaflet may bubble a feature click to the map even after the DOM event
       // has been stopped. Do not treat such a click as a background-map click,
