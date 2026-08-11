@@ -228,7 +228,7 @@ The current global defaults are:
 | `symbology` | MapLayer | Used when the layer does not define `style.symbol` (including the base symbol for thematic layers). |
 | `selectSymbology` | MapLayer selection | Used when the layer does not define `style.selectSymbol` / `style.selectSymbology`. |
 | `preventContinuousWorldBasemap` | Map viewer | Applied to built-in tile basemaps globally (`noWrap`). |
-| `markerClustering` | MapLayer options | Inherited when the layer omits the option. The current Leaflet adapter does not yet implement clustering. |
+| `markerClustering` | MapLayer options | Inherited when the layer omits the option. When enabled, point features are grouped with Leaflet.markercluster; line and polygon features remain unclustered. |
 | `maxAllowedFeatures` | Query MapLayer | Inherited when omitted and used as the query source limit. Allowed values are 500, 1000, 2000, and 5000. |
 | `popupTemplate` | GeoJSON MapLayer | Inherited when omitted. Templates support escaped `{{property}}` placeholders; `{{heurist.recordId}}` addresses Heurist metadata. |
 
@@ -605,3 +605,20 @@ When extending configuration, keep these rules:
 6. **Merge configuration once.** The host resolves preference/widget precedence; `heurist-map` normalizes the result but does not repeat the merge.
 7. **Use state for reproducibility.** Extent, active document/layer, query, and selection belong to state when they need to be restored.
 8. **Keep configuration-only mode lightweight.** Website configuration must not create a map engine.
+
+
+### Marker clustering
+
+`markerClustering` enables Leaflet.markercluster for GeoJSON point features. It can be set globally in `config.defaults.markerClustering` or explicitly in a MapLayer `options.markerClustering`. The layer option takes precedence over the global default.
+
+When enabled:
+
+- point features are grouped into clusters as the map is zoomed out;
+- clicking a cluster zooms to its contents using the plugin default behaviour;
+- overlapping markers can spiderfy at maximum zoom;
+- line and polygon features in the same GeoJSON layer remain normal Leaflet paths;
+- bulk marker insertion uses `chunkedLoading` to reduce long UI blocking for large result sets;
+- clustering works with both normal and extent-loaded query layers because it is applied after GeoJSON retrieval.
+
+The setting affects presentation only. It does not alter the Heurist query, result limit, partial-result metadata, or dynamic-request rules.
+

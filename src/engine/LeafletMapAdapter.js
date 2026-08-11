@@ -405,7 +405,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       imageOverlays: true,
       customCrs: false,
       drawing: false,
-      markerClustering: false,
+      markerClustering: typeof L.markerClusterGroup === 'function',
       featureSelection: true,
       multiSelection: true
     };
@@ -446,7 +446,8 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       stroke: symbol.stroke,
       dashArray: symbol.dashArray
     });
-    const pointToLayer = createPointLayerFactory(symbol);
+    const markerClustering = definition.options?.markerClustering === true;
+    const pointToLayer = createPointLayerFactory(symbol, { markerClustering });
     const popupEnabled = definition.popup?.enabled !== false;
     const selectable = definition.selectable !== false;
     const featureLayers = new Map();
@@ -454,7 +455,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     const recordFeatureIds = new Map();
     const selectionBaseStyles = new WeakMap();
 
-    const layer = L.geoJSON(definition.data, {
+    const geoJsonLayer = L.geoJSON(definition.data, {
       style: () => pathStyle,
       pointToLayer,
       onEachFeature: (feature, nativeLayer) => {
@@ -494,6 +495,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
         });
       }
     });
+
+    const layer = markerClustering
+      ? createMarkerClusterLayer(geoJsonLayer)
+      : geoJsonLayer;
 
     const result = this.registerLayer(definition, layer);
     const entry = this.layers.get(definition.id);
@@ -668,7 +673,7 @@ function compactOptions(options) {
 }
 
 
-function createPointLayerFactory(symbol) {
+function createPointLayerFactory(symbol, { markerClustering = false } = {}) {
   if ((symbol.iconType === 'icon' || symbol.iconType === 'marker') && symbol.iconUrl) {
     const icon = L.icon(compactOptions({
       iconUrl: symbol.iconUrl,
@@ -684,6 +689,14 @@ function createPointLayerFactory(symbol) {
     return (_feature, latlng) => L.marker(latlng, { icon });
   }
 
+  // Leaflet.markercluster is designed for Marker instances. The normal
+  // renderer uses CircleMarker for default point symbols, so clustering uses
+  // a marker-backed divIcon that preserves the same circle appearance.
+  if (markerClustering) {
+    const icon = createClusterPointIcon(symbol);
+    return (_feature, latlng) => L.marker(latlng, { icon });
+  }
+
   const options = compactOptions({
     radius: symbol.radius,
     color: symbol.color,
@@ -695,6 +708,67 @@ function createPointLayerFactory(symbol) {
     stroke: symbol.stroke
   });
   return (_feature, latlng) => L.circleMarker(latlng, options);
+}
+
+function createMarkerClusterLayer(geoJsonLayer) {
+  if (typeof L.markerClusterGroup !== 'function') {
+    throw new Error('Marker clustering is enabled but Leaflet.markercluster is not available');
+  }
+
+  const clusterLayer = L.markerClusterGroup({
+    chunkedLoading: true
+  });
+  clusterLayer.addLayers(geoJsonLayer.getLayers());
+  return clusterLayer;
+}
+
+function createClusterPointIcon(symbol = {}) {
+  const radius = finitePositiveNumber(symbol.radius, 6);
+  const diameter = Math.max(2, radius * 2);
+  const fillColor = symbol.fillColor || symbol.color || '#3388ff';
+  const strokeColor = symbol.color || '#3388ff';
+  const weight = Math.max(0, finiteNumber(symbol.weight, 2));
+  const opacity = finiteOpacity(symbol.opacity, 1);
+  const fillOpacity = finiteOpacity(symbol.fillOpacity, 0.2);
+  const fill = symbol.fill !== false;
+  const stroke = symbol.stroke !== false;
+  const style = [
+    'display:block',
+    'box-sizing:border-box',
+    `width:${diameter}px`,
+    `height:${diameter}px`,
+    'border-radius:50%',
+    `background:${fill ? fillColor : 'transparent'}`,
+    `opacity:${opacity}`,
+    stroke ? `border:${weight}px solid ${strokeColor}` : 'border:0',
+    fill ? `--heurist-map-marker-fill-opacity:${fillOpacity}` : ''
+  ].filter(Boolean).join(';');
+
+  const background = fill ? hexOrCssWithOpacity(fillColor, fillOpacity) : 'transparent';
+  return L.divIcon({
+    className: 'heurist-map-cluster-point-icon',
+    html: `<span style="${style};background:${background}"></span>`,
+    iconSize: [diameter, diameter],
+    iconAnchor: [diameter / 2, diameter / 2]
+  });
+}
+
+function finitePositiveNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function finiteNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function hexOrCssWithOpacity(color, opacity) {
+  const hex = typeof color === 'string' ? color.trim() : '';
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return color;
+  const value = match[1];
+  return `rgba(${parseInt(value.slice(0, 2), 16)},${parseInt(value.slice(2, 4), 16)},${parseInt(value.slice(4, 6), 16)},${opacity})`;
 }
 
 function createIconFontIcon(symbol) {

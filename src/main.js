@@ -19,7 +19,10 @@
  * @copyright (C) 2024 onwards Heurist Network
  * @license https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
+import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import 'leaflet.markercluster/dist/MarkerCluster.css';
+import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import './style.css';
 import './assets/jquery-ui.icon-font.css';
 import '@fortawesome/fontawesome-free/css/fontawesome.min.css';
@@ -29,11 +32,21 @@ import { getHeuristMapConfig } from './mapConfig.js';
 import { initHeuristMap } from './initHeuristMap.js';
 import { initHeuristMapConfiguration } from './initHeuristMapConfiguration.js';
 
+// Leaflet.markercluster 1.x is distributed as a UMD plugin and expects a
+// browser-global `L` while it is being evaluated. A static plugin import runs
+// before this module body, so expose Leaflet first and load the plugin only
+// afterwards.
 const config = getHeuristMapConfig();
 
-const bootstrap = config.viewerMode === 'configuration'
-  ? initHeuristMapConfiguration(config)
-  : initHeuristMap(config);
+if (typeof window !== 'undefined') {
+  window.L = L;
+}
+
+const bootstrap = import('leaflet.markercluster').then(() => {
+  return config.viewerMode === 'configuration'
+    ? initHeuristMapConfiguration(config)
+    : initHeuristMap(config);
+});
 
 bootstrap.catch(async (error) => {
   console.error('Cannot initialize Heurist Map', error);
