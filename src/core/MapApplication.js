@@ -83,7 +83,7 @@ export class MapApplication {
         const mapLayer = normalizeMapLayer({
           ...definition,
           options: { ...(definition.options || {}), runtimeId: requestedRuntimeId }
-        }, { defaults: this.config.defaults });
+        }, { defaults: this.getLayerDefaults(this.mapDocuments.get(this.dynamicDocumentId)) });
         return {
           mapLayer,
           reference: {
@@ -818,6 +818,17 @@ export class MapApplication {
     return removed;
   }
 
+  /** Return layer fallbacks for one document. Dynamic loading is document-specific. */
+  getLayerDefaults(document) {
+    if (String(document?.id) === this.dynamicDocumentId) {
+      return {
+        ...(this.config.defaults || {}),
+        dynamicRequests: this.config.dynamicDocument?.dynamicRequests === true
+      };
+    }
+    return this.config.defaults || {};
+  }
+
   /** Add a MapLayer definition or persisted MapLayer record to a document. */
   async addLayer(definition, { documentId = this.activeMapDocumentId, signal } = {}) {
     // Backward-compatible internal/runtime path used by existing integrations
@@ -831,14 +842,14 @@ export class MapApplication {
       ? definition.runtimeId ?? definition.id
       : null;
     const mapLayer = typeof definition === 'number' || /^\d+$/.test(String(definition))
-      ? await this.providers.mapLayer.getById(Number(definition), { signal, defaults: this.config.defaults })
+      ? await this.providers.mapLayer.getById(Number(definition), { signal, defaults: this.getLayerDefaults(document) })
       : normalizeMapLayer({
           ...definition,
           options: {
             ...(definition?.options || {}),
             runtimeId: requestedRuntimeId || definition?.options?.runtimeId || null
           }
-        }, { defaults: this.config.defaults });
+        }, { defaults: this.getLayerDefaults(document) });
     if (!mapLayer.source?.type) throw new TypeError('MapLayer definition requires source.type');
 
     const id = createRuntimeLayerId(mapLayer, ++this.runtimeLayerSerial);
@@ -1312,14 +1323,15 @@ export class MapApplication {
 
     // Reapply changed global defaults only to values that each stored layer
     // originally inherited. Explicit layer settings are never overwritten.
-    const layerDefaultsChanged = !sameJson(previousDefaults, nextDefaults);
+    const dynamicLoadingChanged = previous.config.dynamicDocument?.dynamicRequests !== normalized.config.dynamicDocument?.dynamicRequests;
+    const layerDefaultsChanged = !sameJson(previousDefaults, nextDefaults) || dynamicLoadingChanged;
     const popupPolicyChanged = previousInteraction.popupEnabled !== nextInteraction.popupEnabled;
     let dynamicDefaultsNeedRefresh = false;
     if (layerDefaultsChanged || popupPolicyChanged) {
       for (const documentEntry of this.mapDocuments.values()) {
         for (const stored of documentEntry.layerDefinitions || []) {
           const defaultsChangedForLayer = layerDefaultsChanged
-            ? reapplyMapLayerDefaults(stored.mapLayer, nextDefaults)
+            ? reapplyMapLayerDefaults(stored.mapLayer, this.getLayerDefaults(documentEntry))
             : false;
           const layerId = stored.reference.id;
           if (String(documentEntry.id) !== String(activeDocumentId)) continue;
@@ -1612,6 +1624,15 @@ export class MapApplication {
     else this.dynamicRefreshTimer = setTimeout(run, this.dynamicRefreshDelay);
   }
 
+  findRuntimeLayerKey(layerId) {
+    if (this.layers.has(layerId)) return layerId;
+    const wanted = String(layerId);
+    for (const key of this.layers.keys()) {
+      if (String(key) === wanted) return key;
+    }
+    return layerId;
+  }
+
   async refreshDynamicLayer(view = null) {
     const document = this.mapDocuments.get(this.activeMapDocumentId);
     if (!document) return null;
@@ -1625,19 +1646,21 @@ export class MapApplication {
     for (const item of entries) {
       if (!this.isDynamicQueryLayer(item.mapLayer)) continue;
       const id = String(item.reference.id);
-      const runtime = this.layers.get(id);
+      const runtimeKey = this.findRuntimeLayerKey(id);
+      const runtime = this.layers.get(runtimeKey);
       if (id !== winnerId && runtime && !this.deferredLayers.has(id)) {
         if (this.selectionLayerId === id) await this.clearSelection();
-        await this.mapEngine.setLayerVisibility(id, false);
+        await this.mapEngine.setLayerVisibility(runtimeKey, false);
       }
     }
     if (!winner) return null;
 
     const requestKey = dynamicViewportKey(currentView);
-    const currentState = this.layers.get(winnerId);
+    const winnerRuntimeKey = this.findRuntimeLayerKey(winnerId);
+    const currentState = this.layers.get(winnerRuntimeKey);
     if (requestKey && this.dynamicRequestKeys.get(winnerId) === requestKey
       && currentState?.loadState === 'loaded' && !this.deferredLayers.has(winnerId)) {
-      await this.mapEngine.setLayerVisibility(winnerId, true);
+      await this.mapEngine.setLayerVisibility(winnerRuntimeKey, true);
       return this.getLayer(winnerId);
     }
 
@@ -1649,7 +1672,8 @@ export class MapApplication {
     const selectedRecordIds = this.selectionLayerId === layerId
       ? [...new Set(this.selectedFeatures.values())]
       : [];
-    const existingState = this.layers.get(layerId);
+    const existingRuntimeKey = this.findRuntimeLayerKey(layerId);
+    const existingState = this.layers.get(existingRuntimeKey);
     if (existingState) {
       existingState.loadState = 'loading';
       existingState.error = null;
@@ -1663,12 +1687,15 @@ export class MapApplication {
         throw new DOMException('Stale dynamic viewport response', 'AbortError');
       }
 
-      if (this.deferredLayers.has(layerId)) {
-        this.deferredLayers.delete(layerId);
-        this.layers.delete(layerId);
-      } else if (this.layers.has(layerId)) {
-        await this.mapEngine.removeLayer(layerId);
-        this.layers.delete(layerId);
+      const runtimeKey = this.findRuntimeLayerKey(layerId);
+      const deferredKey = this.deferredLayers.has(runtimeKey) ? runtimeKey
+        : [...this.deferredLayers.keys()].find((key) => String(key) === String(layerId));
+      if (deferredKey !== undefined) {
+        this.deferredLayers.delete(deferredKey);
+        this.layers.delete(runtimeKey);
+      } else if (this.layers.has(runtimeKey)) {
+        await this.mapEngine.removeLayer(runtimeKey);
+        this.layers.delete(runtimeKey);
       }
       runtimeLayer.visible = true;
       await this.renderRuntimeLayer(runtimeLayer);
@@ -1677,6 +1704,12 @@ export class MapApplication {
         try { await this.selectRecords(layerId, selectedRecordIds, { replace: true, zoom: false }); } catch { /* selected records may be outside the new viewport */ }
       }
       return this.getLayer(layerId);
+    } catch (error) {
+      if (isAbortError(error)) {
+        console.debug('Dynamic viewport request cancelled:', error.message);
+        return null;
+      }
+      throw error;
     } finally {
       if (this.dynamicRefreshController === controller) this.dynamicRefreshController = null;
     }

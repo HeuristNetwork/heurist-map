@@ -29,6 +29,23 @@ test('dynamic viewport is appended to JSON and plain Heurist queries without mut
   );
 });
 
+test('dynamic viewport coordinates are clamped to valid longitude and latitude ranges', () => {
+  const bounds = { west: -240, south: -120, east: 220, north: 105 };
+
+  assert.deepEqual(
+    addViewportToQuery([{ t: 12 }], bounds),
+    [
+      { t: 12 },
+      { geo: { west: -180, south: -90, east: 180, north: 90 } }
+    ]
+  );
+
+  assert.equal(
+    addViewportToQuery('t:12', bounds),
+    't:12 geo:"-180,-90,180,90"'
+  );
+});
+
 function createDynamicApplication({ layers, view = VIEW, loaderDelay = 0 } = {}) {
   const requests = [];
   const visibility = [];
@@ -158,7 +175,21 @@ test('new viewport aborts the in-flight dynamic request', async () => {
   await new Promise((resolve) => setTimeout(resolve, 5));
   const secondView = { ...VIEW, bounds: { west: -10, south: 35, east: 30, north: 65 } };
   const second = ctx.application.refreshDynamicLayer(secondView);
-  await assert.rejects(first, (error) => error?.name === 'AbortError');
+  assert.equal(await first, null, 'superseded request is hidden from the caller');
   await second;
   assert.equal(ctx.application.getLayer('only').loadState, 'loaded');
+});
+
+
+test('dynamic refresh handles numeric runtime layer keys used by persisted MapLayers', async () => {
+  const ctx = createDynamicApplication({ layers: [
+    { id: 17, title: 'Persisted-like layer', visible: true, source: { type: 'heurist-query', query: 't:12' }, options: { dynamicRequests: true } }
+  ] });
+  const stored = ctx.application.getDynamicDocumentEntry().layerDefinitions[0];
+  stored.reference.id = 17;
+  ctx.application.registerDeferredLayer(stored.mapLayer, stored.reference, { preserveVisible: true });
+
+  await ctx.application.refreshDynamicLayer(VIEW);
+  assert.equal(ctx.requests.length, 1);
+  assert.equal(ctx.application.getLayer(17).loadState, 'loaded');
 });

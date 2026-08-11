@@ -120,22 +120,35 @@ function normalizeResultMeta(value) {
 export function addViewportToQuery(query, bounds) {
   const viewport = normalizeViewport(bounds);
   if (!viewport) return query;
-  const geo = { geo: viewport };
+  const geoPredicate = { geo: viewport };
 
-  if (Array.isArray(query)) return [...query, geo];
+  if (Array.isArray(query)) {
+      return [...query, geoPredicate];
+  }
+  if (query && typeof query === 'object') {
+      return [query, geoPredicate];
+  }
 
   if (typeof query === 'string') {
     const trimmed = query.trim();
     if (trimmed.startsWith('[')) {
       try {
         const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) return [...parsed, geo];
+        if (Array.isArray(parsed)) {
+            return JSON.stringify([...parsed, geoPredicate]);
+        }
+
+        if (parsed && typeof parsed === 'object') {
+            return JSON.stringify([parsed, geoPredicate]);
+        }
       } catch { /* legacy/plain query */ }
     }
     return `${query}${query && !/\s$/.test(query) ? ' ' : ''}geo:"${viewport.west},${viewport.south},${viewport.east},${viewport.north}"`;
   }
   return query;
 }
+
+
 
 function normalizeViewport(bounds) {
   if (!bounds || typeof bounds !== 'object') return null;

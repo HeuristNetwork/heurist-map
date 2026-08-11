@@ -114,7 +114,6 @@ function normalizeConfig(source, defaults) {
         configuredDefaults.maxAllowedFeatures,
         defaults.defaults.maxAllowedFeatures
       ),
-      dynamicRequests: boolean(configuredDefaults.dynamicRequests, defaults.defaults.dynamicRequests),
       popupTemplate: nullableString(configuredDefaults.popupTemplate)
     },
     dynamicDocument: {
@@ -124,7 +123,12 @@ function normalizeConfig(source, defaults) {
       maxZoom: nullableZoom(document.maxZoom),
       minimumZoomKm: nullablePositiveNumber(document.minimumZoomKm),
       maximumZoomKm: nullablePositiveNumber(document.maximumZoomKm),
-      bounds: normalizeBounds(document.bounds)
+      bounds: normalizeBounds(document.bounds),
+      // Migrate the former global default into the Current Results Map setting.
+      dynamicRequests: boolean(
+        document.dynamicRequests,
+        boolean(configuredDefaults.dynamicRequests, defaults.dynamicDocument.dynamicRequests)
+      )
     }
   };
 }
@@ -164,7 +168,7 @@ function nullableZoom(value) {
 
 function allowedFeatureLimit(value, fallback) {
   const number = Number(value);
-  return [10, 500, 1000, 2000, 5000].includes(number) ? number : fallback;
+  return [500, 1000, 2000, 5000].includes(number) ? number : fallback;
 }
 
 function nullableIdentifier(value, { numeric = false, allowDynamic = false } = {}) {

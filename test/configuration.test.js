@@ -8,11 +8,13 @@ import {
 } from '../src/ui/config/mapConfigurationSchema.js';
 import { createMapConfigurationDefaults } from '../src/ui/config/mapConfigurationDefaults.js';
 import { MapConfigurationDialog } from '../src/ui/config/MapConfigurationDialog.js';
+import { normalizeMapLayer } from '../src/core/MapLayer.js';
 
 test('map configuration defaults contain agreed global fallback settings', () => {
   const value = createMapConfigurationDefaults();
   assert.equal(value.config.defaults.maxAllowedFeatures, 1000);
-  assert.equal(value.config.defaults.dynamicRequests, false);
+  assert.equal(value.config.defaults.dynamicRequests, undefined);
+  assert.equal(value.config.dynamicDocument.dynamicRequests, false);
   assert.equal(value.config.defaults.markerClustering, false);
   assert.equal(value.config.defaults.preventContinuousWorldBasemap, false);
   assert.equal(value.config.defaults.symbology, null);
@@ -52,7 +54,8 @@ test('configuration normalization strips runtime, obsolete, and unknown properti
   assert.equal(value.config.currentResultsLayer, undefined);
   assert.equal(value.config.defaults.unknown, undefined);
   assert.equal(value.config.defaults.maxAllowedFeatures, 1000);
-  assert.equal(value.config.defaults.dynamicRequests, true);
+  assert.equal(value.config.defaults.dynamicRequests, undefined);
+  assert.equal(value.config.dynamicDocument.dynamicRequests, true, 'legacy global value is migrated');
 });
 
 test('dynamic document zoom settings remain document-specific; global defaults normalize independently', () => {
@@ -113,4 +116,19 @@ test('maximum allowed features accepts only configured choices', () => {
     const value = normalizeMapConfigurationSettings({ config: { defaults: { maxAllowedFeatures: limit } } });
     assert.equal(value.config.defaults.maxAllowedFeatures, limit);
   }
+});
+
+
+test('dynamic requests are not inherited by ordinary MapLayers from global defaults', () => {
+  const layer = normalizeMapLayer({
+    source: { type: 'heurist-query', query: 't:12' },
+    options: {}
+  }, { defaults: createMapConfigurationDefaults().config.defaults });
+  assert.equal(layer.options.dynamicRequests, false);
+
+  const explicit = normalizeMapLayer({
+    source: { type: 'heurist-query', query: 't:12' },
+    options: { dynamicRequests: true }
+  }, { defaults: createMapConfigurationDefaults().config.defaults });
+  assert.equal(explicit.options.dynamicRequests, true);
 });

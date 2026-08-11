@@ -46,7 +46,6 @@ export const HEURIST_MAP_CONFIG_DEFAULTS = Object.freeze({
     preventContinuousWorldBasemap: false,
     markerClustering: false,
     maxAllowedFeatures: 1000,
-    dynamicRequests: false,
     popupTemplate: null
   }),
   dynamicDocument: Object.freeze({
@@ -56,7 +55,8 @@ export const HEURIST_MAP_CONFIG_DEFAULTS = Object.freeze({
     maxZoom: null,
     minimumZoomKm: null,
     maximumZoomKm: null,
-    bounds: null
+    bounds: null,
+    dynamicRequests: false
   })
 });
 

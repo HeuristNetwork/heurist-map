@@ -154,6 +154,8 @@ export class MapConfigurationDialog {
   buildCurrentResults(body) {
     this.checkbox(body, 'config.dynamicDocument.enabled', 'Enable current-results document', { hidden: true });
     this.text(body, 'config.dynamicDocument.title', 'Title');
+    const dynamicLoading = this.checkbox(body, 'config.dynamicDocument.dynamicRequests', 'Load by map extent');
+    dynamicLoading.title = 'Loads only records within the current map view and refreshes the layer when the map is moved or zoomed. Recommended for large result sets.';
     this.zoomFields(body, 'config.dynamicDocument', { allAdvanced: true });
     this.boundsFields(body, 'config.dynamicDocument.bounds', { advanced: true });
   }
@@ -166,9 +168,8 @@ export class MapConfigurationDialog {
     this.checkbox(body, 'config.defaults.preventContinuousWorldBasemap', 'Prevent continuous world basemap', { advanced: true });
     this.checkbox(body, 'config.defaults.markerClustering', 'Marker clustering');
     this.select(body, 'config.defaults.maxAllowedFeatures', 'Maximum allowed features', [
-      ['10', '10'], ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
+      ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
     ], { kind: 'positive-int' });
-    this.checkbox(body, 'config.defaults.dynamicRequests', 'Dynamic requests', { advanced: true });
     this.textarea(body, 'config.defaults.popupTemplate', 'Popup template', { advanced: true });
   }
 

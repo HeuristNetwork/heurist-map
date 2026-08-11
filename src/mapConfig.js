@@ -80,6 +80,7 @@ export function getHeuristMapConfig() {
       minimumZoomKm: settings.config.dynamicDocument.minimumZoomKm,
       maximumZoomKm: settings.config.dynamicDocument.maximumZoomKm,
       bounds: settings.config.dynamicDocument.bounds,
+      dynamicRequests: settings.config.dynamicDocument.dynamicRequests === true,
       keepContent: true,
       layers: []
     },

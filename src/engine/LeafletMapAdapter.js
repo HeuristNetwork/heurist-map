@@ -92,7 +92,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     validateLayerDefinition(definition);
 
     if (this.layers.has(definition.id)) {
-      throw new Error(`Layer "${definition.id}" already exists`);
+      throw new Error(`Layer "${definition.id}" already exists. Can't add a layer to leaflet map.`);
     }
 
     switch (definition.type) {

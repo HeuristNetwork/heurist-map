@@ -170,7 +170,6 @@ Portable configuration is stored in the following versioned envelope:
       preventContinuousWorldBasemap: false,
       markerClustering: false,
       maxAllowedFeatures: 1000,
-      dynamicRequests: false,
       popupTemplate: null
     },
 
@@ -181,7 +180,8 @@ Portable configuration is stored in the following versioned envelope:
       maxZoom: null,
       minimumZoomKm: null,
       maximumZoomKm: null,
-      bounds: null
+      bounds: null,
+      dynamicRequests: false
     }
   }
 }
@@ -230,7 +230,6 @@ The current global defaults are:
 | `preventContinuousWorldBasemap` | Map viewer | Applied to built-in tile basemaps globally (`noWrap`). |
 | `markerClustering` | MapLayer options | Inherited when the layer omits the option. The current Leaflet adapter does not yet implement clustering. |
 | `maxAllowedFeatures` | Query MapLayer | Inherited when omitted and used as the query source limit. Allowed values are 500, 1000, 2000, and 5000. |
-| `dynamicRequests` | MapLayer options | Inherited when omitted. Viewport-driven/dynamic request loading is reserved for the large-data implementation. |
 | `popupTemplate` | GeoJSON MapLayer | Inherited when omitted. Templates support escaped `{{property}}` placeholders; `{{heurist.recordId}}` addresses Heurist metadata. |
 
 Fallback values are applied with nullish semantics: explicit `false` and `0` values are not replaced by defaults.
@@ -243,11 +242,12 @@ Fallback values are applied with nullish semantics: explicit `false` and `0` val
 - `title`;
 - native `minZoom` / `maxZoom`;
 - kilometre `minimumZoomKm` / `maximumZoomKm`;
-- `bounds`.
+- `bounds`;
+- `dynamicRequests` (**Load by map extent**).
 
 The document has no separate `initiallyActive` flag. Startup activation is controlled only by `options.mapDocuments.initiallyActive`.
 
-The `current-results` layer also has no separate persisted configuration object. It is an internal layer with fixed ID `current-results`, initially visible and selectable, and it inherits the layer-related values from `config.defaults`.
+The `current-results` layer also has no separate persisted configuration object. It is an internal layer with fixed ID `current-results`, initially visible and selectable. When `config.dynamicDocument.dynamicRequests` is enabled, this layer is loaded by the current map extent. Other MapLayers do not inherit this setting; they must explicitly define `options.dynamicRequests: true` if they are to use extent-based loading.
 
 ## 3. Why bootstrap and configuration differ
 
@@ -365,7 +365,7 @@ With Advanced settings disabled:
 
 - the **Map documents**, **Base maps**, and **Interaction** sections are hidden;
 - Current Results Map extent and all of its zoom controls are hidden;
-- popup template, dynamic requests, selection symbology, continuous-world control, Map Control CSS, and other specialist settings are hidden.
+- popup template, **Load by map extent**, selection symbology, continuous-world control, Map Control CSS, and other specialist settings are hidden.
 
 Advanced mode only changes form visibility. It does not define another JSON format.
 
@@ -477,7 +477,123 @@ Canonical defaults are applied by the configuration normalizer. They do not need
 
 Published state is restored after map initialisation; it is not another layer of general preferences.
 
-## 11. Design rules
+## 11. Loading by extent
+
+**Loading by extent** is intended for large Heurist query layers where loading the complete result set at once would be slow or unnecessarily expensive. Instead of requesting every matching record, `heurist-map` requests only records whose geographic values intersect the current map view.
+
+For the internal **Current Results Map**, this behaviour is enabled with:
+
+```javascript
+config: {
+  dynamicDocument: {
+    dynamicRequests: true
+  }
+}
+```
+
+The configuration dialog exposes this option as **Load by map extent** under **Current Results Map**. It is not a global MapLayer default. Persisted or runtime-added MapLayers use the same mechanism only when the individual layer explicitly defines:
+
+```javascript
+options: {
+  dynamicRequests: true
+}
+```
+
+### 11.1 Viewport query
+
+The original layer query is retained unchanged. For each extent request, `heurist-map` creates a temporary effective query by adding the current map bounds.
+
+For the preferred JSON Heurist query format, the added predicate is:
+
+```javascript
+{
+  geo: {
+    west: -16,
+    south: 32,
+    east: 40,
+    north: 72
+  }
+}
+```
+
+For the legacy plain-text query format, the equivalent predicate is appended as:
+
+```text
+geo:"-16,32,40,72"
+```
+
+Viewport coordinates are normalized before the request. Longitude (`west` / `east`) is limited to `-180 .. 180`, and latitude (`south` / `north`) is limited to `-90 .. 90`.
+
+The server interprets the extent as an intersection query. This is important for lines and polygons: a feature is eligible when it intersects the visible map extent; it does not have to be completely contained by it. Existing WKT `geo` queries retain their historical behaviour.
+
+### 11.2 One active extent-loaded layer per MapDocument
+
+A MapDocument may define more than one layer with `dynamicRequests: true`, for example to provide different datasets at different zoom levels. However, **only one dynamic layer is allowed to issue extent requests for a MapDocument at any one zoom level**. This prevents one pan or zoom operation from starting several expensive server queries.
+
+Dynamic layers should therefore normally have non-overlapping effective zoom ranges, for example:
+
+```text
+Overview layer     zoom 0-8
+Places layer       zoom 9-12
+Detailed layer     zoom 13-18
+```
+
+A layer participates in extent loading only when all of the following are true:
+
+- its source is a Heurist query;
+- `dynamicRequests` is `true`;
+- the layer is visible;
+- the current map zoom is within the layer's effective zoom range.
+
+If more than one dynamic layer is eligible because their zoom ranges overlap, `heurist-map` selects only the highest-priority/topmost eligible layer. The other layers do not issue requests. A warning is emitted for the configuration overlap so it can be corrected.
+
+A dynamic layer outside its zoom range remains configured but does not load data until its range becomes active. Moving into another dynamic layer's zoom range switches the active dynamic layer and removes the superseded runtime layer from the map.
+
+### 11.3 Refresh, debounce, and superseding requests
+
+Extent-loaded layers refresh after the map view changes. `heurist-map` listens to the map `moveend` event, which also covers the end of a zoom operation.
+
+Refreshes are debounced so intermediate pan/zoom movements do not immediately create server requests. The current implementation waits briefly after movement before issuing the request.
+
+If a newer viewport request becomes necessary while an earlier request is still in progress:
+
+1. the previous browser request is aborted with `AbortController`;
+2. the newer viewport request supersedes it;
+3. an aborted/superseded request is treated as normal internal control flow, not as a user-visible map error;
+4. the cancellation may be logged to the developer console for diagnostics.
+
+Aborting the browser request prevents a stale response from being applied to the map. It does not guarantee that a MySQL query already executing on the server is immediately cancelled, which is why debounce and the one-active-dynamic-layer rule are also important.
+
+`heurist-map` also avoids issuing another request when the effective zoom and viewport bounds have not changed.
+
+### 11.4 Result limits and partial loading
+
+Extent requests continue to respect the effective query feature/record limit, including `maxAllowedFeatures`. A viewport may therefore still contain more matching records than the configured request limit.
+
+The map API response includes result metadata such as:
+
+```javascript
+meta: {
+  totalRecords,
+  returnedRecords,
+  returnedFeatures,
+  offset,
+  limit,
+  isPartial
+}
+```
+
+When `isPartial` is `true`, the Map Control reports that only part of the result has been loaded. For the `current-results` layer, the row label itself reports the number of loaded features and explains the partial result; the full text is also available as the row title when the visible label is truncated.
+
+`returnedRecords` and `returnedFeatures` are deliberately separate. Some matching records have no geometry, while one record may produce more than one feature. Pagination and result-limit logic therefore must not assume that the number of returned features is the same as the number of processed records.
+
+### 11.5 Selection during extent refresh
+
+When the same dynamic layer is refreshed for a new viewport, selected record IDs are reapplied where those records are still present in the returned data. If a zoom-range change activates a different dynamic layer, selection belonging to the previous dynamic layer is cleared.
+
+This keeps selection stable where possible without retaining selections for features that are no longer part of the active viewport layer.
+
+## 12. Design rules
 
 When extending configuration, keep these rules:
 
