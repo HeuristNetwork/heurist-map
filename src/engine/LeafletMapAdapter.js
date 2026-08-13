@@ -176,6 +176,23 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     return true;
   }
 
+  /** Open a popup for one rendered feature, binding HTML lazily when supplied. */
+  async openFeaturePopup(layerId, featureId, html = null) {
+    const entry = this.getLayerEntry(layerId);
+    const nativeLayer = entry.featureLayers?.get(String(featureId));
+    if (!nativeLayer || typeof nativeLayer.openPopup !== 'function') return false;
+
+    if (html !== null && html !== undefined) {
+      if (typeof nativeLayer.bindPopup !== 'function') return false;
+      nativeLayer.bindPopup(String(html));
+    } else if (typeof nativeLayer.getPopup === 'function' && !nativeLayer.getPopup()) {
+      return false;
+    }
+
+    nativeLayer.openPopup();
+    return true;
+  }
+
   /** Resolve the record ID attached to one rendered feature. */
   getFeatureRecordId(layerId, featureId) {
     const entry = this.getLayerEntry(layerId);
@@ -459,7 +476,6 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     const markerClustering = definition.options?.markerClustering === true;
     const markerClusterGridPixels = finiteNonNegativeNumber(definition.options?.markerClusterGridPixels, 20);
     const pointToLayer = createPointLayerFactory(resolveSymbol, { markerClustering, iconContext: definition.iconContext });
-    const popupEnabled = definition.popup?.enabled !== false;
     const selectable = definition.selectable !== false;
     const featureLayers = new Map();
     const featureRecordIds = new Map();
@@ -487,21 +503,14 @@ export class LeafletMapAdapter extends MapEngineAdapter {
         nativeLayer.on('click', (event) => {
           if (event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
 
-          if (popupEnabled && !nativeLayer.getPopup?.()) {
-            const popupHtml = createPopupHtml(feature, definition.popup);
-            if (popupHtml) {
-              nativeLayer.bindPopup(popupHtml);
-              nativeLayer.openPopup();
-            }
-          }
-
           this.interactionHandlers.onFeatureClick?.({
             layerId: definition.id,
             featureId: metadata.featureId,
             recordId: metadata.recordId,
             selectable,
             additive: Boolean(event.originalEvent?.ctrlKey || event.originalEvent?.metaKey || event.originalEvent?.shiftKey),
-            latlng: toPublicLatLng(event.latlng)
+            latlng: toPublicLatLng(event.latlng),
+            popupFeature: metadata.popupFeature
           });
         });
       }
@@ -914,74 +923,21 @@ function sanitizeClassToken(value) {
   return String(value).replace(/[^A-Za-z0-9_-]/g, '-');
 }
 
-function createPopupHtml(feature, popup) {
-  const properties = feature?.properties || {};
-  const metadata = properties.heurist || {};
-  if (typeof popup?.template === 'string' && popup.template.trim()) {
-    return renderPopupTemplate(popup.template, properties, metadata);
-  }
-  const titleField = popup?.titleField;
-  const title = titleField && properties[titleField] != null
-    ? String(properties[titleField])
-    : metadata.title || properties.rec_Title || properties.title || properties.name || '';
-
-  const parts = [];
-  if (title) {
-    parts.push(`<strong>${escapeHtml(title)}</strong>`);
-  }
-
-  if (popup?.showRecordId !== false && metadata.recordId) {
-    parts.push(`<div>Record ${escapeHtml(metadata.recordId)}</div>`);
-  }
-
-  for (const field of popup?.fields || []) {
-    const descriptor = typeof field === 'string' ? { name: field, label: field } : field;
-    const value = properties[descriptor.name];
-    if (value === undefined || value === null || value === '') continue;
-    parts.push(
-      `<div><span>${escapeHtml(descriptor.label || descriptor.name)}:</span> ${escapeHtml(formatPopupValue(value))}</div>`
-    );
-  }
-
-  return parts.join('');
-}
-
-function renderPopupTemplate(template, properties, metadata) {
-  const valueFor = (name) => {
-    const parts = String(name || '').trim().split('.').filter(Boolean);
-    let value = parts[0] === 'heurist' ? metadata : properties;
-    if (parts[0] === 'heurist') parts.shift();
-    for (const part of parts) {
-      if (!value || typeof value !== 'object') return '';
-      value = value[part];
-    }
-    return value == null ? '' : formatPopupValue(value);
-  };
-  const rendered = String(template).replace(/\{\{\s*([^{}]+?)\s*\}\}/g, (_match, name) => valueFor(name));
-  return escapeHtml(rendered).replaceAll('\n', '<br>');
-}
-
-function formatPopupValue(value) {
-  if (typeof value === 'object') {
-    try { return JSON.stringify(value); } catch { return String(value); }
-  }
-  return String(value);
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
 function getFeatureSelectionMetadata(feature) {
-  const metadata = feature?.properties?.heurist || {};
+  const properties = feature?.properties && typeof feature.properties === 'object' ? feature.properties : {};
+  const metadata = properties.heurist || {};
+  const featureId = String(metadata.featureId ?? feature?.id ?? '');
+  const recordId = Number.isInteger(Number(metadata.recordId)) ? Number(metadata.recordId) : null;
   return {
-    featureId: String(metadata.featureId ?? feature?.id ?? ''),
-    recordId: Number.isInteger(Number(metadata.recordId)) ? Number(metadata.recordId) : null
+    featureId,
+    recordId,
+    popupFeature: {
+      featureId,
+      id: properties.id ?? feature?.id ?? featureId,
+      recordId,
+      title: metadata.title ?? properties.rec_Title ?? properties.title ?? properties.name ?? '',
+      description: properties.description ?? properties.desc ?? properties.Description ?? properties.DESCRIPTION ?? ''
+    }
   };
 }
 

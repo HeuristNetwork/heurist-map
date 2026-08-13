@@ -18,7 +18,7 @@ import {
 export class MapConfigurationDialog {
   constructor({
     mode = 'preferences', value = null, parent = null, title = null,
-    onSave = null, onCancel = null
+    onSave = null, onCancel = null, reportTemplateProvider = null
   } = {}) {
     this.mode = normalizeMapConfigurationMode(mode);
     this.value = normalizeMapConfigurationSettings(value || {});
@@ -26,6 +26,7 @@ export class MapConfigurationDialog {
     this.title = title || defaultTitle(this.mode);
     this.onSave = typeof onSave === 'function' ? onSave : null;
     this.onCancel = typeof onCancel === 'function' ? onCancel : null;
+    this.reportTemplateProvider = reportTemplateProvider || null;
     this.element = null;
     this.dialog = null;
     this.form = null;
@@ -175,7 +176,55 @@ export class MapConfigurationDialog {
     this.select(body, 'config.defaults.maxAllowedFeatures', 'Maximum allowed features', [
       ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
     ], { kind: 'positive-int' });
-    this.textarea(body, 'config.defaults.popupTemplate', 'Popup template', { advanced: true });
+    this.select(body, 'config.defaults.popupTemplate', 'Popup template', [
+      ['standard', 'Standard'],
+      ['minimal', 'Minimal'],
+      ['none', 'None']
+    ], { advanced: true });
+    void this.loadReportTemplates();
+  }
+
+  async loadReportTemplates() {
+    const field = this.fields.get('config.defaults.popupTemplate');
+    const control = field?.control;
+    if (!control || !this.reportTemplateProvider?.isConfigured?.()) return;
+    try {
+      const templates = await this.reportTemplateProvider.list();
+      if (!this.form || !control.isConnected) return;
+      const current = getPath(this.value, 'config.defaults.popupTemplate');
+      control.replaceChildren();
+      for (const [value, label] of [['standard', 'Standard'], ['minimal', 'Minimal'], ['none', 'None']]) {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        control.append(option);
+      }
+      for (const item of templates) {
+        if (['standard', 'minimal', 'none'].includes(String(item.value || '').trim().toLowerCase())) continue;
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        control.append(option);
+      }
+      if (current && ![...control.options].some((option) => option.value === String(current))) {
+        const option = document.createElement('option');
+        option.value = String(current);
+        option.textContent = String(current);
+        control.append(option);
+      }
+      control.value = current == null || current === '' ? 'standard' : String(current);
+    } catch (error) {
+      // Template discovery is configuration assistance only; keep the current
+      // value usable even if the legacy ReportController is unavailable.
+      const current = getPath(this.value, 'config.defaults.popupTemplate');
+      if (current && ![...control.options].some((option) => option.value === String(current))) {
+        const option = document.createElement('option');
+        option.value = String(current);
+        option.textContent = String(current);
+        control.append(option);
+        control.value = String(current);
+      }
+    }
   }
 
   buildMapDocuments(body) {
@@ -365,7 +414,7 @@ export class MapConfigurationDialog {
       if (field.kind === 'boolean') field.control.checked = current === true;
       else if (field.kind === 'json') field.control.value = current == null ? '' : JSON.stringify(current, null, 2);
       else if (field.kind.startsWith('list-')) field.control.value = Array.isArray(current) ? current.join(', ') : '';
-      else field.control.value = current == null ? '' : String(current);
+      else field.control.value = current == null || current === '' ? 'standard' : String(current);
     }
   }
 

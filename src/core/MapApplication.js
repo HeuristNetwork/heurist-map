@@ -15,6 +15,7 @@ import { normalizeMapLayer, reapplyMapLayerDefaults } from './MapLayer.js';
 import { createMapEnvironment } from './createMapEnvironment.js';
 import { normalizeMapConfigurationSettings } from '../ui/config/mapConfigurationSchema.js';
 import { activateThematicMap } from '../thematic/thematicAttributes.js';
+import { normalizePopupMode } from '../data/PopupProvider.js';
 
 /**
  * Engine-neutral application controller.
@@ -649,18 +650,53 @@ export class MapApplication {
     };
     this.dispatch('heurist-map-feature-click', payload);
     this.dispatch('heurist-map-layer-click', { layerId: detail.layerId, latlng: detail.latlng || null });
-    if (this.config.interaction?.selectionEnabled === false
-      || detail.selectable === false
-      || this.layers.get(detail.layerId)?.selectable === false) return;
+
+    const layer = this.layers.get(detail.layerId);
+    const selectionEnabled = this.config.interaction?.selectionEnabled !== false
+      && detail.selectable !== false
+      && layer?.selectable !== false;
+    if (selectionEnabled) {
+      try {
+        await this.selectFeature(detail.layerId, detail.featureId, {
+          recordId: detail.recordId,
+          additive: Boolean(detail.additive),
+          toggle: Boolean(detail.additive),
+          zoom: this.config.interaction?.zoomOnSelection === true
+        });
+      } catch (error) {
+        this.dispatch('heurist-map-error', { operation: 'select-feature', error: serializeError(error) });
+      }
+    }
+
+    const configuredPopupMode = normalizePopupMode(layer?.popup?.template);
+    const heuristBackedPopup = layer?.source?.type === 'heurist-query' || layer?.source?.type === 'record';
+    const popupMode = heuristBackedPopup || configuredPopupMode === 'none' || configuredPopupMode === 'minimal'
+      ? configuredPopupMode
+      : 'minimal';
+    if (layer?.popup?.enabled === false || popupMode === 'none') return;
+    if (popupMode !== 'minimal' && payload.recordId == null) return;
     try {
-      await this.selectFeature(detail.layerId, detail.featureId, {
-        recordId: detail.recordId,
-        additive: Boolean(detail.additive),
-        toggle: Boolean(detail.additive),
-        zoom: this.config.interaction?.zoomOnSelection === true
+      // Reopen a popup already fetched/bound for this runtime feature without
+      // repeating the HTTP request. Runtime layer replacement clears this cache.
+      const opened = await this.mapEngine.openFeaturePopup?.(detail.layerId, payload.featureId, null);
+      if (opened) return;
+
+      const popupProvider = this.providers.popup;
+      if (!popupProvider) return;
+      if (popupMode !== 'minimal' && !popupProvider.isConfigured?.()) return;
+      const html = await popupProvider.load(heuristBackedPopup ? payload.recordId : null, {
+        template: popupMode,
+        feature: detail.popupFeature || null
       });
+      if (html) await this.mapEngine.openFeaturePopup?.(detail.layerId, payload.featureId, html);
     } catch (error) {
-      this.dispatch('heurist-map-error', { operation: 'select-feature', error: serializeError(error) });
+      if (error?.name === 'AbortError') return;
+      this.dispatch('heurist-map-warning', {
+        operation: 'load-popup',
+        layerId: detail.layerId,
+        recordId: payload.recordId,
+        error: serializeError(error)
+      });
     }
   }
 

@@ -50,6 +50,11 @@ export class MapEngineAdapter {
   /** Configure engine-neutral map interaction callbacks. */
   setInteractionHandlers() {}
 
+  /** Lazily bind/open HTML popup content for one rendered feature. */
+  async openFeaturePopup() {
+    throw new Error('MapEngineAdapter.openFeaturePopup() is not implemented');
+  }
+
   /** Apply selected feature IDs for one layer. */
   async setFeatureSelection() {
     throw new Error('MapEngineAdapter.setFeatureSelection() is not implemented');

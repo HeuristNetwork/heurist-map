@@ -21,6 +21,8 @@ import { QueryGeoDataProvider } from './data/QueryGeoDataProvider.js';
 import { ThematicAttributeProvider } from './data/ThematicAttributeProvider.js';
 import { RecordTypeProvider } from './data/RecordTypeProvider.js';
 import { MapDocumentListProvider } from './data/MapDocumentListProvider.js';
+import { PopupProvider } from './data/PopupProvider.js';
+import { ReportTemplateProvider } from './data/ReportTemplateProvider.js';
 import { MapControlPanel } from './ui/MapControlPanel.js';
 import { MapConfigurationDialog } from './ui/config/MapConfigurationDialog.js';
 import { createLayerLoaderRegistry } from './engine/loaders/createLayerLoaderRegistry.js';
@@ -47,13 +49,16 @@ export async function initHeuristMap(config) {
   });
 
   const recordTypes = new RecordTypeProvider({ apiClient });
+  const heuristBaseUrl = resolveHeuristBaseUrl(config);
   const providers = {
     recordTypes,
     mapDocumentList: new MapDocumentListProvider({ apiClient, recordTypes }),
     mapDocument: new MapDocumentProvider({ apiClient }),
     mapLayer: new MapLayerProvider({ apiClient }),
     queryGeoData: new QueryGeoDataProvider({ apiClient }),
-    thematicAttributes: new ThematicAttributeProvider({ apiClient })
+    thematicAttributes: new ThematicAttributeProvider({ apiClient }),
+    popup: new PopupProvider({ baseUrl: heuristBaseUrl, database: config.database }),
+    reportTemplates: new ReportTemplateProvider({ baseUrl: heuristBaseUrl, database: config.database })
   };
   const layerLoaders = createLayerLoaderRegistry({
     queryGeoData: providers.queryGeoData,
@@ -71,7 +76,7 @@ export async function initHeuristMap(config) {
 
   const publicApi = new HeuristMapPublicApi(application);
   publicApi.setConfigurationDialogFactory((options = {}) => {
-    const dialog = new MapConfigurationDialog(options);
+    const dialog = new MapConfigurationDialog({ ...options, reportTemplateProvider: providers.reportTemplates });
     dialog.open();
     return dialog;
   });
@@ -99,4 +104,13 @@ export async function initHeuristMap(config) {
   window.heuristMap = publicApi;
 
   return readyPromise;
+}
+
+function resolveHeuristBaseUrl(config = {}) {
+  const hostBaseUrl = String(config.host?.baseUrl || '').trim();
+  if (hostBaseUrl) return hostBaseUrl.endsWith('/') ? hostBaseUrl : `${hostBaseUrl}/`;
+  const apiBaseUrl = String(config.apiBaseUrl || '').trim().replace(/\/+$/, '');
+  if (!apiBaseUrl) return null;
+  const baseUrl = apiBaseUrl.replace(/\/api$/i, '');
+  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
 }
