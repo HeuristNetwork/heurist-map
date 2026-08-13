@@ -124,6 +124,8 @@ export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson, { normaliz
       : normalizeGeoJson(geoJson, { layerId: id, sourceType: mapLayer.source.type }),
     resultMeta: normalizeResultMeta(geoJson?.meta),
     geometryTypes: detectGeometryTypes(geoJson),
+    recordTypeIds: collectRecordTypeIds(geoJson),
+    iconContext: createIconContext(context.application?.config),
     style: mapLayer.style,
     popup: normalizePopup(mapLayer.options?.popup, mapLayer.options?.popupTemplate),
     options: mapLayer.options,
@@ -226,4 +228,21 @@ function normalizeViewport(bounds) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function collectRecordTypeIds(geoJson) {
+  const ids = new Set();
+  for (const feature of geoJson?.features || []) {
+    const value = feature?.properties?.heurist?.recordTypeId ?? feature?.properties?.rec_RecTypeID;
+    const id = Number(value);
+    if (Number.isInteger(id) && id > 0) ids.add(id);
+  }
+  return [...ids];
+}
+
+function createIconContext(config = {}) {
+  const apiBaseUrl = String(config?.apiBaseUrl || '').replace(/\/+$/, '');
+  if (!apiBaseUrl || !config?.database) return null;
+  const baseUrl = apiBaseUrl.replace(/\/api$/i, '') + '/';
+  return { baseUrl, database: String(config.database) };
 }

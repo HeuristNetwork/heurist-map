@@ -110,6 +110,7 @@ function normalizeConfig(source, defaults) {
         defaults.defaults.preventContinuousWorldBasemap
       ),
       markerClustering: boolean(configuredDefaults.markerClustering, defaults.defaults.markerClustering),
+      markerClusterGridPixels: boundedNumber(configuredDefaults.markerClusterGridPixels, defaults.defaults.markerClusterGridPixels, 0, 100),
       maxAllowedFeatures: allowedFeatureLimit(
         configuredDefaults.maxAllowedFeatures,
         defaults.defaults.maxAllowedFeatures
@@ -131,6 +132,12 @@ function normalizeConfig(source, defaults) {
       )
     }
   };
+}
+
+function boundedNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
 }
 
 function boolean(value, fallback) {

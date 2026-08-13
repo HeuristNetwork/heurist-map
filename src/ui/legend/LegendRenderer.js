@@ -6,6 +6,7 @@
  */
 
 import { mergeThematicSymbol } from '../../thematic/thematicSymbolResolver.js';
+import { hexToCssFilter } from '../../utils/hexToCssFilter.js';
 
 /** Create the legend for the currently selected layer symbology. */
 export function createLayerLegend(layer) {
@@ -21,9 +22,11 @@ export function createLayerLegend(layer) {
 
   if (!activeTheme) {
     legend.append(createLegendRow({
-      label: 'Default',
+      label: thematic.length ? 'Default' : '',
       symbol: style.symbol || {},
-      geometryTypes
+      geometryTypes,
+      iconContext: layer?.iconContext,
+      recordTypeId: firstRecordTypeId(layer)
     }));
     return legend;
   }
@@ -45,7 +48,9 @@ export function createLayerLegend(layer) {
       section.append(createLegendRow({
         label: getRangeLabel(range),
         symbol: mergeThematicSymbol(activeTheme.symbol || {}, range?.symbol || {}),
-        geometryTypes
+        geometryTypes,
+        iconContext: layer?.iconContext,
+        recordTypeId: firstRecordTypeId(layer)
       }));
     }
     legend.append(section);
@@ -56,41 +61,44 @@ export function createLayerLegend(layer) {
     legend.append(createLegendRow({
       label: activeTheme.title || 'Theme',
       symbol: activeTheme.symbol || style.symbol || {},
-      geometryTypes
+      geometryTypes,
+      iconContext: layer?.iconContext,
+      recordTypeId: firstRecordTypeId(layer)
     }));
   }
   return legend;
 }
 
-function createLegendRow({ label, symbol, geometryTypes }) {
+function createLegendRow({ label, symbol, geometryTypes, iconContext = null, recordTypeId = null }) {
   const row = document.createElement('div');
   row.className = 'heurist-map-legend-row';
 
   const samples = document.createElement('span');
   samples.className = 'heurist-map-legend-samples';
-  appendGeometrySamples(samples, symbol, geometryTypes);
+  appendGeometrySamples(samples, symbol, geometryTypes, { iconContext, recordTypeId });
 
   const text = document.createElement('span');
   text.className = 'heurist-map-legend-label';
   text.textContent = label;
   text.title = label;
 
-  row.append(samples, text);
+  row.append(samples);
+  if (label) row.append(text);
   return row;
 }
 
-function appendGeometrySamples(container, symbol, geometryTypes) {
+function appendGeometrySamples(container, symbol, geometryTypes, context = {}) {
   const known = geometryTypes.point || geometryTypes.line || geometryTypes.polygon;
   // Loaded-but-empty GeoJSON has no geometry family to infer. Use a marker as
   // a compact generic fallback rather than drawing all three representations.
   const types = known ? geometryTypes : { point: true, line: false, polygon: false };
 
-  if (types.point) container.append(createPointSample(symbol));
+  if (types.point) container.append(createPointSample(symbol, context));
   if (types.line) container.append(createLineSample(symbol));
   if (types.polygon) container.append(createPolygonSample(symbol));
 }
 
-function createPointSample(symbol) {
+function createPointSample(symbol, { iconContext = null, recordTypeId = null } = {}) {
   const wrapper = document.createElement('span');
   wrapper.className = 'heurist-map-legend-sample heurist-map-legend-point';
 
@@ -109,12 +117,14 @@ function createPointSample(symbol) {
     return wrapper;
   }
 
-  if ((symbol?.iconType === 'image' || symbol?.iconType === 'icon') && symbol.iconUrl) {
+  const imageUrl = resolveLegendImageUrl(symbol, iconContext, recordTypeId);
+  if (imageUrl) {
     const image = document.createElement('img');
-    image.src = String(symbol.iconUrl);
+    image.src = imageUrl;
     image.alt = '';
     image.style.width = `${pointSize(symbol)}px`;
     image.style.height = `${pointSize(symbol)}px`;
+    if (symbol?.color) image.style.filter = hexToCssFilter(symbol.color);
     wrapper.append(image);
     return wrapper;
   }
@@ -235,4 +245,19 @@ function cssColorWithOpacity(color, opacity) {
   if (short) hex = short[1].split('').map((c) => c + c).join('');
   if (!hex) return text;
   return `rgba(${parseInt(hex.slice(0, 2), 16)},${parseInt(hex.slice(2, 4), 16)},${parseInt(hex.slice(4, 6), 16)},${alpha})`;
+}
+
+function firstRecordTypeId(layer) {
+  const ids = Array.isArray(layer?.recordTypeIds) ? layer.recordTypeIds : [];
+  return Number.isInteger(Number(ids[0])) ? Number(ids[0]) : null;
+}
+
+function resolveLegendImageUrl(symbol, iconContext, recordTypeId) {
+  const type = String(symbol?.iconType || '').toLowerCase();
+  if ((type === 'url' || type === 'image' || type === 'icon' || type === 'marker') && symbol?.iconUrl) return String(symbol.iconUrl);
+  if (type !== 'rectype' || !recordTypeId || !iconContext?.baseUrl || !iconContext?.database) return null;
+  const url = new URL(iconContext.baseUrl);
+  url.searchParams.set('db', iconContext.database);
+  url.searchParams.set('icon', String(recordTypeId));
+  return url.toString();
 }

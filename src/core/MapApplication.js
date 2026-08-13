@@ -1492,6 +1492,12 @@ export class MapApplication {
       activeDocumentId: this.activeMapDocumentId ?? null,
       baseMap: this.activeBaseMapId ?? null,
       visibleLayerIds: this.getLayers().filter((layer) => layer.visible !== false).map((layer) => layer.id),
+      activeThemes: Object.fromEntries(this.getLayers().map((layer) => [
+        String(layer.id),
+        Array.isArray(layer.style?.thematic)
+          ? layer.style.thematic.findIndex((theme) => theme?.active === true)
+          : -1
+      ])),
       activeLayerId: this.selectionLayerId ?? null,
       query: currentLayer?.source?.query ?? null,
       selection: selectedRecordIds
@@ -1526,6 +1532,14 @@ export class MapApplication {
           visible: true,
           selectable: true
         });
+      }
+    }
+
+    if (state.activeThemes && typeof state.activeThemes === 'object') {
+      for (const [layerId, themeIndex] of Object.entries(state.activeThemes)) {
+        if (!this.layers.has(layerId)) continue;
+        const index = Number(themeIndex);
+        await this.setLayerTheme(layerId, Number.isInteger(index) && index >= 0 ? index : null);
       }
     }
 
@@ -2023,6 +2037,8 @@ function createLayerState(definition) {
     featureCount: getFeatureCount(definition),
     resultMeta: clonePlain(definition.resultMeta ?? null),
     geometryTypes: clonePlain(definition.geometryTypes ?? null),
+    recordTypeIds: clonePlain(definition.recordTypeIds ?? null),
+    iconContext: clonePlain(definition.iconContext ?? null),
     opacity: normalizeRuntimeOpacity(definition.opacity ?? 1),
     loadState: 'loading',
     error: null

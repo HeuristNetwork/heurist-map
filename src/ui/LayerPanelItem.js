@@ -53,7 +53,7 @@ export class LayerPanelItem {
       zoomButton.classList.add('heurist-map-layer-zoom-action');
       actions.append(zoomButton);
       actions.append(createOpacityControl(this.api, this.layer, row));
-      if (this.editingEnabled && typeof this.onEditLayer === 'function') {
+      if (String(this.layer.id) !== 'current-results' && this.editingEnabled && typeof this.onEditLayer === 'function') {
         actions.append(button(
           'fa-solid fa-pencil',
           'Edit layer',
@@ -277,6 +277,9 @@ function getLayerPresentation(layer) {
 
   if (String(layer?.id) !== 'current-results') {
     label = layer?.title || String(layer?.id ?? '');
+    if (String(label).trim().toLowerCase() === '[vector]') {
+      label = `${formatCount(features)} features`;
+    }
   }else{
     label = title;
     warning = null;

@@ -113,7 +113,7 @@ function hasOwn(value, key) {
 
 function normalizeIconType(value) {
   const type = String(value || '').trim().toLowerCase();
-  return ['circle', 'marker', 'icon', 'iconfont'].includes(type) ? type : 'circle';
+  return ['circle', 'marker', 'icon', 'iconfont', 'url', 'rectype'].includes(type) ? type : 'circle';
 }
 
 function normalizePair(value, fallback) {

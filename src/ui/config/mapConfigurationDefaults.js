@@ -45,6 +45,7 @@ export const HEURIST_MAP_CONFIG_DEFAULTS = Object.freeze({
     selectSymbology: null,
     preventContinuousWorldBasemap: false,
     markerClustering: false,
+    markerClusterGridPixels: 20,
     maxAllowedFeatures: 1000,
     popupTemplate: null
   }),

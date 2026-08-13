@@ -25,6 +25,7 @@ export function normalizeMapLayer(value = {}, { defaults = {} } = {}) {
     symbology: !hasExplicitSymbol(source.style),
     selectSymbology: !hasExplicitSelectSymbol(source.style),
     markerClustering: !Object.hasOwn(sourceOptions, 'markerClustering'),
+    markerClusterGridPixels: !Object.hasOwn(sourceOptions, 'markerClusterGridPixels'),
     maxAllowedFeatures: !Object.hasOwn(sourceOptions, 'maxAllowedFeatures'),
     dynamicRequests: !Object.hasOwn(sourceOptions, 'dynamicRequests'),
     popupTemplate: !Object.hasOwn(sourceOptions, 'popupTemplate'),
@@ -86,11 +87,12 @@ export function reapplyMapLayerDefaults(mapLayer, defaults = {}) {
 
   const optionDefaults = {
     markerClustering: defaults.markerClustering === true,
+    markerClusterGridPixels: boundedNumber(defaults.markerClusterGridPixels, 20, 0, 100),
     maxAllowedFeatures: positiveIntegerOrNull(defaults.maxAllowedFeatures) ?? 1000,
     dynamicRequests: defaults.dynamicRequests === true,
     popupTemplate: nullableString(defaults.popupTemplate)
   };
-  for (const key of ['markerClustering', 'maxAllowedFeatures', 'dynamicRequests', 'popupTemplate']) {
+  for (const key of ['markerClustering', 'markerClusterGridPixels', 'maxAllowedFeatures', 'dynamicRequests', 'popupTemplate']) {
     if (!inherited[key]) continue;
     if (!sameJson(mapLayer.options?.[key], optionDefaults[key])) {
       mapLayer.options = { ...(mapLayer.options || {}), [key]: optionDefaults[key] };
@@ -144,6 +146,7 @@ function normalizeOptions(value, defaults = {}) {
     maximumZoomKm: finiteNumberOrNull(options.maximumZoomKm ?? options.maximumZoom),
     markerClustering: typeof options.markerClustering === 'boolean'
       ? options.markerClustering : defaults.markerClustering === true,
+    markerClusterGridPixels: boundedNumber(options.markerClusterGridPixels, boundedNumber(defaults.markerClusterGridPixels, 20, 0, 100), 0, 100),
     maxAllowedFeatures: positiveIntegerOrNull(options.maxAllowedFeatures)
       ?? positiveIntegerOrNull(defaults.maxAllowedFeatures)
       ?? 1000,
@@ -175,6 +178,12 @@ function cloneObject(value) {
 
 function sameJson(left, right) {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function boundedNumber(value, fallback, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
 }
 
 function nullableString(value) {

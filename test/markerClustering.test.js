@@ -8,7 +8,7 @@ test('markerClustering is preserved from MapLayer normalization to runtime layer
   const mapLayer = normalizeMapLayer({
     id: 123,
     source: { type: 'inline-geojson', data: { type: 'FeatureCollection', features: [] } },
-    options: { markerClustering: true }
+    options: { markerClustering: true, markerClusterGridPixels: 35 }
   });
   const runtime = createGeoJsonRuntimeLayer(
     mapLayer,
@@ -18,6 +18,8 @@ test('markerClustering is preserved from MapLayer normalization to runtime layer
 
   assert.equal(mapLayer.options.markerClustering, true);
   assert.equal(runtime.options.markerClustering, true);
+  assert.equal(mapLayer.options.markerClusterGridPixels, 35);
+  assert.equal(runtime.options.markerClusterGridPixels, 35);
 });
 
 test('Leaflet.markercluster is declared and loaded by the application entry point', () => {
@@ -38,5 +40,6 @@ test('Leaflet adapter enables clustering with chunked bulk loading', () => {
 
   assert.match(adapter, /L\.markerClusterGroup\(\{[\s\S]*chunkedLoading:\s*true/);
   assert.match(adapter, /clusterLayer\.addLayers\(geoJsonLayer\.getLayers\(\)\)/);
-  assert.match(adapter, /createPointLayerFactory\(resolveSymbol, \{ markerClustering \}\)/);
+  assert.match(adapter, /createPointLayerFactory\(resolveSymbol, \{ markerClustering, iconContext: definition\.iconContext \}\)/);
+  assert.match(adapter, /maxClusterRadius:\s*finiteNonNegativeNumber\(gridPixels, 20\)/);
 });

@@ -16,6 +16,7 @@ import { MapEngineAdapter } from './MapEngineAdapter.js';
 import { createImageFilterCss } from '../utils/normalizeImageFilter.js';
 import { normalizeZoomLimit } from '../utils/normalizeZoomLimit.js';
 import { resolveFeatureSymbol } from '../thematic/thematicSymbolResolver.js';
+import { hexToCssFilter } from '../utils/hexToCssFilter.js';
 
 /**
  * Leaflet implementation hidden behind the engine-neutral adapter contract.
@@ -456,7 +457,8 @@ export class LeafletMapAdapter extends MapEngineAdapter {
   addGeoJsonLayer(definition) {
     const resolveSymbol = (feature) => resolveFeatureSymbol(feature, definition.style);
     const markerClustering = definition.options?.markerClustering === true;
-    const pointToLayer = createPointLayerFactory(resolveSymbol, { markerClustering });
+    const markerClusterGridPixels = finiteNonNegativeNumber(definition.options?.markerClusterGridPixels, 20);
+    const pointToLayer = createPointLayerFactory(resolveSymbol, { markerClustering, iconContext: definition.iconContext });
     const popupEnabled = definition.popup?.enabled !== false;
     const selectable = definition.selectable !== false;
     const featureLayers = new Map();
@@ -506,7 +508,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     });
 
     const layer = markerClustering
-      ? createMarkerClusterLayer(geoJsonLayer)
+      ? createMarkerClusterLayer(geoJsonLayer, markerClusterGridPixels)
       : geoJsonLayer;
 
     const result = this.registerLayer(definition, layer);
@@ -682,17 +684,12 @@ function compactOptions(options) {
 }
 
 
-function createPointLayerFactory(resolveSymbol, { markerClustering = false } = {}) {
+function createPointLayerFactory(resolveSymbol, { markerClustering = false, iconContext = null } = {}) {
   return (feature, latlng) => {
     const symbol = resolveSymbol(feature) || {};
-    if ((symbol.iconType === 'icon' || symbol.iconType === 'marker') && symbol.iconUrl) {
-      const icon = L.icon(compactOptions({
-        iconUrl: symbol.iconUrl,
-        iconSize: symbol.iconSize,
-        iconAnchor: symbol.iconAnchor,
-        popupAnchor: symbol.popupAnchor
-      }));
-      return L.marker(latlng, { icon });
+    const imageUrl = resolveImageMarkerUrl(symbol, feature, iconContext);
+    if (imageUrl) {
+      return L.marker(latlng, { icon: createImageMarkerIcon(symbol, imageUrl) });
     }
 
     if (symbol.iconType === 'iconfont') {
@@ -732,16 +729,73 @@ function createPathStyle(symbol = {}) {
   });
 }
 
-function createMarkerClusterLayer(geoJsonLayer) {
+function createMarkerClusterLayer(geoJsonLayer, gridPixels = 20) {
   if (typeof L.markerClusterGroup !== 'function') {
     throw new Error('Marker clustering is enabled but Leaflet.markercluster is not available');
   }
 
   const clusterLayer = L.markerClusterGroup({
-    chunkedLoading: true
+    chunkedLoading: true,
+    maxClusterRadius: finiteNonNegativeNumber(gridPixels, 20)
   });
   clusterLayer.addLayers(geoJsonLayer.getLayers());
   return clusterLayer;
+}
+
+function createImageMarkerIcon(symbol, iconUrl) {
+  const size = Array.isArray(symbol.iconSize) ? symbol.iconSize : [finitePositiveNumber(symbol.iconSize, 18), finitePositiveNumber(symbol.iconSize, 18)];
+  const iconAnchor = leafletPointOption(symbol.iconAnchor);
+  const popupAnchor = leafletPointOption(symbol.popupAnchor);
+  const filter = symbol.color ? hexToCssFilter(symbol.color) : '';
+  if (!filter) {
+    return L.icon(compactOptions({ iconUrl, iconSize: size, iconAnchor, popupAnchor }));
+  }
+  const width = finitePositiveNumber(size?.[0], 18);
+  const height = finitePositiveNumber(size?.[1], width);
+  const html = `<img src="${escapeAttribute(iconUrl)}" alt="" style="display:block;width:${width}px;height:${height}px;object-fit:contain;filter:${escapeAttribute(filter)}">`;
+  return L.divIcon(compactOptions({
+    className: 'heurist-map-image-marker',
+    html,
+    iconSize: [width, height],
+    iconAnchor,
+    popupAnchor
+  }));
+}
+
+function leafletPointOption(value) {
+  if (value == null) return undefined;
+  if (Array.isArray(value) && value.length >= 2) {
+    const x = Number(value[0]);
+    const y = Number(value[1]);
+    return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : undefined;
+  }
+  if (typeof value === 'object') {
+    const x = Number(value.x);
+    const y = Number(value.y);
+    return Number.isFinite(x) && Number.isFinite(y) ? [x, y] : undefined;
+  }
+  return undefined;
+}
+
+function resolveImageMarkerUrl(symbol, feature, iconContext) {
+  const type = String(symbol?.iconType || '').toLowerCase();
+  if ((type === 'url' || type === 'image' || type === 'icon' || type === 'marker') && symbol?.iconUrl) return String(symbol.iconUrl);
+  if (type !== 'rectype' || !iconContext?.baseUrl || !iconContext?.database) return null;
+  const recordTypeId = Number(feature?.properties?.heurist?.recordTypeId ?? feature?.properties?.rec_RecTypeID);
+  if (!Number.isInteger(recordTypeId) || recordTypeId < 1) return null;
+  const url = new URL(iconContext.baseUrl);
+  url.searchParams.set('db', iconContext.database);
+  url.searchParams.set('icon', String(recordTypeId));
+  return url.toString();
+}
+
+function escapeAttribute(value) {
+  return String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function finiteNonNegativeNumber(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
 function createClusterPointIcon(symbol = {}) {

@@ -166,7 +166,12 @@ export class MapConfigurationDialog {
     this.json(body, 'config.defaults.symbology', 'Default symbology');
     this.json(body, 'config.defaults.selectSymbology', 'Select symbology', { advanced: true });
     this.checkbox(body, 'config.defaults.preventContinuousWorldBasemap', 'Prevent continuous world basemap', { advanced: true });
-    this.checkbox(body, 'config.defaults.markerClustering', 'Marker clustering');
+    const clustering = document.createElement('div');
+    clustering.className = 'heurist-map-config-inline-checks';
+    this.checkbox(clustering, 'config.defaults.markerClustering', 'Marker clustering');
+    const clusterGrid = this.number(clustering, 'config.defaults.markerClusterGridPixels', 'Grid pixels', { min: 0, max: 100 });
+    clusterGrid.classList.add('heurist-map-config-inline-number', 'heurist-map-config-narrow-number');
+    body.append(clustering);
     this.select(body, 'config.defaults.maxAllowedFeatures', 'Maximum allowed features', [
       ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
     ], { kind: 'positive-int' });
