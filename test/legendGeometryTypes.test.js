@@ -27,13 +27,40 @@ test('geometry types are computed once by the loader and retained in lightweight
 });
 
 test('thematic selector is hidden until layer data has loaded', () => {
-  assert.match(layerItemSource, /if \(this\.layer\?\.loadState !== 'loaded'\) return null/);
+  assert.match(layerItemSource, /this\.layer\?\.loadState !== 'loaded'/);
+  assert.match(layerItemSource, /supportsThematicSelection\(this\.layer\)/);
 });
 
 test('legend renders current default or active thematic ranges using geometry-aware samples', () => {
   assert.match(legendSource, /activeTheme = thematic\.find/);
-  assert.match(legendSource, /\{ \.\.\.\(activeTheme\.symbol \|\| \{\}\), \.\.\.\(range\?\.symbol \|\| \{\}\) \}/);
+  assert.match(legendSource, /mergeThematicSymbol\(activeTheme\.symbol \|\| \{\}, range\?\.symbol \|\| \{\}\)/);
   assert.match(legendSource, /if \(types\.point\)/);
   assert.match(legendSource, /if \(types\.line\)/);
   assert.match(legendSource, /if \(types\.polygon\)/);
+});
+
+
+test('legend size follows circle radius and iconfont classes match map marker conventions', () => {
+  assert.match(legendSource, /iconType \|\| 'circle'\) === 'circle'/);
+  assert.match(legendSource, /Number\(symbol\?\.radius\) \* 2/);
+  assert.match(legendSource, /normalizeIconFontClass/);
+  assert.match(legendSource, /`ui-icon \$\{iconClass/);
+  assert.match(legendSource, /classes\.unshift\('fa-solid'\)/);
+});
+
+test('legend display option and thematic source gating are passed through the control panel', () => {
+  assert.match(layerItemSource, /this\.showLegend/);
+  assert.match(layerItemSource, /sourceType === 'heurist-query' \|\| sourceType === 'record'/);
+});
+
+
+test('raster sources do not show a symbology legend', () => {
+  assert.match(layerItemSource, /supportsSymbologyLegend\(this\.layer\)/);
+  assert.match(layerItemSource, /\['image', 'tile', 'iiif', 'geotiff'\]/);
+});
+
+test('legend applies fill opacity independently from stroke opacity', () => {
+  assert.match(legendSource, /cssColorWithOpacity\(symbol\?\.fillColor/);
+  assert.match(legendSource, /symbol\?\.fillOpacity/);
+  assert.doesNotMatch(legendSource, /marker\.style\.opacity/);
 });

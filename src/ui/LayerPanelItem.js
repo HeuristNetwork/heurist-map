@@ -7,11 +7,12 @@
 import { createLayerLegend } from './legend/LegendRenderer.js';
 
 export class LayerPanelItem {
-  constructor({ api, layer, editingEnabled = false, onEditLayer = null }) {
+  constructor({ api, layer, editingEnabled = false, onEditLayer = null, showLegend = true }) {
     this.api = api;
     this.layer = layer;
     this.editingEnabled = editingEnabled;
     this.onEditLayer = onEditLayer;
+    this.showLegend = showLegend !== false;
     this.element = this.create();
   }
 
@@ -64,14 +65,16 @@ export class LayerPanelItem {
     row.append(main, actions);
     const thematicSelector = this.createThematicSelector();
     if (thematicSelector) row.append(thematicSelector);
-    const legend = createLayerLegend(this.layer);
-    if (legend) row.append(legend);
+    if (this.showLegend && supportsSymbologyLegend(this.layer)) {
+      const legend = createLayerLegend(this.layer);
+      if (legend) row.append(legend);
+    }
     return row;
   }
 
 
   createThematicSelector() {
-    if (this.layer?.loadState !== 'loaded') return null;
+    if (this.layer?.loadState !== 'loaded' || !supportsThematicSelection(this.layer)) return null;
     const thematic = Array.isArray(this.layer?.style?.thematic) ? this.layer.style.thematic : [];
     if (!thematic.length) return null;
 
@@ -145,6 +148,18 @@ export class LayerPanelItem {
     });
     return checkbox;
   }
+}
+
+function supportsSymbologyLegend(layer) {
+  const sourceType = String(layer?.source?.type || '');
+  return !['image', 'tile', 'iiif', 'geotiff'].includes(sourceType);
+}
+
+function supportsThematicSelection(layer) {
+  const sourceType = String(layer?.source?.type || '');
+  // Thematic attributes are retrieved through the Heurist records/details API.
+  // Do not expose thematic controls for external/vector-file or raster sources.
+  return sourceType === 'heurist-query' || sourceType === 'record';
 }
 
 function button(icon, title, handler) {

@@ -142,7 +142,8 @@ export class MapControlPanel {
         api: this.api,
         container,
         editingEnabled,
-        onEditLayer: (layerId) => this.editLayer(layerId)
+        onEditLayer: (layerId) => this.editLayer(layerId),
+        showLegend: this.options.showLegend !== false
       }).render(this.api.getLayers(), { loading: documentActivating });
       return container;
     }, {

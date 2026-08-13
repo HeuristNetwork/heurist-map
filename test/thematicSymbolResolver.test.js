@@ -5,7 +5,8 @@ import {
   getFeatureThematicValues,
   resolveFeatureSymbol,
   resolveThematicFieldSymbol,
-  thematicRangeMatches
+  thematicRangeMatches,
+  mergeThematicSymbol
 } from '../src/thematic/thematicSymbolResolver.js';
 
 const base = {
@@ -84,4 +85,46 @@ test('rec_GeoField is read locally and does not require thematic API details', (
   const feature = { properties: { rec_GeoField: '999' } };
   const field = { code: 'rec_GeoField', ranges: [{ value: '999', symbol: { weight: 7 } }] };
   assert.deepEqual(resolveThematicFieldSymbol(feature, field), { weight: 7 });
+});
+
+
+test('persisted Place type and Population thematic fields compose icon type and size correctly', () => {
+  const style = {
+    symbol: { iconType: 'circle', iconSize: [15, 15], radius: 15, color: '#00b050' },
+    thematic: [{
+      active: true,
+      fields: [
+        { code: '12:133', ranges: [{ value: '10443', symbol: { iconType: 'iconfont', iconFont: 'ui-icon-star', color: '#ff0000', opacity: 1, fill: false, fillColor: '#c00000', fillOpacity: 1 } }] },
+        { code: '12:1160', ranges: [
+          { value: '400000<>7800000', symbol: { iconSize: [7, 7] } },
+          { value: '7800000<>15200000', symbol: { iconSize: [11, 11] } }
+        ] }
+      ],
+      symbol: { iconType: 'circle', iconSize: [10, 10], radius: 10, color: '#0070c0', weight: 1, opacity: 1, fill: true, fillColor: '#92cddc', fillOpacity: 1 }
+    }]
+  };
+
+  const iconFeature = { properties: { thematic: {
+    '12:133': { 1: '10443' },
+    '12:1160': { 2: '9000000' }
+  } } };
+  const iconSymbol = resolveFeatureSymbol(iconFeature, style);
+  assert.equal(iconSymbol.iconType, 'iconfont');
+  assert.equal(iconSymbol.iconFont, 'ui-icon-star');
+  assert.equal(iconSymbol.color, '#ff0000');
+  assert.deepEqual(iconSymbol.iconSize, [11, 11]);
+
+  const circleFeature = { properties: { thematic: {
+    '12:133': { 1: '99999' },
+    '12:1160': { 2: '9000000' }
+  } } };
+  const circleSymbol = resolveFeatureSymbol(circleFeature, style);
+  assert.equal(circleSymbol.iconType, 'circle');
+  assert.deepEqual(circleSymbol.iconSize, [11, 11]);
+  assert.equal(circleSymbol.radius, 5.5);
+});
+
+test('circle thematic iconSize override controls radius while explicit radius wins', () => {
+  assert.equal(mergeThematicSymbol({ iconType: 'circle', radius: 10 }, { iconSize: [19, 19] }).radius, 9.5);
+  assert.equal(mergeThematicSymbol({ iconType: 'circle', radius: 10 }, { iconSize: [19, 19], radius: 4 }).radius, 4);
 });

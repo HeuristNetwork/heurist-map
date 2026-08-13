@@ -5,6 +5,8 @@
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
 
+import { mergeThematicSymbol } from '../../thematic/thematicSymbolResolver.js';
+
 /** Create the legend for the currently selected layer symbology. */
 export function createLayerLegend(layer) {
   if (layer?.loadState !== 'loaded') return null;
@@ -42,7 +44,7 @@ export function createLayerLegend(layer) {
     for (const range of ranges) {
       section.append(createLegendRow({
         label: getRangeLabel(range),
-        symbol: { ...(activeTheme.symbol || {}), ...(range?.symbol || {}) },
+        symbol: mergeThematicSymbol(activeTheme.symbol || {}, range?.symbol || {}),
         geometryTypes
       }));
     }
@@ -94,9 +96,15 @@ function createPointSample(symbol) {
 
   if (symbol?.iconType === 'iconfont' && symbol.iconFont) {
     const icon = document.createElement('span');
-    icon.className = String(symbol.iconFont);
+    icon.className = normalizeIconFontClass(symbol.iconFont);
     icon.style.color = symbol.color || symbol.fillColor || '';
-    icon.style.fontSize = `${pointSize(symbol)}px`;
+    const size = pointSize(symbol);
+    icon.style.fontSize = `${size}px`;
+    icon.style.width = `${size}px`;
+    icon.style.height = `${size}px`;
+    icon.style.display = 'inline-flex';
+    icon.style.alignItems = 'center';
+    icon.style.justifyContent = 'center';
     wrapper.append(icon);
     return wrapper;
   }
@@ -118,9 +126,12 @@ function createPointSample(symbol) {
   marker.style.height = `${size}px`;
   marker.style.borderStyle = symbol?.stroke === false ? 'none' : 'solid';
   marker.style.borderWidth = `${Math.max(1, Number(symbol?.weight) || 1)}px`;
-  marker.style.borderColor = symbol?.color || 'transparent';
-  marker.style.background = symbol?.fill === false ? 'transparent' : (symbol?.fillColor || 'transparent');
-  marker.style.opacity = String(numberOr(symbol?.opacity, 1));
+  marker.style.borderColor = symbol?.stroke === false
+    ? 'transparent'
+    : cssColorWithOpacity(symbol?.color || 'transparent', numberOr(symbol?.opacity, 1));
+  marker.style.background = symbol?.fill === false
+    ? 'transparent'
+    : cssColorWithOpacity(symbol?.fillColor || 'transparent', numberOr(symbol?.fillOpacity, 1));
   wrapper.append(marker);
   return wrapper;
 }
@@ -143,20 +154,46 @@ function createPolygonSample(symbol) {
   const polygon = document.createElement('span');
   polygon.style.borderStyle = symbol?.stroke === false ? 'none' : 'solid';
   polygon.style.borderWidth = `${Math.max(1, Number(symbol?.weight) || 1)}px`;
-  polygon.style.borderColor = symbol?.color || 'transparent';
-  polygon.style.background = symbol?.fill === false ? 'transparent' : (symbol?.fillColor || 'transparent');
-  polygon.style.opacity = String(numberOr(symbol?.fillOpacity, numberOr(symbol?.opacity, 1)));
+  polygon.style.borderColor = symbol?.stroke === false
+    ? 'transparent'
+    : cssColorWithOpacity(symbol?.color || 'transparent', numberOr(symbol?.opacity, 1));
+  polygon.style.background = symbol?.fill === false
+    ? 'transparent'
+    : cssColorWithOpacity(symbol?.fillColor || 'transparent', numberOr(symbol?.fillOpacity, 1));
   wrapper.append(polygon);
   return wrapper;
 }
 
 function pointSize(symbol) {
-  const iconSize = Array.isArray(symbol?.iconSize) ? Number(symbol.iconSize[0]) : Number(symbol?.iconSize);
   const radiusSize = Number(symbol?.radius) * 2;
+  if ((symbol?.iconType || 'circle') === 'circle' && Number.isFinite(radiusSize) && radiusSize > 0) {
+    return Math.max(5, Math.min(28, Math.round(radiusSize)));
+  }
+  const iconSize = Array.isArray(symbol?.iconSize) ? Number(symbol.iconSize[0]) : Number(symbol?.iconSize);
   const size = Number.isFinite(iconSize) && iconSize > 0
     ? iconSize
     : (Number.isFinite(radiusSize) && radiusSize > 0 ? radiusSize : 12);
   return Math.max(5, Math.min(28, Math.round(size)));
+}
+
+function normalizeIconFontClass(iconFont) {
+  const classes = String(iconFont || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const isFontAwesome = classes.some((name) =>
+    name === 'fa' || name === 'fas' || name === 'far' || name === 'fab' || name.startsWith('fa-')
+  );
+  if (isFontAwesome) {
+    const hasStyleClass = classes.some((name) =>
+      name === 'fa-solid' || name === 'fa-regular' || name === 'fa-brands'
+      || name === 'fas' || name === 'far' || name === 'fab'
+    );
+    if (!hasStyleClass) classes.unshift('fa-solid');
+    return classes.join(' ');
+  }
+  const iconClass = classes.find((name) => name.startsWith('ui-icon-')) || classes[0] || 'ui-icon-location';
+  return `ui-icon ${iconClass.startsWith('ui-icon-') ? iconClass : `ui-icon-${iconClass}`}`;
 }
 
 function dashStyle(value) {
@@ -186,4 +223,16 @@ function normalizeGeometryTypes(value) {
 function numberOr(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+
+function cssColorWithOpacity(color, opacity) {
+  const alpha = Math.min(1, Math.max(0, numberOr(opacity, 1)));
+  const text = String(color || '').trim();
+  const short = /^#([0-9a-f]{3})$/i.exec(text);
+  const full = /^#([0-9a-f]{6})$/i.exec(text);
+  let hex = full?.[1] || null;
+  if (short) hex = short[1].split('').map((c) => c + c).join('');
+  if (!hex) return text;
+  return `rgba(${parseInt(hex.slice(0, 2), 16)},${parseInt(hex.slice(2, 4), 16)},${parseInt(hex.slice(4, 6), 16)},${alpha})`;
 }

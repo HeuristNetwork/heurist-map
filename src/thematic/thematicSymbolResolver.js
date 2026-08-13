@@ -30,9 +30,31 @@ export function resolveFeatureSymbol(feature, style = {}) {
   let symbol = { ...(isObject(theme.symbol) ? theme.symbol : ordinarySymbol) };
   for (const field of Array.isArray(theme.fields) ? theme.fields : []) {
     const override = resolveThematicFieldSymbol(feature, field);
-    if (override) symbol = { ...symbol, ...override };
+    if (override) symbol = mergeThematicSymbol(symbol, override);
   }
   return symbol;
+}
+
+
+/**
+ * Merge one partial thematic range symbol into the current symbol.
+ *
+ * Leaflet CircleMarker renders point size from `radius`, while persisted
+ * thematic ranges historically vary point size with `iconSize`. When a
+ * circle range overrides iconSize but not radius, translate the requested
+ * diameter to the engine radius so thematic size ranges affect the map.
+ */
+export function mergeThematicSymbol(base = {}, override = {}) {
+  const merged = { ...(isObject(base) ? base : {}), ...(isObject(override) ? override : {}) };
+  if (merged.iconType === 'circle'
+      && Object.prototype.hasOwnProperty.call(override, 'iconSize')
+      && !Object.prototype.hasOwnProperty.call(override, 'radius')) {
+    const diameter = Array.isArray(override.iconSize)
+      ? Number(override.iconSize[0])
+      : Number(override.iconSize);
+    if (Number.isFinite(diameter) && diameter >= 0) merged.radius = diameter / 2;
+  }
+  return merged;
 }
 
 /** Return the first configured range symbol matching any value of one thematic field. */
@@ -67,7 +89,11 @@ export function getFeatureThematicValues(feature, code) {
 
   const details = properties.thematic?.[fieldCode];
   if (isObject(details)) return Object.values(details).flatMap(flattenValues);
-  return flattenValues(details);
+  if (details != null) return flattenValues(details);
+
+  // Compatibility with GeoJSON that already exposes thematic values directly
+  // under the persisted field-path code.
+  return flattenValues(properties[fieldCode]);
 }
 
 /**

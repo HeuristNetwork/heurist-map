@@ -202,6 +202,9 @@ export class HeuristMapPublicApi {
   /** Set a runtime global opacity multiplier; accepts 0-1 or 0-100. */
   setLayerOpacity(layerId, opacity) { return this.application.setLayerOpacity(layerId, opacity); }
 
+  /** Activate one thematic map for a layer, or null for default symbology. */
+  setLayerTheme(layerId, themeIndex = null) { return this.application.setLayerTheme(layerId, themeIndex); }
+
   /** Return the current lightweight single-layer selection. */
   getSelection() { return this.application.getSelection(); }
 

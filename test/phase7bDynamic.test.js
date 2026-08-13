@@ -23,9 +23,9 @@ test('dynamic viewport is appended to JSON and plain Heurist queries without mut
     't:12 geo:"-16,32,40,72"'
   );
 
-  assert.deepEqual(
+  assert.equal(
     addViewportToQuery('[{"t":12}]', VIEW.bounds),
-    [{ t: 12 }, { geo: { west: -16, south: 32, east: 40, north: 72 } }]
+    '[{"t":12},{"geo":{"west":-16,"south":32,"east":40,"north":72}}]'
   );
 });
 
