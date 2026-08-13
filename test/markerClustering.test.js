@@ -38,5 +38,5 @@ test('Leaflet adapter enables clustering with chunked bulk loading', () => {
 
   assert.match(adapter, /L\.markerClusterGroup\(\{[\s\S]*chunkedLoading:\s*true/);
   assert.match(adapter, /clusterLayer\.addLayers\(geoJsonLayer\.getLayers\(\)\)/);
-  assert.match(adapter, /createPointLayerFactory\(symbol, \{ markerClustering \}\)/);
+  assert.match(adapter, /createPointLayerFactory\(resolveSymbol, \{ markerClustering \}\)/);
 });

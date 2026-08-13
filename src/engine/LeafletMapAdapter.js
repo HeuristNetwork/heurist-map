@@ -15,6 +15,7 @@ import { normalizeBounds as normalizeGeographicBounds } from '../utils/normalize
 import { MapEngineAdapter } from './MapEngineAdapter.js';
 import { createImageFilterCss } from '../utils/normalizeImageFilter.js';
 import { normalizeZoomLimit } from '../utils/normalizeZoomLimit.js';
+import { resolveFeatureSymbol } from '../thematic/thematicSymbolResolver.js';
 
 /**
  * Leaflet implementation hidden behind the engine-neutral adapter contract.
@@ -435,19 +436,9 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    * @returns {*} Method result.
    */
   addGeoJsonLayer(definition) {
-    const symbol = definition.style?.symbol ?? {};
-    const pathStyle = compactOptions({
-      color: symbol.color,
-      weight: symbol.weight,
-      opacity: symbol.opacity,
-      fillColor: symbol.fillColor,
-      fillOpacity: symbol.fillOpacity,
-      fill: symbol.fill,
-      stroke: symbol.stroke,
-      dashArray: symbol.dashArray
-    });
+    const resolveSymbol = (feature) => resolveFeatureSymbol(feature, definition.style);
     const markerClustering = definition.options?.markerClustering === true;
-    const pointToLayer = createPointLayerFactory(symbol, { markerClustering });
+    const pointToLayer = createPointLayerFactory(resolveSymbol, { markerClustering });
     const popupEnabled = definition.popup?.enabled !== false;
     const selectable = definition.selectable !== false;
     const featureLayers = new Map();
@@ -456,7 +447,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     const selectionBaseStyles = new WeakMap();
 
     const geoJsonLayer = L.geoJSON(definition.data, {
-      style: () => pathStyle,
+      style: (feature) => createPathStyle(resolveSymbol(feature)),
       pointToLayer,
       onEachFeature: (feature, nativeLayer) => {
         const metadata = getFeatureSelectionMetadata(feature);
@@ -673,41 +664,54 @@ function compactOptions(options) {
 }
 
 
-function createPointLayerFactory(symbol, { markerClustering = false } = {}) {
-  if ((symbol.iconType === 'icon' || symbol.iconType === 'marker') && symbol.iconUrl) {
-    const icon = L.icon(compactOptions({
-      iconUrl: symbol.iconUrl,
-      iconSize: symbol.iconSize,
-      iconAnchor: symbol.iconAnchor,
-      popupAnchor: symbol.popupAnchor
+function createPointLayerFactory(resolveSymbol, { markerClustering = false } = {}) {
+  return (feature, latlng) => {
+    const symbol = resolveSymbol(feature) || {};
+    if ((symbol.iconType === 'icon' || symbol.iconType === 'marker') && symbol.iconUrl) {
+      const icon = L.icon(compactOptions({
+        iconUrl: symbol.iconUrl,
+        iconSize: symbol.iconSize,
+        iconAnchor: symbol.iconAnchor,
+        popupAnchor: symbol.popupAnchor
+      }));
+      return L.marker(latlng, { icon });
+    }
+
+    if (symbol.iconType === 'iconfont') {
+      return L.marker(latlng, { icon: createIconFontIcon(symbol) });
+    }
+
+    // Leaflet.markercluster is designed for Marker instances. The normal
+    // renderer uses CircleMarker for default point symbols, so clustering uses
+    // a marker-backed divIcon that preserves the same circle appearance.
+    if (markerClustering) {
+      return L.marker(latlng, { icon: createClusterPointIcon(symbol) });
+    }
+
+    return L.circleMarker(latlng, compactOptions({
+      radius: symbol.radius,
+      color: symbol.color,
+      weight: symbol.weight,
+      opacity: symbol.opacity,
+      fillColor: symbol.fillColor,
+      fillOpacity: symbol.fillOpacity,
+      fill: symbol.fill,
+      stroke: symbol.stroke
     }));
-    return (_feature, latlng) => L.marker(latlng, { icon });
-  }
+  };
+}
 
-  if (symbol.iconType === 'iconfont') {
-    const icon = createIconFontIcon(symbol);
-    return (_feature, latlng) => L.marker(latlng, { icon });
-  }
-
-  // Leaflet.markercluster is designed for Marker instances. The normal
-  // renderer uses CircleMarker for default point symbols, so clustering uses
-  // a marker-backed divIcon that preserves the same circle appearance.
-  if (markerClustering) {
-    const icon = createClusterPointIcon(symbol);
-    return (_feature, latlng) => L.marker(latlng, { icon });
-  }
-
-  const options = compactOptions({
-    radius: symbol.radius,
+function createPathStyle(symbol = {}) {
+  return compactOptions({
     color: symbol.color,
     weight: symbol.weight,
     opacity: symbol.opacity,
     fillColor: symbol.fillColor,
     fillOpacity: symbol.fillOpacity,
     fill: symbol.fill,
-    stroke: symbol.stroke
+    stroke: symbol.stroke,
+    dashArray: symbol.dashArray
   });
-  return (_feature, latlng) => L.circleMarker(latlng, options);
 }
 
 function createMarkerClusterLayer(geoJsonLayer) {

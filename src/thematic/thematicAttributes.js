@@ -14,7 +14,7 @@ const GEO_FIELD_CODE = 'rec_GeoField';
 
 /** Return the single active thematic map from a normalized layer style. */
 export function getActiveThematicMap(style) {
-  if (!style || style.type !== 'thematic') return null;
+  if (!style) return null;
   const thematic = style.thematic;
   if (!thematic) return null;
 
