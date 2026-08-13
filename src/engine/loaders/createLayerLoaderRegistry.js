@@ -21,12 +21,12 @@ import { ImageLayerLoader } from './ImageLayerLoader.js';
  *
  * @returns {*} Function result.
  */
-export function createLayerLoaderRegistry({ queryGeoData, fetchImpl } = {}) {
+export function createLayerLoaderRegistry({ queryGeoData, thematicAttributes, fetchImpl } = {}) {
   const registry = new LayerLoaderRegistry();
   registry
     .register(
       ['heurist-query', 'record', 'inline-geojson'],
-      new GeoJsonLayerLoader({ queryGeoData })
+      new GeoJsonLayerLoader({ queryGeoData, thematicAttributes })
     )
     .register('remote-geojson', new RemoteGeoJsonLayerLoader({ fetchImpl }))
     .register(['tile', 'tiled-image', 'tiledImage'], new TileLayerLoader())

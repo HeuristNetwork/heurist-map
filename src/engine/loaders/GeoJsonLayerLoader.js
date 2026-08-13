@@ -11,6 +11,12 @@
  */
 
 import { normalizeGeoJson } from '../../utils/normalizeGeoJson.js';
+import {
+  applyThematicAttributes,
+  collectThematicRecordIds,
+  getActiveThematicMap,
+  getThematicFieldCodes
+} from '../../thematic/thematicAttributes.js';
 
 /**
  * Loads Heurist query, record, and inline GeoJSON MapLayers.
@@ -19,8 +25,9 @@ export class GeoJsonLayerLoader {
   /**
    * Create and initialize the class instance.
    */
-  constructor({ queryGeoData }) {
+  constructor({ queryGeoData, thematicAttributes = null }) {
     this.queryGeoData = queryGeoData;
+    this.thematicAttributes = thematicAttributes;
   }
 
   /**
@@ -54,7 +61,45 @@ export class GeoJsonLayerLoader {
         throw new Error(`Unsupported GeoJSON source type "${source.type}"`);
     }
 
-    return createGeoJsonRuntimeLayer(mapLayer, context, geoJson);
+    const id = context.reference.id ?? `map-layer-${context.reference.recordId}`;
+    const normalizedGeoJson = normalizeGeoJson(geoJson, {
+      layerId: id,
+      sourceType: mapLayer.source.type
+    });
+
+    if (source.type === 'heurist-query' || source.type === 'record') {
+      await this.enrichThematicAttributes(mapLayer, normalizedGeoJson, context);
+    }
+
+    return createGeoJsonRuntimeLayer(mapLayer, context, normalizedGeoJson, { normalized: true });
+  }
+
+  /** Load thematic attributes without making geometry loading depend on enrichment success. */
+  async enrichThematicAttributes(mapLayer, geoJson, context) {
+    const theme = getActiveThematicMap(mapLayer.style);
+    const fieldCodes = getThematicFieldCodes(theme);
+    const recordIds = collectThematicRecordIds(geoJson);
+    if (!theme || !fieldCodes.length || !recordIds.length || !this.thematicAttributes) return geoJson;
+
+    try {
+      const response = await this.thematicAttributes.load({
+        recordIds,
+        fieldCodes,
+        signal: context.signal
+      });
+      applyThematicAttributes(geoJson, response);
+    } catch (error) {
+      if (isAbortError(error) || context.signal?.aborted) throw error;
+      const message = `Thematic attributes could not be loaded for layer \"${mapLayer.title || context.reference.id}\"`;
+      console.warn(message, error);
+      context.application?.dispatch?.('heurist-map-warning', {
+        code: 'thematic-attributes-unavailable',
+        message,
+        layerId: context.reference.id ?? null,
+        error: serializeError(error)
+      });
+    }
+    return geoJson;
   }
 }
 
@@ -63,7 +108,7 @@ export class GeoJsonLayerLoader {
  *
  * @returns {*} Function result.
  */
-export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson) {
+export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson, { normalized = false } = {}) {
   const id = context.reference.id ?? `map-layer-${context.reference.recordId}`;
   return {
     id,
@@ -75,7 +120,9 @@ export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson) {
     visibilityMinZoom: mapLayer.options?.effectiveMinZoom ?? mapLayer.options?.minZoom,
     visibilityMaxZoom: mapLayer.options?.effectiveMaxZoom ?? mapLayer.options?.maxZoom,
     selectable: mapLayer.selectable !== false,
-    data: normalizeGeoJson(geoJson, { layerId: id, sourceType: mapLayer.source.type }),
+    data: normalized
+      ? geoJson
+      : normalizeGeoJson(geoJson, { layerId: id, sourceType: mapLayer.source.type }),
     resultMeta: normalizeResultMeta(geoJson?.meta),
     style: mapLayer.style,
     popup: normalizePopup(mapLayer.options?.popup, mapLayer.options?.popupTemplate),
@@ -112,6 +159,18 @@ function normalizeResultMeta(value) {
     offset: numberOrNull(value.offset) ?? 0,
     limit: numberOrNull(value.limit),
     isPartial: value.isPartial === true
+  };
+}
+
+
+function isAbortError(error) {
+  return error?.name === 'AbortError';
+}
+
+function serializeError(error) {
+  return {
+    name: error?.name || 'Error',
+    message: error?.message || String(error || 'Unknown error')
   };
 }
 

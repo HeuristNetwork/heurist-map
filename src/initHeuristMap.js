@@ -18,6 +18,7 @@ import { HeuristApiClient } from './data/HeuristApiClient.js';
 import { MapDocumentProvider } from './data/MapDocumentProvider.js';
 import { MapLayerProvider } from './data/MapLayerProvider.js';
 import { QueryGeoDataProvider } from './data/QueryGeoDataProvider.js';
+import { ThematicAttributeProvider } from './data/ThematicAttributeProvider.js';
 import { RecordTypeProvider } from './data/RecordTypeProvider.js';
 import { MapDocumentListProvider } from './data/MapDocumentListProvider.js';
 import { MapControlPanel } from './ui/MapControlPanel.js';
@@ -51,10 +52,12 @@ export async function initHeuristMap(config) {
     mapDocumentList: new MapDocumentListProvider({ apiClient, recordTypes }),
     mapDocument: new MapDocumentProvider({ apiClient }),
     mapLayer: new MapLayerProvider({ apiClient }),
-    queryGeoData: new QueryGeoDataProvider({ apiClient })
+    queryGeoData: new QueryGeoDataProvider({ apiClient }),
+    thematicAttributes: new ThematicAttributeProvider({ apiClient })
   };
   const layerLoaders = createLayerLoaderRegistry({
-    queryGeoData: providers.queryGeoData
+    queryGeoData: providers.queryGeoData,
+    thematicAttributes: providers.thematicAttributes
   });
 
   const application = new MapApplication({
