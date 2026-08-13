@@ -146,7 +146,7 @@ test('GeoJsonLayerLoader enriches a thematic query layer before creating the run
   });
 
   assert.deepEqual(attributeRequest.recordIds, [101, 102]);
-  assert.deepEqual(attributeRequest.fieldCodes, ['10:133', '10:lt240:48:237']);
+  assert.deepEqual(attributeRequest.fieldCodes, ['10:999', '10:133', '10:lt240:48:237']);
   assert.deepEqual(runtime.data.features[0].properties.thematic['10:133'], { '1': 'one' });
   assert.deepEqual(runtime.data.features[2].properties.thematic['10:133'], { '2': 'two' });
 });
@@ -208,4 +208,32 @@ test('simple and inline GeoJSON layers do not request thematic attributes', asyn
   });
 
   assert.equal(calls, 0);
+});
+
+test('all thematic field codes are collected so runtime theme switching needs no data reload', async () => {
+  const { getAllThematicFieldCodes } = await import('../src/thematic/thematicAttributes.js');
+  const style = {
+    thematic: [
+      { active: false, fields: [{ code: '12:133' }, { code: 'rec_GeoField' }] },
+      { active: true, fields: [{ code: '12:1160' }, { code: '12:133' }] }
+    ]
+  };
+  assert.deepEqual(getAllThematicFieldCodes(style), ['12:133', '12:1160']);
+});
+
+test('activateThematicMap selects one theme or restores default symbology', async () => {
+  const { activateThematicMap } = await import('../src/thematic/thematicAttributes.js');
+  const style = {
+    symbol: { color: '#123456' },
+    thematic: [
+      { title: 'One', active: true },
+      { title: 'Two', active: false }
+    ]
+  };
+  const second = activateThematicMap(style, 1);
+  assert.deepEqual(second.thematic.map((item) => item.active), [false, true]);
+  assert.deepEqual(style.thematic.map((item) => item.active), [true, false]);
+  const normal = activateThematicMap(second, null);
+  assert.deepEqual(normal.thematic.map((item) => item.active), [false, false]);
+  assert.throws(() => activateThematicMap(style, 5), RangeError);
 });

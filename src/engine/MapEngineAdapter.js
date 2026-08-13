@@ -75,6 +75,11 @@ export class MapEngineAdapter {
     throw new Error('MapEngineAdapter.setBaseMap() is not implemented');
   }
 
+  /** Replace the runtime style for one rendered layer without reloading source data. */
+  async setLayerStyle() {
+    throw new Error('MapEngineAdapter.setLayerStyle() is not implemented');
+  }
+
   /** Set a runtime global opacity multiplier for one rendered layer. */
   async setLayerOpacity() {
     throw new Error('MapEngineAdapter.setLayerOpacity() is not implemented');

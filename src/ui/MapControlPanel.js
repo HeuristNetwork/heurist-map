@@ -103,7 +103,7 @@ export class MapControlPanel {
       'heurist-map-document-activating', 'heurist-map-document-activated',
       'heurist-map-document-state-changed', 'heurist-map-document-unloaded',
       'heurist-map-layer-loaded', 'heurist-map-layer-visibility-changed',
-      'heurist-map-layer-state-changed',
+      'heurist-map-layer-state-changed', 'heurist-map-layer-style-changed',
       'heurist-map-basemap-changed', 'heurist-map-error'
     ]) this.bind(eventName, () => this.refresh());
 

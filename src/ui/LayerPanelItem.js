@@ -60,7 +60,47 @@ export class LayerPanelItem {
     }
 
     row.append(main, actions);
+    const thematicSelector = this.createThematicSelector();
+    if (thematicSelector) row.append(thematicSelector);
     return row;
+  }
+
+
+  createThematicSelector() {
+    const thematic = Array.isArray(this.layer?.style?.thematic) ? this.layer.style.thematic : [];
+    if (!thematic.length) return null;
+
+    const list = document.createElement('div');
+    list.className = 'heurist-map-layer-themes';
+    list.setAttribute('role', 'radiogroup');
+    list.setAttribute('aria-label', `Symbology for ${this.layer.title || this.layer.id}`);
+
+    const activeIndex = thematic.findIndex((theme) => theme?.active === true);
+    list.append(this.createThemeRadio('Default', null, activeIndex < 0));
+    thematic.forEach((theme, index) => {
+      list.append(this.createThemeRadio(theme?.title || `Theme ${index + 1}`, index, activeIndex === index));
+    });
+    return list;
+  }
+
+  createThemeRadio(labelText, themeIndex, checked) {
+    const label = document.createElement('label');
+    label.className = 'heurist-map-layer-theme-option';
+
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = `heurist-map-layer-theme-${this.layer.id}`;
+    radio.checked = checked;
+    radio.value = themeIndex == null ? 'default' : String(themeIndex);
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      Promise.resolve(this.api.setLayerTheme(this.layer.id, themeIndex)).catch(() => {});
+    });
+
+    const text = document.createElement('span');
+    text.textContent = labelText;
+    label.append(radio, text);
+    return label;
   }
 
   createStateControl() {

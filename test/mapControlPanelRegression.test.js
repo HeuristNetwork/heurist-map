@@ -55,3 +55,12 @@ test('MapControlPanel owns edit integration and hides edit actions when editing 
   assert.match(panelSource, /editLayer\(layerId\)[\s\S]*requestEditLayer\(layerId\)/);
   assert.match(layerItemSource, /this\.editingEnabled && typeof this\.onEditLayer === 'function'/);
 });
+
+test('layer panel renders thematic radio choices and switches themes through the public API', () => {
+  assert.match(layerItemSource, /heurist-map-layer-themes/);
+  assert.match(layerItemSource, /createThemeRadio\('Default', null/);
+  assert.match(layerItemSource, /theme\?\.title \|\| `Theme \$\{index \+ 1\}`/);
+  assert.match(layerItemSource, /this\.api\.setLayerTheme\(this\.layer\.id, themeIndex\)/);
+  assert.match(panelSource, /heurist-map-layer-style-changed/);
+  assert.match(cssSource, /\.heurist-map-layer-theme-option/);
+});

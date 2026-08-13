@@ -41,6 +41,46 @@ export function getThematicFieldCodes(theme) {
     .filter((code) => code && code !== GEO_FIELD_CODE))];
 }
 
+
+/** Return unique field-path codes required by all configured thematic maps. */
+export function getAllThematicFieldCodes(style) {
+  const thematic = Array.isArray(style?.thematic)
+    ? style.thematic
+    : Array.isArray(style?.thematic?.maps)
+      ? style.thematic.maps
+      : style?.thematic && Array.isArray(style.thematic.fields)
+        ? [style.thematic]
+        : [];
+
+  const codes = [];
+  const seen = new Set();
+  for (const theme of thematic) {
+    for (const code of getThematicFieldCodes(theme)) {
+      if (seen.has(code)) continue;
+      seen.add(code);
+      codes.push(code);
+    }
+  }
+  return codes;
+}
+
+/** Return a cloned style with exactly one thematic map active, or none for default symbology. */
+export function activateThematicMap(style, themeIndex = null) {
+  const source = style && typeof style === 'object' ? style : {};
+  const thematic = Array.isArray(source.thematic) ? source.thematic : [];
+  const selected = themeIndex == null ? null : Number(themeIndex);
+  if (selected != null && (!Number.isInteger(selected) || selected < 0 || selected >= thematic.length)) {
+    throw new RangeError(`Unknown thematic map index "${themeIndex}"`);
+  }
+  return {
+    ...source,
+    thematic: thematic.map((theme, index) => ({
+      ...theme,
+      active: selected != null && index === selected
+    }))
+  };
+}
+
 /** Return unique Heurist record IDs represented by a normalized GeoJSON collection. */
 export function collectThematicRecordIds(geoJson) {
   if (!geoJson || !Array.isArray(geoJson.features)) return [];

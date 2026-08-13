@@ -14,8 +14,7 @@ import { normalizeGeoJson } from '../../utils/normalizeGeoJson.js';
 import {
   applyThematicAttributes,
   collectThematicRecordIds,
-  getActiveThematicMap,
-  getThematicFieldCodes
+  getAllThematicFieldCodes
 } from '../../thematic/thematicAttributes.js';
 
 /**
@@ -76,10 +75,9 @@ export class GeoJsonLayerLoader {
 
   /** Load thematic attributes without making geometry loading depend on enrichment success. */
   async enrichThematicAttributes(mapLayer, geoJson, context) {
-    const theme = getActiveThematicMap(mapLayer.style);
-    const fieldCodes = getThematicFieldCodes(theme);
+    const fieldCodes = getAllThematicFieldCodes(mapLayer.style);
     const recordIds = collectThematicRecordIds(geoJson);
-    if (!theme || !fieldCodes.length || !recordIds.length || !this.thematicAttributes) return geoJson;
+    if (!fieldCodes.length || !recordIds.length || !this.thematicAttributes) return geoJson;
 
     try {
       const response = await this.thematicAttributes.load({

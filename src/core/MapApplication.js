@@ -14,6 +14,7 @@ import { normalizeMapDocument } from './MapDocument.js';
 import { normalizeMapLayer, reapplyMapLayerDefaults } from './MapLayer.js';
 import { createMapEnvironment } from './createMapEnvironment.js';
 import { normalizeMapConfigurationSettings } from '../ui/config/mapConfigurationSchema.js';
+import { activateThematicMap } from '../thematic/thematicAttributes.js';
 
 /**
  * Engine-neutral application controller.
@@ -454,6 +455,34 @@ export class MapApplication {
     if (!this.deferredLayers.has(layerId)) await this.mapEngine.setLayerOpacity(layerId, value);
     this.dispatch('heurist-map-layer-opacity-changed', { layerId, opacity: value, layer: this.getLayer(layerId) });
     return value;
+  }
+
+  /** Activate one thematic map for a layer, or use null for the ordinary/default symbology. */
+  async setLayerTheme(layerId, themeIndex = null) {
+    const layer = this.layers.get(layerId);
+    if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
+
+    const activeDocument = this.mapDocuments.get(this.activeMapDocumentId)
+      || this.mapDocuments.get(String(this.activeMapDocumentId));
+    const stored = activeDocument ? findStoredLayer(activeDocument, layerId) : null;
+    const sourceStyle = stored?.mapLayer?.style ?? layer.style ?? {};
+    const nextStyle = activateThematicMap(sourceStyle, themeIndex);
+
+    if (stored?.mapLayer) stored.mapLayer.style = clonePlain(nextStyle);
+    layer.style = clonePlain(nextStyle);
+    const deferred = this.deferredLayers.get(layerId);
+    if (deferred?.mapLayer) deferred.mapLayer.style = clonePlain(nextStyle);
+
+    if (layer.loadState === 'loaded' && !this.deferredLayers.has(layerId)) {
+      await this.mapEngine.setLayerStyle(layerId, nextStyle);
+    }
+
+    this.dispatch('heurist-map-layer-style-changed', {
+      layerId,
+      themeIndex: themeIndex == null ? null : Number(themeIndex),
+      layer: this.getLayer(layerId)
+    });
+    return this.getLayer(layerId);
   }
 
   /** Return the lightweight single-layer selection. */

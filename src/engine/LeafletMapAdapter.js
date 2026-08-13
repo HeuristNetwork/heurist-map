@@ -226,6 +226,24 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     return true;
   }
 
+  /** Replace layer style by redrawing the already-loaded runtime definition. */
+  async setLayerStyle(layerId, style) {
+    const entry = this.getLayerEntry(layerId);
+    const definition = {
+      ...entry.definition,
+      style: clonePlainValue(style),
+      visible: entry.visible
+    };
+    const opacity = entry.opacity;
+    const selectedFeatureIds = [...(entry.selectedFeatureIds || [])];
+
+    await this.removeLayer(layerId);
+    await this.addLayer(definition);
+    if (opacity !== 1) await this.setLayerOpacity(layerId, opacity);
+    if (selectedFeatureIds.length) await this.setFeatureSelection(layerId, selectedFeatureIds);
+    return true;
+  }
+
   /** Apply a global opacity multiplier without changing persisted symbology. */
   async setLayerOpacity(layerId, opacity) {
     const entry = this.getLayerEntry(layerId);
@@ -1005,4 +1023,11 @@ function applyChildOpacity(layer, multiplier, baseOpacity) {
 function finiteOpacity(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+function clonePlainValue(value) {
+  if (value == null) return value;
+  return typeof structuredClone === 'function'
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value));
 }
