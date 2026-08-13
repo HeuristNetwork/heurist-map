@@ -5,9 +5,11 @@
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
 export class LayerPanelItem {
-  constructor({ api, layer }) {
+  constructor({ api, layer, editingEnabled = false, onEditLayer = null }) {
     this.api = api;
     this.layer = layer;
+    this.editingEnabled = editingEnabled;
+    this.onEditLayer = onEditLayer;
     this.element = this.create();
   }
 
@@ -48,11 +50,13 @@ export class LayerPanelItem {
       zoomButton.classList.add('heurist-map-layer-zoom-action');
       actions.append(zoomButton);
       actions.append(createOpacityControl(this.api, this.layer, row));
-      actions.append(button(
-        'fa-solid fa-pencil',
-        'Edit layer (not implemented)',
-        () => this.api.requestEditLayer(this.layer.id)
-      ));
+      if (this.editingEnabled && typeof this.onEditLayer === 'function') {
+        actions.append(button(
+          'fa-solid fa-pencil',
+          'Edit layer',
+          () => this.onEditLayer(this.layer.id)
+        ));
+      }
     }
 
     row.append(main, actions);

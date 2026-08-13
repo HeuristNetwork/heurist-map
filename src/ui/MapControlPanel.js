@@ -126,6 +126,7 @@ export class MapControlPanel {
 
   refresh() {
     const activeId = this.api.getActiveMapDocument()?.id;
+    const editingEnabled = this.api.getCapabilities?.().editing === true;
     const allDocuments = this.api.getMapDocuments();
     const documentActivating = allDocuments.some((item) => item.activating === true || item.loadState === 'loading');
     const documents = allDocuments.filter((item) => {
@@ -137,11 +138,30 @@ export class MapControlPanel {
       if (this.options.showLayers === false) return null;
       const container = document.createElement('div');
       container.className = 'heurist-map-active-layers';
-      new LayerPanel({ api: this.api, container }).render(this.api.getLayers(), { loading: documentActivating });
+      new LayerPanel({
+        api: this.api,
+        container,
+        editingEnabled,
+        onEditLayer: (layerId) => this.editLayer(layerId)
+      }).render(this.api.getLayers(), { loading: documentActivating });
       return container;
+    }, {
+      editingEnabled,
+      onEditDocument: (documentId) => this.editMapDocument(documentId)
     });
     this.baseMapSelector?.render(this.api.getBaseMaps(), this.api.getActiveBaseMap()?.id);
     this.updateBaseMapsExpansion();
+  }
+
+
+  /** Request editing of a persisted MapDocument through the public map API. */
+  editMapDocument(documentId) {
+    return this.api.requestEditMapDocument(documentId);
+  }
+
+  /** Request editing of a persisted MapLayer through the public map API. */
+  editLayer(layerId) {
+    return this.api.requestEditLayer(layerId);
   }
 
   updateBaseMapsExpansion() {

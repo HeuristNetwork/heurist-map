@@ -10,13 +10,13 @@ export class MapDocumentSelector {
     this.container = container;
   }
 
-  render(documents, activeId, createActiveContent) {
+  render(documents, activeId, createActiveContent, { editingEnabled = false, onEditDocument = null } = {}) {
     this.container.replaceChildren();
     for (const item of documents) {
       const active = String(item.id) === String(activeId);
       const block = document.createElement('div');
       block.className = `heurist-map-document-block${active ? ' active' : ''}`;
-      block.append(createRow(item, active, this.api));
+      block.append(createRow(item, active, this.api, { editingEnabled, onEditDocument }));
       if (active && createActiveContent) {
         const content = createActiveContent(item);
         if (content) block.append(content);
@@ -27,7 +27,7 @@ export class MapDocumentSelector {
   }
 }
 
-function createRow(item, active, api) {
+function createRow(item, active, api, { editingEnabled = false, onEditDocument = null } = {}) {
   const row = document.createElement('div');
   row.className = 'heurist-map-document-row';
 
@@ -63,8 +63,8 @@ function createRow(item, active, api) {
   actions.className = 'heurist-map-row-actions';
   actions.append(iconButton('fa-solid fa-magnifying-glass-plus', 'Zoom to map document extent', () => api.zoomToMapDocument(item.id)));
   if (active) actions.append(iconButton('fa-solid fa-rotate', 'Reload map document', () => api.reloadMapDocument(item.id).catch(() => {})));
-  if (item.persistent !== false) {
-    actions.append(iconButton('fa-solid fa-pencil', 'Edit map document', () => api.requestEditMapDocument(item.id)));
+  if (editingEnabled && item.persistent !== false && typeof onEditDocument === 'function') {
+    actions.append(iconButton('fa-solid fa-pencil', 'Edit map document', () => onEditDocument(item.id)));
   }
   row.append(label, actions);
   return row;

@@ -695,6 +695,12 @@ export class MapApplication {
         signal: combinedSignal
       });
       const documentEntry = this.mapDocuments.get(Number(recordId));
+      // Keep the lightweight MapDocument list entry in sync with the authoritative
+      // record returned by the document endpoint. In particular, an edited title
+      // must be reflected by MapControlPanel after reload/refresh.
+      if (documentEntry && mapDocument.title != null) {
+        documentEntry.title = mapDocument.title;
+      }
       const runtimeDefinitions = (documentEntry?.layerDefinitions || [])
         .filter((item) => item.runtimeAdded === true);
 

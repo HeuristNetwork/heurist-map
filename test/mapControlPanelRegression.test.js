@@ -46,3 +46,12 @@ test('configuration dialog keeps Interface first and uses flat Default settings 
   assert.doesNotMatch(dialogSource, /legend\('Map defaults'\)|legend\('Layer defaults'\)/);
   assert.match(dialogSource, /heurist-map-config-inline-number/);
 });
+
+test('MapControlPanel owns edit integration and hides edit actions when editing is disabled', () => {
+  assert.match(panelSource, /editingEnabled = this\.api\.getCapabilities\?\.\(\)\.editing === true/);
+  assert.match(panelSource, /onEditDocument: \(documentId\) => this\.editMapDocument\(documentId\)/);
+  assert.match(panelSource, /onEditLayer: \(layerId\) => this\.editLayer\(layerId\)/);
+  assert.match(panelSource, /editMapDocument\(documentId\)[\s\S]*requestEditMapDocument\(documentId\)/);
+  assert.match(panelSource, /editLayer\(layerId\)[\s\S]*requestEditLayer\(layerId\)/);
+  assert.match(layerItemSource, /this\.editingEnabled && typeof this\.onEditLayer === 'function'/);
+});

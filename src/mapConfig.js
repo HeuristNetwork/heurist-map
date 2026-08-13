@@ -51,7 +51,7 @@ export function getHeuristMapConfig() {
     // Application mechanics are internal constants rather than bootstrap options.
     containerId: 'heurist-map',
     engine: 'leaflet',
-    readonly: true,
+    readonly: runtime.readonly === true,
 
     apiBaseUrl: runtime.apiBaseUrl || null,
     database: runtime.database || null,
