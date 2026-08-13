@@ -11,6 +11,7 @@
  */
 
 import { normalizeGeoJson } from '../../utils/normalizeGeoJson.js';
+import { detectGeometryTypes } from '../../utils/geometryTypes.js';
 import {
   applyThematicAttributes,
   collectThematicRecordIds,
@@ -122,6 +123,7 @@ export function createGeoJsonRuntimeLayer(mapLayer, context, geoJson, { normaliz
       ? geoJson
       : normalizeGeoJson(geoJson, { layerId: id, sourceType: mapLayer.source.type }),
     resultMeta: normalizeResultMeta(geoJson?.meta),
+    geometryTypes: detectGeometryTypes(geoJson),
     style: mapLayer.style,
     popup: normalizePopup(mapLayer.options?.popup, mapLayer.options?.popupTemplate),
     options: mapLayer.options,

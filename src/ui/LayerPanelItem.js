@@ -4,6 +4,8 @@
  * @project     Heurist mapping application
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
+import { createLayerLegend } from './legend/LegendRenderer.js';
+
 export class LayerPanelItem {
   constructor({ api, layer, editingEnabled = false, onEditLayer = null }) {
     this.api = api;
@@ -62,11 +64,14 @@ export class LayerPanelItem {
     row.append(main, actions);
     const thematicSelector = this.createThematicSelector();
     if (thematicSelector) row.append(thematicSelector);
+    const legend = createLayerLegend(this.layer);
+    if (legend) row.append(legend);
     return row;
   }
 
 
   createThematicSelector() {
+    if (this.layer?.loadState !== 'loaded') return null;
     const thematic = Array.isArray(this.layer?.style?.thematic) ? this.layer.style.thematic : [];
     if (!thematic.length) return null;
 

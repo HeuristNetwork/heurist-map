@@ -2022,6 +2022,7 @@ function createLayerState(definition) {
     selectable: definition.selectable !== false,
     featureCount: getFeatureCount(definition),
     resultMeta: clonePlain(definition.resultMeta ?? null),
+    geometryTypes: clonePlain(definition.geometryTypes ?? null),
     opacity: normalizeRuntimeOpacity(definition.opacity ?? 1),
     loadState: 'loading',
     error: null
