@@ -19,8 +19,21 @@ export class HeuristHostAdapter extends HostAdapter {
       : (...args) => globalThis.fetch(...args);
   }
 
+  supportsEditing() {
+    return typeof this.bridge?.editRecord === 'function';
+  }
+
   getCapabilities() {
     return { mapPreferences: true, mapPublishing: true };
+  }
+
+  async editRecord(recordId) {
+    const id = Number(recordId);
+    if (!(id > 0)) throw new Error('A valid Heurist record ID is required for editing');
+    if (!this.supportsEditing()) {
+      throw new Error('Record editing is not available from the Heurist host');
+    }
+    return this.bridge.editRecord(id);
   }
 
   async loadMapPreferences() {

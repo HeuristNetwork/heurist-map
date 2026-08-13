@@ -226,10 +226,10 @@ export class HeuristMapPublicApi {
   /** Zoom to the current selection. */
   zoomToSelection() { return this.application.zoomToSelection(); }
 
-  /** Dispatch an edit request without coupling the map to Heurist forms. */
+  /** Request host editing of a persisted MapDocument record. */
   requestEditMapDocument(documentId) { return this.application.requestEditMapDocument(documentId); }
 
-  /** Dispatch an edit request without coupling the map to Heurist forms. */
+  /** Request host editing of a persisted MapLayer record. */
   requestEditLayer(layerId) { return this.application.requestEditLayer(layerId); }
 
   /** Subscribe to public map lifecycle events. */

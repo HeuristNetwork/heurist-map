@@ -641,13 +641,39 @@ export class MapApplication {
     await this.clearSelection();
   }
 
-  requestEditMapDocument(documentId) {
-    this.dispatch('heurist-map-edit-document-requested', { documentId: Number(documentId) });
+  async requestEditMapDocument(documentId) {
+    const recordId = Number(documentId);
+    if (!(recordId > 0)) throw new Error('A persisted MapDocument record ID is required for editing');
+
+    if (!this.config.readonly && this.host.supportsEditing()) {
+      const result = await this.host.editRecord(recordId);
+      if (result?.saved === true) {
+        await this.reloadMapDocument(recordId);
+      }
+      return result ?? null;
+    }
+
+    // Keep the stable event as a fallback for custom hosts which integrate externally.
+    this.dispatch('heurist-map-edit-document-requested', { documentId: recordId, recordId });
+    return null;
   }
 
-  requestEditLayer(layerId) {
+  async requestEditLayer(layerId) {
     const layer = this.layers.get(layerId);
-    this.dispatch('heurist-map-edit-layer-requested', { layerId, recordId: layer?.recordId ?? null });
+    const recordId = Number(layer?.recordId);
+    if (!(recordId > 0)) throw new Error(`Layer "${layerId}" is not backed by a persisted MapLayer record`);
+
+    if (!this.config.readonly && this.host.supportsEditing()) {
+      const result = await this.host.editRecord(recordId);
+      if (result?.saved === true) {
+        await this.reloadLayer(layerId);
+      }
+      return result ?? null;
+    }
+
+    // Keep the stable event as a fallback for custom hosts which integrate externally.
+    this.dispatch('heurist-map-edit-layer-requested', { layerId, recordId });
+    return null;
   }
 
   /**

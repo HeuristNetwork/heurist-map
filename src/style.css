@@ -141,3 +141,8 @@ body {
 .heurist-map-layer-title-block{display:flex;flex-direction:column;min-width:0;overflow:hidden}
 .heurist-map-layer-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .heurist-map-layer-partial-warning{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;line-height:1.2;color:#9a5b00}
+
+.leaflet-attribution-flag{
+    visibility:hidden;
+    display:none !important;
+}

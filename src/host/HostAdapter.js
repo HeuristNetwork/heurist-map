@@ -28,6 +28,16 @@ export class HostAdapter {
     return false;
   }
 
+  /**
+   * Open the host record editor for an existing Heurist record.
+   * MapDocument and MapLayer editing intentionally share this generic record-level contract.
+   * @param {number} recordId Heurist record ID.
+   * @returns {Promise<{saved:boolean,recordId:number}|*>} Host edit result.
+   */
+  async editRecord(recordId) {
+    throw new Error(`Record editing is not supported by this host (${recordId})`);
+  }
+
   /** Return optional host capabilities. */
   getCapabilities() {
     return { mapPreferences: false, mapPublishing: false };

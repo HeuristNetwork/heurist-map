@@ -137,3 +137,20 @@ test('saving preferences updates the parent-owned bootstrap through the direct b
   await adapter.saveMapPreferences(settings);
   assert.deepEqual(updated, settings);
 });
+
+
+test('HeuristHostAdapter delegates record editing to the parent bridge', async () => {
+  const edited = [];
+  const adapter = new HeuristHostAdapter({
+    bridge: {
+      editRecord(recordId) {
+        edited.push(recordId);
+        return Promise.resolve({ saved: true, recordId });
+      }
+    }
+  });
+
+  assert.equal(adapter.supportsEditing(), true);
+  assert.deepEqual(await adapter.editRecord(77), { saved: true, recordId: 77 });
+  assert.deepEqual(edited, [77]);
+});
