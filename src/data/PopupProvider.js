@@ -45,10 +45,10 @@ export class PopupProvider {
     return url.toString();
   }
 
-  async load(recordId, { template = null, signal, feature = null } = {}) {
+  async load(recordId, { template = null, signal, properties = null } = {}) {
     const mode = normalizePopupMode(template);
     if (mode === 'none') return null;
-    if (mode === 'minimal') return buildMinimalPopup(feature, recordId);
+    if (mode === 'minimal') return buildMinimalPopup(properties);
 
     const url = this.buildUrl(recordId, mode);
     const response = await this.fetchImpl(url, {
@@ -83,29 +83,28 @@ export function normalizePopupMode(value) {
   return text;
 }
 
-export function buildMinimalPopup(feature = null, recordId = null) {
-  const info = feature && typeof feature === 'object' ? feature : {};
-  const heuristRecordId = positiveIntegerOrNull(info.recordId ?? recordId);
-  const title = firstNonEmpty(info.title, info.rec_Title);
+export function buildMinimalPopup(properties = null) {
+  const props = properties && typeof properties === 'object' ? properties : {};
 
-  if (heuristRecordId) {
-    const safeTitle = escapeHtml(title || `Record ${heuristRecordId}`);
-    return `<div class="heurist-map-popup-minimal"><div><strong>${safeTitle}</strong></div><div>ID: ${heuristRecordId}</div></div>`;
+  if (props.rec_ID !== null && props.rec_ID !== undefined
+      && String(props.rec_ID).trim() !== ''
+      && props.rec_Title !== null && props.rec_Title !== undefined
+      && String(props.rec_Title).trim() !== '') {
+    return `<div class="heurist-map-popup-minimal"><div><strong>${escapeHtml(props.rec_Title)}</strong></div><div>ID: ${escapeHtml(props.rec_ID)}</div></div>`;
   }
 
-  const id = firstNonEmpty(info.rec_ID, info.id, info.featureId, 'Feature');
-  const description = firstNonEmpty(info.rec_Title, info.description, info.desc, info.title, info.name);
-  const descriptionHtml = `<div>ID: ${escapeHtml(id)}</div>` + (description && description !== id
-    ? `<div>${escapeHtml(description)}</div>`
-    : '');
-  const propertiesHtml = buildPropertiesHtml(info.properties);
-
-  return `<div class="heurist-map-popup-minimal">${propertiesHtml?propertiesHtml:descriptionHtml}</div>`;
+  const propertiesHtml = buildPropertiesHtml(props);
+  return `<div class="heurist-map-popup-minimal">${propertiesHtml}</div>`;
 }
 
 function buildPropertiesHtml(properties) {
   if (!properties || typeof properties !== 'object') return '';
-  const rows = Object.entries(properties).slice(0, 10);
+  const rows = [];
+  for (const [key, value] of Object.entries(properties)) {
+    if (key === 'heurist' || key === 'thematic') continue;
+    rows.push([key, value]);
+    if (rows.length >= 10) break;
+  }
   if (!rows.length) return '';
   const html = rows.map(([key, value]) =>
     `<div class="heurist-map-popup-property"><strong>${escapeHtml(key)}</strong> ${escapeHtml(formatPropertyValue(value))}</div>`
@@ -124,17 +123,6 @@ function formatPropertyValue(value) {
   }
 }
 
-function positiveIntegerOrNull(value) {
-  const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? number : null;
-}
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    if (value !== null && value !== undefined && String(value).trim()) return String(value).trim();
-  }
-  return '';
-}
 
 function escapeHtml(value) {
   return String(value)

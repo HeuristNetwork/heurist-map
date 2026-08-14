@@ -72,7 +72,7 @@ PublishedMapDialog                      (shown after HostAdapter.publishMap();
 
 ### Host layer
 
-`HostAdapter` defines the contract for preferences and publishing outside the public map API. `StandaloneHostAdapter` is a no-op implementation used when no Heurist root URL is configured. `HeuristHostAdapter` calls the main Heurist `FrontController` (`UserController.get_prefs`/`save_prefs`, `MapController.save`/`get`/`delete`) for persisted map preferences and published-map links; it is selected by `createHostAdapter()` whenever `heuristMapBootstrap.runtime.baseUrl` is present. `PublishedMapDialog` is a standalone UI shown by the caller after a successful `HostAdapter.publishMap()`; it is not owned by `MapApplication`.
+`HostAdapter` defines the contract for preferences and publishing outside the public map API. `StandaloneHostAdapter` is a no-op implementation used when no Heurist root URL is configured. `HeuristHostAdapter` calls the main Heurist `FrontController` (`UserController.get_prefs`/`save_prefs`, `MapPublishedController.save`/`get`/`delete`) for persisted map preferences and published-map links; it is selected by `createHostAdapter()` whenever `heuristMapBootstrap.runtime.baseUrl` is present. `PublishedMapDialog` is a standalone UI shown by the caller after a successful `HostAdapter.publishMap()`; it is not owned by `MapApplication`.
 
 ### Configuration-editor layer
 

@@ -5,7 +5,7 @@
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
 
-/** Show the public URL returned by MapController after a successful publish. */
+/** Show the public URL returned by MapPublishedController after a successful publish. */
 export class PublishedMapDialog {
   constructor({ publication = {}, parent = null } = {}) {
     this.publication = publication || {};

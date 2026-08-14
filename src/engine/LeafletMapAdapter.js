@@ -510,7 +510,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
             selectable,
             additive: Boolean(event.originalEvent?.ctrlKey || event.originalEvent?.metaKey || event.originalEvent?.shiftKey),
             latlng: toPublicLatLng(event.latlng),
-            popupFeature: metadata.popupFeature
+            popupProperties: metadata.popupProperties
           });
         });
       }
@@ -931,28 +931,8 @@ function getFeatureSelectionMetadata(feature) {
   return {
     featureId,
     recordId,
-    popupFeature: {
-      featureId,
-      id: properties.id ?? feature?.id ?? featureId,
-      recordId,
-      title: metadata.title ?? properties.rec_Title ?? properties.title ?? properties.name ?? '',
-      description: properties.description ?? properties.desc ?? properties.Description ?? properties.DESCRIPTION ?? '',
-      properties: getPopupProperties(properties)
-    }
+    popupProperties: properties
   };
-}
-
-
-function getPopupProperties(properties) {
-  const result = {};
-  let count = 0;
-  for (const [key, value] of Object.entries(properties || {})) {
-    if (key === 'heurist' || key === 'thematic') continue;
-    result[key] = value;
-    count += 1;
-    if (count >= 10) break;
-  }
-  return result;
 }
 
 function toPublicLatLng(latlng) {

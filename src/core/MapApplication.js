@@ -686,7 +686,7 @@ export class MapApplication {
       if (popupMode !== 'minimal' && !popupProvider.isConfigured?.()) return;
       const html = await popupProvider.load(heuristBackedPopup ? payload.recordId : null, {
         template: popupMode,
-        feature: detail.popupFeature || null
+        properties: detail.popupProperties || null
       });
       if (html) await this.mapEngine.openFeaturePopup?.(detail.layerId, payload.featureId, html);
     } catch (error) {

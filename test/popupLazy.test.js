@@ -102,7 +102,7 @@ test('PopupProvider supports none, minimal, standard and named-template modes', 
 
   const minimal = await provider.load(7, {
     template: 'minimal',
-    feature: { recordId: 7, title: 'Record seven' }
+    properties: { rec_ID: 7, rec_Title: 'Record seven' }
   });
   assert.match(minimal, /Record seven/);
   assert.match(minimal, /ID: 7/);
@@ -120,10 +120,10 @@ test('minimal popup supports non-Heurist file features without a record ID', asy
   const provider = new PopupProvider({});
   const html = await provider.load(null, {
     template: 'minimal',
-    feature: { featureId: 'road-4', id: 'road-4', description: 'Main road' }
+    properties: { id: 'road-4', description: 'Main road' }
   });
-  assert.match(html, /ID: road-4/);
-  assert.match(html, /Main road/);
+  assert.match(html, /<strong>id<\/strong> road-4/);
+  assert.match(html, /<strong>description<\/strong> Main road/);
 });
 
 test('none suppresses popup and minimal can open for an external feature', async () => {
@@ -147,7 +147,7 @@ test('none suppresses popup and minimal can open for an external feature', async
 
   const detail = {
     layerId: 'L1', featureId: 'f1', recordId: null, selectable: true,
-    popupFeature: { featureId: 'f1', id: 'feature-1', description: 'External feature' }
+    popupProperties: { id: 'feature-1', description: 'External feature' }
   };
   await application.handleFeatureClick(detail);
   assert.equal(opened.length, 0);
@@ -188,21 +188,21 @@ test('external vector layers force standard and named template modes to minimal'
 
   const detail = {
     layerId: 'L1', featureId: '17', recordId: 17, selectable: true,
-    popupFeature: { featureId: '17', id: '17', description: 'DBF feature' }
+    popupProperties: { rec_ID: 'shp-17', NAME: 'DBF feature' }
   };
 
   await application.handleFeatureClick(detail);
   assert.equal(requests, 0);
   assert.equal(opened.length, 1);
-  assert.match(opened[0], /ID: 17/);
-  assert.match(opened[0], /DBF feature/);
+  assert.match(opened[0], /<strong>rec_ID<\/strong> shp-17/);
+  assert.match(opened[0], /<strong>NAME<\/strong> DBF feature/);
 
   opened.length = 0;
   application.layers.get('L1').popup.template = 'My template.tpl';
   await application.handleFeatureClick(detail);
   assert.equal(requests, 0);
   assert.equal(opened.length, 1);
-  assert.match(opened[0], /ID: 17/);
+  assert.match(opened[0], /<strong>rec_ID<\/strong> shp-17/);
 });
 
 test('minimal popup renders first 10 external feature properties', async () => {
@@ -222,7 +222,7 @@ test('minimal popup renders first 10 external feature properties', async () => {
   };
   const html = await provider.load(null, {
     template: 'minimal',
-    feature: { featureId: 'vt', id: 'vt', properties }
+    properties
   });
   assert.match(html, /<strong>ISO_3166_3<\/strong> USA/);
   assert.match(html, /<strong>OFFICIAL_C<\/strong> \[&#39;50&#39;\]/);
@@ -230,4 +230,31 @@ test('minimal popup renders first 10 external feature properties', async () => {
   assert.match(html, /\[&quot;x&quot;,&quot;y&quot;\]/);
   assert.match(html, /\{&quot;value&quot;:4\}/);
   assert.doesNotMatch(html, /OMITTED/);
+});
+
+
+test('minimal popup prioritizes rec_ID and rec_Title over generic property table', async () => {
+  const provider = new PopupProvider({});
+  const html = await provider.load(null, {
+    template: 'minimal',
+    properties: { rec_ID: '123', rec_Title: 'Mapped place', OTHER: 'ignored in compact view' }
+  });
+  assert.match(html, /<strong>Mapped place<\/strong>/);
+  assert.match(html, /ID: 123/);
+  assert.doesNotMatch(html, /OTHER/);
+});
+
+test('minimal popup ignores runtime heurist and thematic metadata in generic properties', async () => {
+  const provider = new PopupProvider({});
+  const html = await provider.load(null, {
+    template: 'minimal',
+    properties: {
+      heurist: { featureId: 'x' },
+      thematic: { '10:1': { 1: 'x' } },
+      NAME: 'Visible field'
+    }
+  });
+  assert.doesNotMatch(html, /<strong>heurist<\/strong>/);
+  assert.doesNotMatch(html, /<strong>thematic<\/strong>/);
+  assert.match(html, /<strong>NAME<\/strong> Visible field/);
 });
