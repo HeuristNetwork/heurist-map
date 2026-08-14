@@ -906,9 +906,9 @@ function createIconFontIcon(symbol) {
   }
 
   const fontSize = Math.min(width, height);
-  const color = escapeHtml(symbol.color || '#000000');
+  const color = (symbol.color || '#000000'); //escapeHtml
   const backgroundStyle = symbol.fill && symbol.fillColor
-    ? `background-color:${escapeHtml(symbol.fillColor)};`
+    ? `background-color:${symbol.fillColor};` 
     : 'background:none;';
 
   return L.divIcon({
@@ -936,9 +936,23 @@ function getFeatureSelectionMetadata(feature) {
       id: properties.id ?? feature?.id ?? featureId,
       recordId,
       title: metadata.title ?? properties.rec_Title ?? properties.title ?? properties.name ?? '',
-      description: properties.description ?? properties.desc ?? properties.Description ?? properties.DESCRIPTION ?? ''
+      description: properties.description ?? properties.desc ?? properties.Description ?? properties.DESCRIPTION ?? '',
+      properties: getPopupProperties(properties)
     }
   };
+}
+
+
+function getPopupProperties(properties) {
+  const result = {};
+  let count = 0;
+  for (const [key, value] of Object.entries(properties || {})) {
+    if (key === 'heurist' || key === 'thematic') continue;
+    result[key] = value;
+    count += 1;
+    if (count >= 10) break;
+  }
+  return result;
 }
 
 function toPublicLatLng(latlng) {

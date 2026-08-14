@@ -93,12 +93,35 @@ export function buildMinimalPopup(feature = null, recordId = null) {
     return `<div class="heurist-map-popup-minimal"><div><strong>${safeTitle}</strong></div><div>ID: ${heuristRecordId}</div></div>`;
   }
 
-  const id = firstNonEmpty(info.id, info.featureId, 'Feature');
-  const description = firstNonEmpty(info.description, info.desc, info.title, info.name);
-  const descriptionHtml = description && description !== id
+  const id = firstNonEmpty(info.rec_ID, info.id, info.featureId, 'Feature');
+  const description = firstNonEmpty(info.rec_Title, info.description, info.desc, info.title, info.name);
+  const descriptionHtml = `<div>ID: ${escapeHtml(id)}</div>` + (description && description !== id
     ? `<div>${escapeHtml(description)}</div>`
-    : '';
-  return `<div class="heurist-map-popup-minimal"><div>ID: ${escapeHtml(id)}</div>${descriptionHtml}</div>`;
+    : '');
+  const propertiesHtml = buildPropertiesHtml(info.properties);
+
+  return `<div class="heurist-map-popup-minimal">${propertiesHtml?propertiesHtml:descriptionHtml}</div>`;
+}
+
+function buildPropertiesHtml(properties) {
+  if (!properties || typeof properties !== 'object') return '';
+  const rows = Object.entries(properties).slice(0, 10);
+  if (!rows.length) return '';
+  const html = rows.map(([key, value]) =>
+    `<div class="heurist-map-popup-property"><strong>${escapeHtml(key)}</strong> ${escapeHtml(formatPropertyValue(value))}</div>`
+  ).join('');
+  return `<div class="heurist-map-popup-properties">${html}</div>`;
+}
+
+function formatPropertyValue(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
 
 function positiveIntegerOrNull(value) {

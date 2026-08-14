@@ -204,3 +204,30 @@ test('external vector layers force standard and named template modes to minimal'
   assert.equal(opened.length, 1);
   assert.match(opened[0], /ID: 17/);
 });
+
+test('minimal popup renders first 10 external feature properties', async () => {
+  const provider = new PopupProvider({});
+  const properties = {
+    ISO_3166_3: 'USA',
+    OFFICIAL_C: "['50']",
+    OFFICIAL_N: "['Vermont']",
+    TYPE: 'state',
+    YEAR: '2023',
+    A: 1,
+    B: true,
+    C: ['x', 'y'],
+    D: { value: 4 },
+    E: null,
+    OMITTED: 'eleventh'
+  };
+  const html = await provider.load(null, {
+    template: 'minimal',
+    feature: { featureId: 'vt', id: 'vt', properties }
+  });
+  assert.match(html, /<strong>ISO_3166_3<\/strong> USA/);
+  assert.match(html, /<strong>OFFICIAL_C<\/strong> \[&#39;50&#39;\]/);
+  assert.match(html, /<strong>YEAR<\/strong> 2023/);
+  assert.match(html, /\[&quot;x&quot;,&quot;y&quot;\]/);
+  assert.match(html, /\{&quot;value&quot;:4\}/);
+  assert.doesNotMatch(html, /OMITTED/);
+});
