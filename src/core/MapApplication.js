@@ -45,7 +45,9 @@ export class MapApplication {
     this.activeMapDocumentId = null;
     this.controlPanel = null;
     this.baseMaps = new Map((config.baseMaps || []).map((item) => [String(item.id), clonePlain(item)]));
-    this.activeBaseMapId = config.mapDocument?.worldBaseMap?.code || config.baseMaps?.[0]?.id || null;
+    const initialBaseMap = findBaseMapByName(this.baseMaps, config.mapDocument?.worldBaseMap?.label)
+      || this.baseMaps.get(String(this.defaultBaseMapId));
+    this.activeBaseMapId = initialBaseMap?.id ?? null;
     this.selectionLayerId = null;
     this.selectedFeatures = new Map();
     this.runtimeLayerSerial = 0;
@@ -65,6 +67,9 @@ export class MapApplication {
       ? createDynamicMapDocument(this.config, this.getDynamicDocumentEntry())
       : config.mapDocument;
     this.mapEnvironment = createMapEnvironment(initialDocument, config.defaults);
+    this.mapEnvironment.baseMap = findBaseMapByName(this.baseMaps, initialDocument?.worldBaseMap?.label)
+      || this.baseMaps.get(String(this.defaultBaseMapId))
+      || null;
   }
 
   /** Create the predefined non-persistent MapDocument entry. */
@@ -420,12 +425,10 @@ export class MapApplication {
   }
 
   async applyDocumentBaseMap(document) {
-    const code = document?.worldBaseMap?.code;
-    if (String(code) === 'None' && this.baseMaps.has('None')) return this.setBaseMap('None');
-    if (code && this.baseMaps.has(String(code))) return this.setBaseMap(code);
-    // Missing MapDocument basemap is not the same as `None`: use the configured
-    // initial/first allowed basemap.
-    return this.restoreDefaultBaseMap();
+    // MapPresentationService returns worldBaseMap as a Heurist term descriptor.
+    // The term id/code are not basemap identifiers; the reliable value is label.
+    const baseMap = findBaseMapByName(this.baseMaps, document?.worldBaseMap?.label);
+    return baseMap ? this.setBaseMap(baseMap.id) : this.restoreDefaultBaseMap();
   }
 
   async restoreDefaultBaseMap() {
@@ -1587,25 +1590,38 @@ export class MapApplication {
       }
     }
 
-    if (state.activeThemes && typeof state.activeThemes === 'object') {
-      for (const [layerId, themeIndex] of Object.entries(state.activeThemes)) {
-        if (!this.layers.has(layerId)) continue;
-        const index = Number(themeIndex);
-        await this.setLayerTheme(layerId, Number.isInteger(index) && index >= 0 ? index : null);
-      }
-    }
-
-    if (state.layerOpacities && typeof state.layerOpacities === 'object') {
-      for (const [layerId, opacity] of Object.entries(state.layerOpacities)) {
-        if (!this.layers.has(layerId)) continue;
-        await this.setLayerOpacity(layerId, opacity);
-      }
-    }
-
+    // Restore visibility first. Making a deferred layer visible can load/recreate it
+    // from the MapDocument definition, which also reapplies its stored theme/opacity.
+    // Published live style state therefore has to be restored after visibility.
     if (Array.isArray(state.visibleLayerIds)) {
       const visible = new Set(state.visibleLayerIds.map(String));
       for (const layer of this.getLayers()) {
         await this.setLayerVisibility(layer.id, visible.has(String(layer.id)));
+      }
+    }
+
+    if (state.activeThemes && typeof state.activeThemes === 'object') {
+      for (const [layerId, themeIndex] of Object.entries(state.activeThemes)) {
+        // Object.entries() always yields string keys, while runtime MapLayer ids may
+        // be numeric. Resolve the stored id back to the actual key used by layers.
+        const runtimeLayerId = this.findRuntimeLayerKey(layerId);
+        if (!this.layers.has(runtimeLayerId)) continue;
+        const index = Number(themeIndex);
+        // -1/null explicitly means ordinary/default symbology and must clear any
+        // thematic map marked active by the MapDocument source.
+        await this.setLayerTheme(runtimeLayerId, Number.isInteger(index) && index >= 0 ? index : null);
+      }
+    }
+
+    // Opacity is deliberately last among layer-state restoration: style/theme and
+    // deferred layer loading may recreate native layers with their source opacity.
+    if (state.layerOpacities && typeof state.layerOpacities === 'object') {
+      for (const [layerId, opacity] of Object.entries(state.layerOpacities)) {
+        // See activeThemes above: published object keys are strings even when the
+        // corresponding runtime layer is keyed by a numeric record id.
+        const runtimeLayerId = this.findRuntimeLayerKey(layerId);
+        if (!this.layers.has(runtimeLayerId)) continue;
+        await this.setLayerOpacity(runtimeLayerId, opacity);
       }
     }
 
@@ -2058,6 +2074,19 @@ function isPreparedRuntimeLayer(definition) {
 function createPublicDocumentEntry(entry) {
   const { layerDefinitions, ...publicEntry } = entry || {};
   return clonePlain(publicEntry);
+}
+
+function findBaseMapByName(baseMaps, name) {
+  const requestedName = String(name || '').trim();
+  if (!requestedName) return null;
+
+  for (const baseMap of baseMaps.values()) {
+    if (String(baseMap.title || '').trim() === requestedName
+      || String(baseMap.id || '').trim() === requestedName) {
+      return baseMap;
+    }
+  }
+  return null;
 }
 
 function createDynamicMapDocument(config, entry) {
