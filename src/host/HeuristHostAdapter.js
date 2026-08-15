@@ -37,8 +37,23 @@ export class HeuristHostAdapter extends HostAdapter {
   }
 
   async loadMapPreferences() {
-    const response = await this.request('UserController', 'get_prefs', { key: 'heurist-map' });
-    return response ?? null;
+    let response = await this.request('UserController', 'get_prefs', { key: 'heurist-map' });
+
+    // UserController may return the preference exactly as stored, i.e. as a
+    // JSON string. Keep the host boundary responsible for converting that
+    // transport representation into the settings object expected by the
+    // configuration dialog.
+    if (typeof response === 'string' && response) {
+      try {
+        response = JSON.parse(response);
+      } catch {
+        return null;
+      }
+    }
+
+    return response && typeof response === 'object' && !Array.isArray(response)
+      ? response
+      : null;
   }
 
   async saveMapPreferences(settings) {

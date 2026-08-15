@@ -64,3 +64,19 @@ test('layer panel renders thematic radio choices and switches themes through the
   assert.match(panelSource, /heurist-map-layer-style-changed/);
   assert.match(cssSource, /\.heurist-map-layer-theme-option/);
 });
+
+
+test('Base maps control is omitted when None is the only configured basemap', () => {
+  assert.match(panelSource, /hasSelectableBaseMaps = this\.options\.showBaseMaps !== false/);
+  assert.match(panelSource, /configuredBaseMaps\.some\(\(item\) => String\(item\?\.id\) !== 'None'\)/);
+  assert.match(panelSource, /if \(hasSelectableBaseMaps\)/);
+});
+
+test('configuration transfer lists keep None and use first-selected basemap fallback', async () => {
+  const dialogSource = await readFile(new URL('../src/ui/config/MapConfigurationDialog.js', import.meta.url), 'utf8');
+  assert.match(dialogSource, /fixedSelectedValues: \['None'\]/);
+  assert.match(dialogSource, /fixedSelectedValues: new Set/);
+  assert.match(dialogSource, /option\.disabled = true/);
+  assert.doesNotMatch(dialogSource, /First selected/);
+  assert.match(dialogSource, /choices\[0\]\?\.\[0\] \?\? ''/);
+});

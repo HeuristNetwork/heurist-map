@@ -29,7 +29,7 @@ export class MapDocumentListProvider {
 }
 
 function normalizeDocumentQuery(query, recordTypeId) {
-  if (query == null || query === '') return { q: `t:${recordTypeId}` };
+  if (query == null || query === '') return { q: { t: recordTypeId } };
   if (Array.isArray(query)) return { ids: query.join(',') };
   if (typeof query === 'number') return { ids: String(query) };
   if (typeof query === 'string') {

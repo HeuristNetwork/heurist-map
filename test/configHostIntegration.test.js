@@ -49,6 +49,29 @@ test('configuration-only API exposes schema operations without MapApplication', 
 });
 
 
+
+test('Heurist host adapter parses persisted map preference JSON strings', async () => {
+  const stored = {
+    format: 'heurist-map-settings',
+    version: 1,
+    options: {
+      ui: { enabled: false, showBaseMaps: false },
+      nativeControls: { zoom: false, search: true }
+    },
+    config: {}
+  };
+  const host = new HeuristHostAdapter({
+    baseUrl: 'http://example.test/heurist/',
+    database: 'demo',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ status: 0, data: JSON.stringify(stored) })
+    })
+  });
+
+  assert.deepEqual(await host.loadMapPreferences(), stored);
+});
+
 test('default host fetch keeps Window/global receiver and avoids illegal invocation', async () => {
   const originalFetch = globalThis.fetch;
   let receiver = null;

@@ -14,18 +14,7 @@
 
 import { normalizeMapDocument } from './core/MapDocument.js';
 import { normalizeMapConfigurationSettings } from './ui/config/mapConfigurationSchema.js';
-
-const BUILT_IN_BASE_MAPS = Object.freeze([
-  Object.freeze({
-    id: 'OpenStreetMap',
-    title: 'OpenStreetMap',
-    type: 'tile',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19
-  }),
-  Object.freeze({ id: 'None', title: 'None', type: 'none' })
-]);
+import { getDefaultBaseMaps } from './basemaps/defaultBasemaps.js';
 
 /**
  * Return normalized application configuration from the single bootstrap object.
@@ -57,6 +46,7 @@ export function getHeuristMapConfig() {
     database: runtime.database || null,
     accessToken: runtime.accessToken || null,
     requestHeaders: runtime.requestHeaders || {},
+    baseMapProviderOptions: runtime.baseMapProviderOptions || {},
     host: buildHostConfiguration(runtime, bridge),
 
     persistedSettings: settings,
@@ -90,12 +80,10 @@ export function getHeuristMapConfig() {
     // global default even though it affects the map engine rather than layers.
     baseMaps: normalizeBaseMaps(settings.options.baseMaps, preventContinuousWorldBasemap),
     interaction: settings.options.interaction,
+    nativeControls: settings.options.nativeControls,
     ui: {
       ...settings.options.ui,
       // Internal Map Control defaults that are not persisted configuration.
-      showOptions: true,
-      showScaleControl: true,
-      showHomeControl: true,
       baseMapsInitiallyExpanded: true,
       maxHeight: '70vh'
     },
@@ -124,14 +112,25 @@ function getHostBridge() {
 function getStandaloneBootstrap() {
   const bootstrap = globalThis.heuristMapBootstrap;
   if (bootstrap && typeof bootstrap === 'object') {
+    // Preferred bootstrap shape is {runtime, settings, state}. Published pages
+    // historically also supplied the publish payload flattened as
+    // {runtime, options, config, state}; accept both so publish options (notably
+    // native controls and initial basemap) are never replaced by defaults.
+    let settings = bootstrap.settings && typeof bootstrap.settings === 'object'
+      ? bootstrap.settings
+      : null;
+    if (!settings && (bootstrap.options || bootstrap.config)) {
+      settings = {
+        options: bootstrap.options || {},
+        config: bootstrap.config || {}
+      };
+    }
     return {
       runtime: bootstrap.runtime && typeof bootstrap.runtime === 'object'
         ? bootstrap.runtime
         : {},
-      settings: bootstrap.settings && typeof bootstrap.settings === 'object'
-        ? bootstrap.settings
-        : null,
-      state: bootstrap.state ?? null
+      settings,
+      state: bootstrap.state ?? settings?.state ?? null
     };
   }
 
@@ -157,10 +156,14 @@ function parseDocumentQuery(value) {
 }
 
 function normalizeBaseMaps(settings = {}, preventContinuousWorldBasemap = false) {
-  let result = BUILT_IN_BASE_MAPS.map((item) => ({ ...item }));
+  const defaults = getDefaultBaseMaps();
+  const defaultById = new Map(defaults.map((item) => [String(item.id), item]));
+  let result = defaults;
   if (Array.isArray(settings.allowed)) {
-    const allowed = new Set(settings.allowed.map(String));
-    result = result.filter((item) => allowed.has(String(item.id)));
+    result = settings.allowed.map((id) => {
+      const key = String(id);
+      return defaultById.get(key) || { id: key, title: key, type: key === 'None' ? 'none' : 'tile', provider: key };
+    });
   }
   if (preventContinuousWorldBasemap) {
     result = result.map((item) => item.type === 'tile' ? { ...item, noWrap: true } : item);

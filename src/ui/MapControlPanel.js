@@ -30,18 +30,25 @@ export class MapControlPanel {
     const header = document.createElement('div');
     header.className = 'heurist-map-panel-header';
     const hasDocumentControls = this.options.showCurrentDocument !== false || this.options.showMapDocuments !== false;
-    const hasPanelSections = hasDocumentControls || this.options.showBaseMaps !== false;
+    const configuredBaseMaps = this.api.getBaseMaps?.() || [];
+    const hasSelectableBaseMaps = this.options.showBaseMaps !== false
+      && configuredBaseMaps.some((item) => String(item?.id) !== 'None');
+    const hasPanelSections = hasDocumentControls || hasSelectableBaseMaps;
     if (!hasPanelSections) {
       this.element.classList.add('controls-only');
     } else {
-      const toggle = iconButton('fa-solid fa-layer-group', 'Show or hide map controls', () => {
+      let toggle;
+      const togglePanel = () => {
         this.element.classList.toggle('collapsed');
-        toggle.setAttribute('aria-expanded', String(!this.element.classList.contains('collapsed')));
-      });
+        toggle?.setAttribute('aria-expanded', String(!this.element.classList.contains('collapsed')));
+      };
+      toggle = iconButton('fa-solid fa-layer-group', 'Show or hide map controls', togglePanel);
       toggle.classList.add('heurist-map-panel-toggle');
       toggle.setAttribute('aria-expanded', String(this.options.initiallyExpanded !== false));
       const title = document.createElement('strong');
       title.textContent = 'Map controls';
+      title.title = 'Show or hide map controls';
+      title.addEventListener('click', togglePanel);
       header.append(toggle, title);
     }
     if (this.options.showHomeControl !== false) {
@@ -66,7 +73,7 @@ export class MapControlPanel {
       body.append(this.documentsContainer);
     }
 
-    if (this.options.showBaseMaps !== false) {
+    if (hasSelectableBaseMaps) {
       const baseSection = document.createElement('section');
       baseSection.className = 'heurist-map-basemap-section';
       this.baseMapsToggle = document.createElement('button');

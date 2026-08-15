@@ -57,9 +57,11 @@ export function normalizeMapDocument(value = {}) {
     zoomToPointInKM: finiteNumberOrNull(
       source.zoomToPointInKM ?? source.zoomToPointKm ?? source.DT_ZOOM_KM_POINT
     ),
+    // No MapDocument basemap means: use the configured initial/default basemap.
+    // An explicit `None` term remains distinguishable and disables the basemap.
     worldBaseMap: normalizeTermDescriptor(
       source.worldBaseMap ?? source.baseMap ?? source.baseLayer ?? source.DT_WORLD_BASEMAP,
-      { code: 'OpenStreetMap', label: 'OpenStreetMap' }
+      null
     ),
     crs: normalizeTermDescriptor(
       source.crs ?? source.DT_CRS,
@@ -162,7 +164,7 @@ function parseLegacyBookmark(value) {
   };
 }
 
-function normalizeTermDescriptor(value, defaults) {
+function normalizeTermDescriptor(value, defaults = null) {
   if (value === false || value === null) {
     return null;
   }
@@ -177,16 +179,16 @@ function normalizeTermDescriptor(value, defaults) {
   }
 
   if (!isObject(value)) {
-    return { id: null, ...defaults };
+    return defaults ? { id: null, ...defaults } : null;
   }
 
-  const rawCode = value.code ?? value.termCode ?? value.name ?? defaults.code ?? null;
+  const rawCode = value.code ?? value.termCode ?? value.name ?? defaults?.code ?? null;
   const code = rawCode === 'XY' ? 'Simple' : rawCode;
 
   return {
     id: positiveIntegerOrNull(value.id ?? value.termId ?? value.trm_ID),
     code: code == null ? null : String(code),
-    label: String(value.label ?? value.title ?? value.name ?? code ?? defaults.label ?? '') || null
+    label: String(value.label ?? value.title ?? value.name ?? code ?? defaults?.label ?? '') || null
   };
 }
 

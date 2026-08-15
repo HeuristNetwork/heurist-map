@@ -17,10 +17,18 @@ export const HEURIST_MAP_OPTIONS_DEFAULTS = Object.freeze({
     showLayers: true,
     showBaseMaps: true,
     showLegend: true,
-    showZoomControl: true,
-    showSearch: false,
+    showHomeControl: false,
+    showOptions: true,
     showPublish: true,
     controlCss: null
+  }),
+  nativeControls: Object.freeze({
+    zoom: true,
+    scale: true,
+    bookmark: false,
+    print: false,
+    selector: false,
+    search: false
   }),
   mapDocuments: Object.freeze({
     allowed: null,

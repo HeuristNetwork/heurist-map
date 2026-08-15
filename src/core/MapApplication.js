@@ -14,6 +14,7 @@ import { normalizeMapDocument } from './MapDocument.js';
 import { normalizeMapLayer, reapplyMapLayerDefaults } from './MapLayer.js';
 import { createMapEnvironment } from './createMapEnvironment.js';
 import { normalizeMapConfigurationSettings } from '../ui/config/mapConfigurationSchema.js';
+import { getDefaultBaseMaps } from '../basemaps/defaultBasemaps.js';
 import { activateThematicMap } from '../thematic/thematicAttributes.js';
 import { normalizePopupMode } from '../data/PopupProvider.js';
 
@@ -420,8 +421,10 @@ export class MapApplication {
 
   async applyDocumentBaseMap(document) {
     const code = document?.worldBaseMap?.code;
+    if (String(code) === 'None' && this.baseMaps.has('None')) return this.setBaseMap('None');
     if (code && this.baseMaps.has(String(code))) return this.setBaseMap(code);
-    if (document?.worldBaseMap === null && this.baseMaps.has('None')) return this.setBaseMap('None');
+    // Missing MapDocument basemap is not the same as `None`: use the configured
+    // initial/first allowed basemap.
     return this.restoreDefaultBaseMap();
   }
 
@@ -1403,6 +1406,7 @@ export class MapApplication {
         : normalized.options.mapDocuments.initiallyActive
     };
     this.config.ui = { ...(this.config.ui || {}), ...normalized.options.ui };
+    this.config.nativeControls = { ...(this.config.nativeControls || {}), ...normalized.options.nativeControls };
     this.config.interaction = { ...(this.config.interaction || {}), ...normalized.options.interaction };
     this.config.defaults = clonePlain(nextDefaults);
     this.config.dynamicDocument = {
@@ -1411,6 +1415,26 @@ export class MapApplication {
       id: this.dynamicDocumentId,
       keepContent: this.config.dynamicDocument?.keepContent !== false
     };
+
+    // Base-map availability is live configuration too. Rebuild the effective
+    // definitions before refreshing MapControlPanel so its Base maps section
+    // immediately reflects the saved Allowed base maps selection.
+    const configuredBaseMaps = resolveConfiguredBaseMaps(
+      normalized.options.baseMaps,
+      nextDefaults.preventContinuousWorldBasemap === true
+    );
+    this.baseMaps = new Map(configuredBaseMaps.map((item) => [String(item.id), clonePlain(item)]));
+    this.defaultBaseMapId = configuredBaseMaps[0]?.id ?? null;
+    const activeBaseMapStillAllowed = this.activeBaseMapId != null
+      && this.baseMaps.has(String(this.activeBaseMapId));
+    if (!activeBaseMapStillAllowed) {
+      if (this.defaultBaseMapId != null) await this.setBaseMap(this.defaultBaseMapId);
+      else {
+        await this.mapEngine.setBaseMap(null);
+        this.activeBaseMapId = null;
+        this.dispatch('heurist-map-basemap-changed', { baseMap: null });
+      }
+    }
 
     const dynamicEntry = this.getDynamicDocumentEntry();
     if (dynamicEntry) {
@@ -1482,18 +1506,13 @@ export class MapApplication {
       this.mapEnvironment.zoomToPointInKM = environment.zoomToPointInKM;
     }
 
-    // Continuous-world behavior belongs to global defaults. Update the built-in
-    // basemap definitions and recreate the active basemap only when it changed.
-    if (previousDefaults.preventContinuousWorldBasemap !== nextDefaults.preventContinuousWorldBasemap) {
-      const noWrap = nextDefaults.preventContinuousWorldBasemap === true;
-      for (const [id, item] of this.baseMaps) {
-        if (item.type === 'tile') this.baseMaps.set(id, { ...item, noWrap });
-      }
-      if (this.activeBaseMapId != null && this.baseMaps.has(String(this.activeBaseMapId))) {
-        await this.setBaseMap(this.activeBaseMapId);
-      }
+    // Recreate the active tile layer when continuous-world behavior changes.
+    if (previousDefaults.preventContinuousWorldBasemap !== nextDefaults.preventContinuousWorldBasemap
+        && this.activeBaseMapId != null && this.baseMaps.has(String(this.activeBaseMapId))) {
+      await this.setBaseMap(this.activeBaseMapId);
     }
 
+    await this.mapEngine.setNativeControls?.(this.config.nativeControls || {});
     this.controlPanel?.applyOptions?.(this.config.ui);
 
     // Reloading current-results can clear its selection; restore it if possible.
@@ -1522,17 +1541,18 @@ export class MapApplication {
     const selectedRecordIds = [...new Set(
       [...this.selectedFeatures.values()].map((item) => item.recordId).filter((id) => id != null)
     )];
+    const layers = this.getLayers();
     return {
       extent: view?.bounds || null,
       zoom: view?.zoom ?? null,
       activeDocumentId: this.activeMapDocumentId ?? null,
       baseMap: this.activeBaseMapId ?? null,
-      visibleLayerIds: this.getLayers().filter((layer) => layer.visible !== false).map((layer) => layer.id),
-      activeThemes: Object.fromEntries(this.getLayers().map((layer) => [
-        String(layer.id),
-        Array.isArray(layer.style?.thematic)
-          ? layer.style.thematic.findIndex((theme) => theme?.active === true)
-          : -1
+      visibleLayerIds: layers.filter((layer) => layer.visible !== false).map((layer) => layer.id),
+      layerOpacities: Object.fromEntries(layers.map((layer) => [
+        String(layer.id), normalizeRuntimeOpacity(layer.opacity ?? 1)
+      ])),
+      activeThemes: Object.fromEntries(layers.map((layer) => [
+        String(layer.id), activeThemeIndex(layer.style)
       ])),
       activeLayerId: this.selectionLayerId ?? null,
       query: currentLayer?.source?.query ?? null,
@@ -1543,10 +1563,6 @@ export class MapApplication {
   /** Restore a previously captured published/initial map state. */
   async restoreMapState(state = {}) {
     if (!state || typeof state !== 'object') return false;
-
-    if (state.baseMap != null && this.baseMaps.has(String(state.baseMap))) {
-      await this.setBaseMap(state.baseMap);
-    }
 
     const targetDocument = state.activeDocumentId;
     if (targetDocument != null) {
@@ -1579,11 +1595,25 @@ export class MapApplication {
       }
     }
 
+    if (state.layerOpacities && typeof state.layerOpacities === 'object') {
+      for (const [layerId, opacity] of Object.entries(state.layerOpacities)) {
+        if (!this.layers.has(layerId)) continue;
+        await this.setLayerOpacity(layerId, opacity);
+      }
+    }
+
     if (Array.isArray(state.visibleLayerIds)) {
       const visible = new Set(state.visibleLayerIds.map(String));
       for (const layer of this.getLayers()) {
         await this.setLayerVisibility(layer.id, visible.has(String(layer.id)));
       }
+    }
+
+    // Restore the published basemap after MapDocument activation because
+    // activation applies the document/default basemap by design. Published
+    // live state must win over that startup choice.
+    if (state.baseMap != null && this.baseMaps.has(String(state.baseMap))) {
+      await this.setBaseMap(state.baseMap);
     }
 
     if (state.extent) await this.fitBounds(state.extent);
@@ -1951,12 +1981,14 @@ export class MapApplication {
       minZoom: environment.zoomLimits?.minZoom ?? undefined,
       maxZoom: environment.zoomLimits?.maxZoom ?? undefined,
       crs: environment.crs,
+      baseMapProviderOptions: this.config.baseMapProviderOptions || {},
       controls: {
-        zoom: this.config.ui?.showZoomControl !== false,
-        scale: this.config.ui?.showScaleControl !== false,
+        ...(this.config.nativeControls || {}),
         attribution: true
       },
-      baseLayer: environment.baseMap
+      baseLayer: environment.baseMapSpecified
+        ? environment.baseMap
+        : this.getConfiguredDefaultBaseMap()
     });
     this.mapEngine.setInteractionHandlers?.({
       onFeatureClick: (detail) => { void this.handleFeatureClick(detail); },
@@ -1973,6 +2005,13 @@ export class MapApplication {
     if (initialView.type === 'bounds') {
       await this.fitBounds(initialView.bounds, { animate: false });
     }
+  }
+
+  /** Return the configured initial/first allowed basemap as an engine-neutral layer. */
+  getConfiguredDefaultBaseMap() {
+    if (this.defaultBaseMapId == null) return null;
+    const item = this.baseMaps.get(String(this.defaultBaseMapId));
+    return item && item.type !== 'none' ? clonePlain(item) : null;
   }
 
   /**
@@ -2177,6 +2216,31 @@ function normalizeSelectedRecordId(value) {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+function resolveConfiguredBaseMaps(settings = {}, preventContinuousWorldBasemap = false) {
+  const defaults = getDefaultBaseMaps();
+  const defaultById = new Map(defaults.map((item) => [String(item.id), item]));
+  let result = defaults;
+  if (Array.isArray(settings?.allowed)) {
+    result = settings.allowed.map((id) => {
+      const key = String(id);
+      return defaultById.get(key) || {
+        id: key,
+        title: key,
+        type: key === 'None' ? 'none' : 'tile',
+        provider: key
+      };
+    });
+  }
+  if (preventContinuousWorldBasemap) {
+    result = result.map((item) => item.type === 'tile' ? { ...item, noWrap: true } : item);
+  }
+  if (settings?.initial != null) {
+    const index = result.findIndex((item) => String(item.id) === String(settings.initial));
+    if (index > 0) result = [result[index], ...result.slice(0, index), ...result.slice(index + 1)];
+  }
+  return result;
+}
+
 function sameJson(left, right) {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
@@ -2195,6 +2259,15 @@ function serializeError(error) {
     code: error?.code ?? null,
     status: error?.status ?? null
   };
+}
+
+function activeThemeIndex(style) {
+  const thematic = Array.isArray(style?.thematic)
+    ? style.thematic
+    : Array.isArray(style?.thematic?.maps)
+      ? style.thematic.maps
+      : [];
+  return thematic.findIndex((theme) => theme?.active === true);
 }
 
 function normalizeRuntimeOpacity(value) {

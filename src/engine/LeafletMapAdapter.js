@@ -17,6 +17,7 @@ import { createImageFilterCss } from '../utils/normalizeImageFilter.js';
 import { normalizeZoomLimit } from '../utils/normalizeZoomLimit.js';
 import { resolveFeatureSymbol } from '../thematic/thematicSymbolResolver.js';
 import { hexToCssFilter } from '../utils/hexToCssFilter.js';
+import { createLeafletBaseMapLayer, getLeafletBaseMapCatalog } from './leaflet/LeafletBasemapCatalog.js';
 
 /**
  * Leaflet implementation hidden behind the engine-neutral adapter contract.
@@ -30,6 +31,8 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     this.map = null;
     this.layers = new Map();
     this.interactionHandlers = {};
+    this.baseMapProviderOptions = {};
+    this.nativeControls = new Map();
   }
 
   /**
@@ -37,8 +40,11 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    * @returns {Promise<*>} Resolves when the operation completes.
    */
   async initialize(container, options) {
+    this.baseMapProviderOptions = { ...(options.baseMapProviderOptions || {}) };
     this.map = L.map(container, {
-      zoomControl: options.controls?.zoom !== false,
+      // Native controls are created through setNativeControls() so they can be
+      // changed live from MapConfigurationDialog without rebuilding Leaflet.
+      zoomControl: false,
       attributionControl: options.controls?.attribution !== false,
       minZoom: options.minZoom,
       maxZoom: options.maxZoom
@@ -70,19 +76,95 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       });
     });
 
-    if (options.controls?.scale !== false) {
-      L.control.scale({ position: 'bottomleft' }).addTo(this.map);
-    }
+    await this.setNativeControls(options.controls || {});
 
     if (options.baseLayer) {
-      this.addTileLayer({
-        ...options.baseLayer,
-        id: '__base__',
-        visible: true
-      });
-      const base = this.layers.get('__base__')?.layer;
-      if (typeof base?.bringToBack === 'function') base.bringToBack();
+      this.addBaseMapLayer(options.baseLayer);
     }
+  }
+
+  /** Show/hide Leaflet-native controls and optional Leaflet plugins. */
+  async setNativeControls(options = {}) {
+    this.assertInitialized();
+    const desired = {
+      zoom: options.zoom !== false,
+      scale: options.scale !== false,
+      bookmark: options.bookmark === true,
+      print: options.print === true,
+      selector: false,
+      search: options.search === true
+    };
+
+    await this.toggleNativeControl('zoom', desired.zoom, () => L.control.zoom({ position: 'topleft' }));
+    await this.toggleNativeControl('scale', desired.scale, () => L.control.scale({ position: 'bottomleft' }));
+    await this.toggleNativeControl('bookmark', desired.bookmark, async () => {
+      const module = await import('leaflet-bookmarks');
+      await import('leaflet-bookmarks/dist/leaflet.bookmarks.css');
+      const Bookmarks = L.Control.Bookmarks || module.default;
+      if (typeof Bookmarks !== 'function') throw new Error('Leaflet.Bookmarks plugin did not register correctly');
+      // Leaflet.Bookmarks falls back to L.Icon.Default for its temporary/edit
+      // marker. In a bundled build that makes Leaflet request marker-icon assets
+      // we do not ship. The bookmark location itself does not need a marker in
+      // heurist-map, so provide an intentionally transparent div icon instead.
+      const transparentBookmarkIcon = L.divIcon({
+        className: 'heurist-map-bookmark-marker-transparent',
+        html: '',
+        iconSize: [1, 1],
+        iconAnchor: [0, 0]
+      });
+      return new Bookmarks({
+        position: 'topleft',
+        icon: transparentBookmarkIcon
+      });
+    });
+    await this.toggleNativeControl('print', desired.print, async () => {
+      await import('leaflet.browser.print/dist/leaflet.browser.print.min.js');
+      if (typeof L.control.browserPrint !== 'function') {
+        throw new Error('leaflet.browser.print plugin did not register correctly');
+      }
+      return L.control.browserPrint({ position: 'topleft', title: 'Print map' });
+    });
+    await this.toggleNativeControl('search', desired.search, async () => {
+      const module = await import('leaflet-control-geocoder');
+      await import('leaflet-control-geocoder/dist/Control.Geocoder.css');
+      const Geocoder = L.Control.Geocoder || module.Control?.Geocoder || module.default;
+      if (typeof L.Control?.geocoder === 'function') {
+        return L.Control.geocoder({ position: 'topleft' });
+      }
+      if (typeof Geocoder === 'function') {
+        return new Geocoder({ position: 'topleft' });
+      }
+      throw new Error('leaflet-control-geocoder plugin did not register correctly');
+    });
+  }
+
+  async toggleNativeControl(name, enabled, factory) {
+    const existing = this.nativeControls.get(name);
+    if (!enabled) {
+      if (existing) {
+        existing.remove?.();
+        this.nativeControls.delete(name);
+      }
+      return null;
+    }
+    if (existing) return existing;
+    const control = await factory();
+    control?.addTo?.(this.map);
+    if (control) {
+      // Optional Leaflet plugins use different container padding and dimensions.
+      // Mark single-button controls so application CSS can give them the same
+      // collapsed footprint as Leaflet's native zoom buttons without affecting
+      // expanded plugin UIs (for example, the geocoder input/bookmark list).
+      if (name === 'bookmark' || name === 'print' || name === 'search') {
+        const container = control.getContainer?.();
+        container?.classList?.add(
+          'heurist-map-native-single-control',
+          `heurist-map-native-${name}-control`
+        );
+      }
+      this.nativeControls.set(name, control);
+    }
+    return control || null;
   }
 
   /**
@@ -222,26 +304,27 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       : null;
   }
 
+  /** Return the full Leaflet provider catalogue as engine-neutral descriptors. */
+  getAvailableBaseMaps() {
+    return getLeafletBaseMapCatalog();
+  }
+
   /** Replace the current base map without touching operational layers. */
   async setBaseMap(definition) {
     await this.removeLayer('__base__');
-
-    if (!definition) {
-      return true;
-    }
-
-    this.addTileLayer({
-      ...definition,
-      id: '__base__',
-      visible: true
-    });
-
-    const base = this.layers.get('__base__')?.layer;
-    if (typeof base?.bringToBack === 'function') {
-      base.bringToBack();
-    }
-
+    if (!definition) return true;
+    this.addBaseMapLayer(definition);
     return true;
+  }
+
+  /** Create/register one base map while keeping Leaflet provider objects private. */
+  addBaseMapLayer(definition) {
+    const normalized = { ...definition, id: '__base__', visible: true };
+    const layer = createLeafletBaseMapLayer(normalized, this.baseMapProviderOptions);
+    if (!layer) return null;
+    const result = this.registerLayer(normalized, layer);
+    if (typeof layer.bringToBack === 'function') layer.bringToBack();
+    return result;
   }
 
   /** Replace layer style by redrawing the already-loaded runtime definition. */
@@ -460,6 +543,11 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     const map = this.map;
     this.map = null;
     this.layers.clear();
+
+    for (const control of this.nativeControls.values()) {
+      control.remove?.();
+    }
+    this.nativeControls.clear();
 
     // Remove handlers and DOM references while the container is still
     // attached. This also makes repeated Vite HMR initialization safe.

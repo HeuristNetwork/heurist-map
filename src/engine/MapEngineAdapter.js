@@ -47,8 +47,16 @@ export class MapEngineAdapter {
   }
 
 
+  /** Return base maps available from the concrete engine/provider catalogue. */
+  getAvailableBaseMaps() { return []; }
+
   /** Configure engine-neutral map interaction callbacks. */
   setInteractionHandlers() {}
+
+  /** Show/hide native controls implemented by the concrete map engine. */
+  async setNativeControls() {
+    throw new Error('MapEngineAdapter.setNativeControls() is not implemented');
+  }
 
   /** Lazily bind/open HTML popup content for one rendered feature. */
   async openFeaturePopup() {

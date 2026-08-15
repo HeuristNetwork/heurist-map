@@ -16,7 +16,7 @@ test('resolves MapDocument record type and lists all documents', async () => {
   const provider=new MapDocumentListProvider({apiClient,recordTypes});
   const result=await provider.search();
   assert.deepEqual(result.items.map(item=>item.id),[126,129]);
-  assert.equal(calls[1].query.q,'t:24');
+  assert.deepEqual(calls[1].query.q,{t:24});
   assert.equal(calls[1].query.fields,'rec_Title');
 });
 

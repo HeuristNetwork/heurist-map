@@ -13,15 +13,21 @@ import {
 
 /** Public API used when heurist-map is loaded only as a configuration editor. */
 export class HeuristMapConfigurationApi {
-  constructor() {
+  constructor({ mapDocumentListProvider = null, baseMapCatalog = [] } = {}) {
     this.configurationDialog = null;
+    this.mapDocumentListProvider = mapDocumentListProvider;
+    this.baseMapCatalog = Array.isArray(baseMapCatalog) ? baseMapCatalog : [];
   }
 
   ready() { return Promise.resolve(this); }
 
   openConfigurationDialog(options = {}) {
     this.configurationDialog?.close?.();
-    this.configurationDialog = new MapConfigurationDialog(options);
+    this.configurationDialog = new MapConfigurationDialog({
+      ...options,
+      mapDocumentListProvider: options.mapDocumentListProvider || this.mapDocumentListProvider,
+      baseMapCatalog: options.baseMapCatalog || this.baseMapCatalog
+    });
     this.configurationDialog.open();
     return this.configurationDialog;
   }

@@ -78,7 +78,14 @@ test('minimal standalone bootstrap uses canonical settings and built-in basemaps
     assert.equal(config.persistedSettings.options.ui.enabled, true);
     assert.equal(config.persistedSettings.options.mapDocuments.allowed, null);
     assert.equal(config.documents.initiallyActive, 'dynamic');
-    assert.deepEqual(config.baseMaps.map((item) => item.id), ['OpenStreetMap', 'None']);
+    assert.deepEqual(config.baseMaps.map((item) => item.id), [
+      'OpenStreetMap', 'OpenTopoMap', 'Esri.WorldStreetMap', 'Esri.WorldTopoMap',
+      'Esri.WorldImagery', 'Esri.WorldShadedRelief', 'Stadia.StamenToner', 'Stadia.StamenTonerLite',
+      'Stadia.StamenTerrain', 'Stadia.StamenTerrainBackground', 'Stadia.StamenWatercolor',
+      'Esri.NatGeoWorldMap', 'Esri.WorldGrayCanvas', 'MapTilesAPI.OSMEnglish',
+      'DARE.RomanEmpire', 'GeoportailFrance.plan', 'GeoportailFrance.parcels',
+      'GeoportailFrance.orthos', 'None'
+    ]);
     assert.equal(config.mapDocument.id, null);
   } finally {
     globalThis.frameElement = previousFrameElement;

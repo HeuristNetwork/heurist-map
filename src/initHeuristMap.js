@@ -76,7 +76,12 @@ export async function initHeuristMap(config) {
 
   const publicApi = new HeuristMapPublicApi(application);
   publicApi.setConfigurationDialogFactory((options = {}) => {
-    const dialog = new MapConfigurationDialog({ ...options, reportTemplateProvider: providers.reportTemplates });
+    const dialog = new MapConfigurationDialog({
+      ...options,
+      reportTemplateProvider: providers.reportTemplates,
+      mapDocumentListProvider: providers.mapDocumentList,
+      baseMapCatalog: mapEngine.getAvailableBaseMaps?.() || []
+    });
     dialog.open();
     return dialog;
   });

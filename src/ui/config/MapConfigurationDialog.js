@@ -14,11 +14,13 @@ import {
   normalizeMapConfigurationSettings,
   serializeMapConfigurationSettings
 } from './mapConfigurationSchema.js';
+import { getDefaultBaseMaps } from '../../basemaps/defaultBasemaps.js';
 
 export class MapConfigurationDialog {
   constructor({
     mode = 'preferences', value = null, parent = null, title = null,
-    onSave = null, onCancel = null, reportTemplateProvider = null
+    onSave = null, onCancel = null, reportTemplateProvider = null,
+    mapDocumentListProvider = null, baseMapCatalog = []
   } = {}) {
     this.mode = normalizeMapConfigurationMode(mode);
     this.value = normalizeMapConfigurationSettings(value || {});
@@ -27,6 +29,9 @@ export class MapConfigurationDialog {
     this.onSave = typeof onSave === 'function' ? onSave : null;
     this.onCancel = typeof onCancel === 'function' ? onCancel : null;
     this.reportTemplateProvider = reportTemplateProvider || null;
+    this.mapDocumentListProvider = mapDocumentListProvider || null;
+    this.baseMapCatalog = Array.isArray(baseMapCatalog) ? baseMapCatalog : [];
+    this.defaultBaseMapIds = getDefaultBaseMaps().map((item) => String(item.id));
     this.element = null;
     this.dialog = null;
     this.form = null;
@@ -228,44 +233,126 @@ export class MapConfigurationDialog {
   }
 
   buildMapDocuments(body) {
-    this.text(body, 'options.mapDocuments.allowed', 'Allowed MapDocument IDs', {
-      placeholder: 'All (or comma-separated record IDs)', kind: 'list-number'
+    this.transferList(body, 'options.mapDocuments.allowed', 'Allowed MapDocuments', [], {
+      kind: 'multi-number',
+      defaultLabel: 'Allow all MapDocuments',
+      defaultValues: 'all',
+      onChange: () => this.refreshMapDocumentDefaultChoices()
     });
-    this.text(body, 'options.mapDocuments.initiallyActive', 'Default document', {
-      placeholder: 'Current results (default) or record ID', kind: 'identifier'
-    });
+    this.select(body, 'options.mapDocuments.initiallyActive', 'Default document', [
+      ['', 'Current results']
+    ], { kind: 'identifier-select' });
+    void this.loadMapDocumentChoices();
   }
 
   buildBaseMaps(body) {
-    this.text(body, 'options.baseMaps.allowed', 'Allowed base maps', {
-      placeholder: 'All (or comma-separated IDs/names)', kind: 'list-string'
+    // Configuration deliberately exposes the Heurist-curated list only. The full
+    // leaflet-providers catalogue remains available to the Leaflet adapter, but is
+    // not presented here as an end-user configuration list.
+    const choices = getDefaultBaseMaps().map((item) => [String(item.id), item.title || item.id]);
+    this.transferList(body, 'options.baseMaps.allowed', 'Allowed base maps', choices, {
+      kind: 'multi-string',
+      defaultLabel: 'All Heurist base maps',
+      defaultValues: this.defaultBaseMapIds,
+      fixedSelectedValues: ['None'],
+      availableNotice: {
+        text: 'Email team for other base maps',
+        href: 'https://leaflet-extras.github.io/leaflet-providers/preview/index.html'
+      },
+      onChange: () => this.refreshBaseMapInitialChoices()
     });
-    this.text(body, 'options.baseMaps.initial', 'Initial base map', { placeholder: 'Default' });
+    this.select(body, 'options.baseMaps.initial', 'Initial base map', [], { kind: 'string-null-select' });
+    this.refreshBaseMapInitialChoices();
+  }
+
+  async loadMapDocumentChoices() {
+    if (!this.mapDocumentListProvider) return;
+    try {
+      const result = await this.mapDocumentListProvider.search();
+      if (!this.form) return;
+      const choices = (result.items || []).map((item) => [String(item.id), item.title || `Map document ${item.id}`]);
+      this.replaceTransferChoices('options.mapDocuments.allowed', choices);
+      this.populateField('options.mapDocuments.allowed');
+      this.refreshMapDocumentDefaultChoices();
+      this.populateField('options.mapDocuments.initiallyActive');
+    } catch (error) {
+      this.showError(`Cannot load MapDocument list: ${error?.message || String(error)}`);
+    }
+  }
+
+  refreshMapDocumentDefaultChoices() {
+    const field = this.fields.get('options.mapDocuments.allowed');
+    if (!field) return;
+    const values = this.getTransferAllowedValues(field);
+    const choices = values.map((value) => [value, this.transferChoiceLabel(field, value)]);
+    this.replaceConstrainedSelectChoices(
+      'options.mapDocuments.initiallyActive',
+      [['', 'Current results'], ...choices]
+    );
+  }
+
+  refreshBaseMapInitialChoices() {
+    const field = this.fields.get('options.baseMaps.allowed');
+    if (!field) return;
+    const values = this.getTransferAllowedValues(field);
+    const choices = values.map((value) => [value, this.transferChoiceLabel(field, value)]);
+    const initialField = this.fields.get('options.baseMaps.initial');
+    const current = initialField?.control?.value || '';
+    this.replaceSelectChoices('options.baseMaps.initial', choices);
+    if (initialField?.control) {
+      initialField.control.value = choices.some(([value]) => String(value) === String(current))
+        ? current
+        : (choices[0]?.[0] ?? '');
+    }
   }
 
   buildInterface(body) {
     const controls = document.createElement('fieldset');
     controls.className = 'heurist-map-config-group heurist-map-config-controls-group';
-    controls.append(legend('Show map controls'));
-    this.checkbox(controls, 'options.ui.enabled', 'Show map controls');
+    controls.append(legend('Map Controls'));
+
+    const heuristSection = document.createElement('div');
+    heuristSection.className = 'heurist-map-config-control-section';
+    const masterRow = this.checkbox(heuristSection, 'options.ui.enabled', 'Heurist Map Controls');
+    const masterControl = this.fields.get('options.ui.enabled')?.control;
 
     const primary = document.createElement('div');
     primary.className = 'heurist-map-config-inline-checks';
     this.checkbox(primary, 'options.ui.showCurrentDocument', 'Current results');
     this.checkbox(primary, 'options.ui.showMapDocuments', 'Map documents');
     this.checkbox(primary, 'options.ui.showBaseMaps', 'Base maps');
-    this.checkbox(primary, 'options.ui.showLegend', 'Legend');
-    controls.append(primary);
+    heuristSection.append(primary);
 
-    this.checkbox(controls, 'options.ui.initiallyExpanded', 'Initially expanded');
+    this.checkbox(heuristSection, 'options.ui.initiallyExpanded', 'Initially expanded');
 
     const secondary = document.createElement('div');
     secondary.className = 'heurist-map-config-inline-checks';
-    this.checkbox(secondary, 'options.ui.showZoomControl', 'Zoom control');
-    this.checkbox(secondary, 'options.ui.showSearch', 'Search');
+    this.checkbox(secondary, 'options.ui.showHomeControl', 'Home');
+    this.checkbox(secondary, 'options.ui.showOptions', 'Options');
     this.checkbox(secondary, 'options.ui.showPublish', 'Publish');
-    controls.append(secondary);
+    heuristSection.append(secondary);
 
+    const nativeSection = document.createElement('div');
+    nativeSection.className = 'heurist-map-config-control-section heurist-map-config-native-controls';
+    nativeSection.append(sectionTitle('Native Map Controls'));
+
+    const native = document.createElement('div');
+    native.className = 'heurist-map-config-inline-checks';
+    this.checkbox(native, 'options.nativeControls.zoom', 'Zoom');
+    this.checkbox(native, 'options.nativeControls.scale', 'Scale');
+    this.checkbox(native, 'options.nativeControls.bookmark', 'Bookmark');
+    this.checkbox(native, 'options.nativeControls.print', 'Print');
+    const selectorRow = this.checkbox(native, 'options.nativeControls.selector', 'Selector');
+    this.checkbox(native, 'options.nativeControls.search', 'Search');
+    const selectorControl = this.fields.get('options.nativeControls.selector')?.control;
+    if (selectorControl) {
+      selectorControl.disabled = true;
+      selectorRow.title = 'Feature area selector will be implemented with Leaflet.draw in a later step.';
+    }
+    nativeSection.append(native);
+
+    // Existing hidden/internal controls remain persisted for compatibility.
+    this.checkbox(controls, 'options.ui.showLegend', 'Legend', { hidden: true });
     this.checkbox(controls, 'options.ui.showLayers', 'Show layers', { hidden: true });
     this.select(controls, 'options.ui.placement', 'Control placement', [
       ['overlay', 'Overlay'], ['side', 'Side panel']
@@ -275,7 +362,32 @@ export class MapConfigurationDialog {
       ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']
     ], { hidden: true });
     this.textarea(controls, 'options.ui.controlCss', 'CSS for Map Control', { advanced: true });
+
+    controls.append(heuristSection, nativeSection);
     body.append(controls);
+
+    if (masterControl) {
+      masterControl.addEventListener('change', () => this.updateHeuristControlState());
+      masterRow.classList.add('heurist-map-config-master-control');
+    }
+  }
+
+  updateHeuristControlState() {
+    const master = this.fields.get('options.ui.enabled')?.control;
+    if (!master) return;
+    const disabled = master.checked !== true;
+    for (const path of [
+      'options.ui.showCurrentDocument',
+      'options.ui.showMapDocuments',
+      'options.ui.showBaseMaps',
+      'options.ui.initiallyExpanded',
+      'options.ui.showHomeControl',
+      'options.ui.showOptions',
+      'options.ui.showPublish'
+    ]) {
+      const control = this.fields.get(path)?.control;
+      if (control) control.disabled = disabled;
+    }
   }
 
   buildInteraction(body) {
@@ -344,6 +456,161 @@ export class MapConfigurationDialog {
     return row;
   }
 
+  transferList(body, path, labelText, choices, options = {}) {
+    const row = document.createElement('div');
+    row.className = 'heurist-map-config-field heurist-map-config-transfer-field';
+    const caption = document.createElement('span');
+    caption.textContent = labelText;
+
+    const content = document.createElement('div');
+    content.className = 'heurist-map-config-transfer-content';
+
+    const toggle = document.createElement('label');
+    toggle.className = 'heurist-map-config-check heurist-map-config-list-default';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    toggle.append(checkbox, document.createTextNode(options.defaultLabel || 'Use default list'));
+
+    const lists = document.createElement('div');
+    lists.className = 'heurist-map-config-transfer-lists';
+    const availableColumn = transferColumn('Available');
+    const selectedColumn = transferColumn('Selected');
+    lists.append(availableColumn.column, selectedColumn.column);
+
+    if (options.availableNotice?.text && options.availableNotice?.href) {
+      const notice = document.createElement('a');
+      notice.className = 'heurist-map-config-list-notice';
+      notice.textContent = options.availableNotice.text;
+      notice.href = options.availableNotice.href;
+      notice.target = '_blank';
+      notice.rel = 'noopener noreferrer';
+      availableColumn.column.append(notice);
+    }
+
+    content.append(toggle, lists);
+    row.append(caption, content);
+
+    const field = {
+      control: selectedColumn.select,
+      availableControl: availableColumn.select,
+      selectedControl: selectedColumn.select,
+      listContainer: lists,
+      kind: options.kind || 'multi-string',
+      defaultToggle: checkbox,
+      defaultValues: options.defaultValues || null,
+      fixedSelectedValues: new Set((options.fixedSelectedValues || []).map(String)),
+      choices: normalizeChoices(choices),
+      onChange: typeof options.onChange === 'function' ? options.onChange : null
+    };
+    selectedColumn.select.dataset.configPath = path;
+    this.fields.set(path, field);
+
+    const transfer = (source, add) => {
+      const option = source.selectedOptions?.[0];
+      if (!option) return;
+      const selected = new Set(this.getTransferSelectedValues(field));
+      if (add) {
+        selected.add(option.value);
+      } else if (!field.fixedSelectedValues.has(String(option.value))) {
+        selected.delete(option.value);
+      }
+      this.renderTransferField(field, [...selected]);
+      field.onChange?.();
+    };
+    availableColumn.select.addEventListener('click', () => transfer(availableColumn.select, true));
+    selectedColumn.select.addEventListener('click', () => transfer(selectedColumn.select, false));
+
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        this.renderTransferField(field, this.getTransferDefaultValues(field));
+      }
+      lists.hidden = checkbox.checked;
+      field.onChange?.();
+    });
+
+    this.decorate(row, options);
+    body.append(row);
+    return row;
+  }
+
+  replaceTransferChoices(path, choices) {
+    const field = this.fields.get(path);
+    if (!field?.selectedControl) return;
+    const selected = this.getTransferSelectedValues(field);
+    field.choices = normalizeChoices(choices);
+    this.renderTransferField(field, selected);
+  }
+
+  renderTransferField(field, selectedValues) {
+    const selected = new Set((selectedValues || []).map(String));
+    for (const value of field.fixedSelectedValues || []) selected.add(String(value));
+    const known = new Set(field.choices.map(([value]) => String(value)));
+    const choices = [...field.choices];
+
+    // Preserve already-stored custom/legacy values even when they are no longer
+    // offered in the Available list. They remain removable from Selected.
+    for (const value of selected) {
+      if (!known.has(value)) choices.push([value, value]);
+    }
+
+    field.availableControl.replaceChildren();
+    field.selectedControl.replaceChildren();
+    for (const [rawValue, label] of choices) {
+      const value = String(rawValue);
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      if (selected.has(value) && field.fixedSelectedValues?.has(value)) {
+        option.disabled = true;
+        option.title = 'Always available';
+      }
+      (selected.has(value) ? field.selectedControl : field.availableControl).append(option);
+    }
+  }
+
+  getTransferDefaultValues(field) {
+    if (field.defaultValues === 'all') return field.choices.map(([value]) => String(value));
+    if (Array.isArray(field.defaultValues)) return field.defaultValues.map(String);
+    return [];
+  }
+
+  getTransferSelectedValues(field) {
+    return [...(field.selectedControl?.options || [])].map((option) => option.value);
+  }
+
+  getTransferAllowedValues(field) {
+    return field.defaultToggle?.checked
+      ? this.getTransferDefaultValues(field)
+      : this.getTransferSelectedValues(field);
+  }
+
+  transferChoiceLabel(field, value) {
+    const found = field.choices.find(([candidate]) => String(candidate) === String(value));
+    return found ? found[1] : String(value);
+  }
+
+  replaceConstrainedSelectChoices(path, choices) {
+    const field = this.fields.get(path);
+    if (!field?.control) return;
+    const current = field.control.value;
+    this.replaceSelectChoices(path, choices);
+    field.control.value = [...field.control.options].some((option) => option.value === current)
+      ? current
+      : '';
+  }
+
+  replaceSelectChoices(path, choices) {
+    const field = this.fields.get(path);
+    if (!field?.control) return;
+    field.control.replaceChildren();
+    for (const [value, text] of choices) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      field.control.append(option);
+    }
+  }
+
   text(body, path, labelText, options = {}) {
     const { row, control } = labelledControl('input', labelText);
     control.type = 'text';
@@ -409,12 +676,35 @@ export class MapConfigurationDialog {
   }
 
   populate() {
-    for (const [path, field] of this.fields) {
-      const current = getPath(this.value, path);
-      if (field.kind === 'boolean') field.control.checked = current === true;
-      else if (field.kind === 'json') field.control.value = current == null ? '' : JSON.stringify(current, null, 2);
-      else if (field.kind.startsWith('list-')) field.control.value = Array.isArray(current) ? current.join(', ') : '';
-      else field.control.value = current == null || current === '' ? 'standard' : String(current);
+    for (const path of this.fields.keys()) this.populateField(path);
+    this.updateHeuristControlState();
+  }
+
+  populateField(path) {
+    const field = this.fields.get(path);
+    if (!field) return;
+    const current = getPath(this.value, path);
+    if (field.kind === 'boolean') {
+      field.control.checked = current === true;
+    } else if (field.kind === 'json') {
+      field.control.value = current == null ? '' : JSON.stringify(current, null, 2);
+    } else if (field.kind === 'multi-number' || field.kind === 'multi-string') {
+      const useDefault = current == null;
+      if (field.defaultToggle) field.defaultToggle.checked = useDefault;
+      const selected = Array.isArray(current) ? current.map(String) : this.getTransferDefaultValues(field);
+      this.renderTransferField(field, selected);
+      if (field.listContainer) field.listContainer.hidden = useDefault;
+      field.onChange?.();
+    } else if (field.kind === 'identifier-select' || field.kind === 'string-null-select') {
+      if (path === 'options.baseMaps.initial' && current == null) {
+        field.control.value = field.control.options[0]?.value || '';
+      } else {
+        field.control.value = current == null || current === 'dynamic' ? '' : String(current);
+      }
+    } else if (field.kind.startsWith('list-')) {
+      field.control.value = Array.isArray(current) ? current.join(', ') : '';
+    } else {
+      field.control.value = current == null || current === '' ? 'standard' : String(current);
     }
   }
 
@@ -439,6 +729,11 @@ export class MapConfigurationDialog {
 function readControl(field, path) {
   const control = field.control;
   if (field.kind === 'boolean') return control.checked;
+  if (field.kind === 'multi-number' || field.kind === 'multi-string') {
+    if (field.defaultToggle?.checked) return null;
+    const values = [...(field.selectedControl?.options || [])].map((option) => option.value);
+    return field.kind === 'multi-number' ? values.map(Number).filter((value) => Number.isInteger(value) && value > 0) : values;
+  }
   const text = control.value.trim();
   if (field.kind === 'number-null') return text === '' ? null : Number(text);
   if (field.kind === 'positive-int') return text === '' ? null : Number.parseInt(text, 10);
@@ -454,11 +749,29 @@ function readControl(field, path) {
     if (!text) return null;
     return text.split(',').map((item) => item.trim()).filter(Boolean);
   }
+  if (field.kind === 'identifier-select') return text ? Number(text) : null;
+  if (field.kind === 'string-null-select') return text || null;
   if (field.kind === 'identifier') {
     if (!text) return null;
     return text === 'dynamic' ? 'dynamic' : Number(text);
   }
   return text || null;
+}
+
+function transferColumn(title) {
+  const column = document.createElement('div');
+  column.className = 'heurist-map-config-transfer-column';
+  const heading = document.createElement('div');
+  heading.className = 'heurist-map-config-transfer-title';
+  heading.textContent = title;
+  const select = document.createElement('select');
+  select.size = 8;
+  column.append(heading, select);
+  return { column, select };
+}
+
+function normalizeChoices(choices) {
+  return (Array.isArray(choices) ? choices : []).map(([value, label]) => [String(value), String(label ?? value)]);
 }
 
 function labelledControl(tag, labelText) {
@@ -472,6 +785,7 @@ function labelledControl(tag, labelText) {
 }
 
 function legend(text) { const item = document.createElement('legend'); item.textContent = text; return item; }
+function sectionTitle(text) { const item = document.createElement('div'); item.className = 'heurist-map-config-control-section-title'; item.textContent = text; return item; }
 function button(text, title, handler) {
   const item = document.createElement('button');
   item.type = 'button'; item.textContent = text; item.title = title; item.addEventListener('click', handler); return item;

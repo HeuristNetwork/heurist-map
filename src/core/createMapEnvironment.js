@@ -10,18 +10,6 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-const BASE_MAP_REGISTRY = Object.freeze({
-  OpenStreetMap: Object.freeze({
-    id: '__base__',
-    title: 'OpenStreetMap',
-    type: 'tile',
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; OpenStreetMap contributors',
-    maxZoom: 19,
-    visible: true
-  })
-});
-
 /**
  * Convert a public MapDocument into the private, engine-neutral runtime model.
  *
@@ -34,6 +22,10 @@ export function createMapEnvironment(mapDocument, defaults = {}) {
     crs: {
       code: mapDocument.crs?.code || 'EPSG:3857'
     },
+    // Keep whether a MapDocument explicitly defines a basemap separate from
+    // the resolved native layer. `None` deliberately resolves to null, whereas
+    // an unspecified basemap falls back to the user's configured initial map.
+    baseMapSpecified: mapDocument.worldBaseMap != null,
     baseMap: applyBaseMapDefaults(resolveBaseMap(mapDocument.worldBaseMap), defaults),
     zoomLimits: {
       minZoom: mapDocument.minZoom,
@@ -131,12 +123,15 @@ function resolveBaseMap(reference) {
     });
   }
 
-  const provider = BASE_MAP_REGISTRY[reference.code];
-  if (!provider) {
-    throw new Error(`Unknown base-map provider "${reference.code}"`);
-  }
+  if (!reference.code || String(reference.code) === 'None') return null;
 
-  return { ...provider };
+  return {
+    id: '__base__',
+    title: reference.label || reference.code,
+    type: 'tile',
+    provider: String(reference.code),
+    visible: true
+  };
 }
 
 function compact(value) {

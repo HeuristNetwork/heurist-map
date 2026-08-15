@@ -14,7 +14,11 @@
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",
     "leaflet": "^1.9.4",
-    "leaflet.markercluster": "^1.5.3"
+    "leaflet.markercluster": "^1.5.3",
+    "leaflet-providers": "^3.0.0",
+    "leaflet.browser.print": "^2.0.2",
+    "leaflet-control-geocoder": "^4.0.0",
+    "leaflet-bookmarks": "^0.5.1"
   },
   "devDependencies": {
     "vite": "^8.1.1"

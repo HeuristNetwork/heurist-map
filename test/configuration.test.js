@@ -23,6 +23,11 @@ test('map configuration defaults contain agreed global fallback settings', () =>
   assert.equal(value.config.currentResultsLayer, undefined);
   assert.equal(value.config.dynamicDocument.initiallyActive, undefined);
   assert.equal(value.options.ui.controlCss, null);
+  assert.equal(value.options.ui.showHomeControl, false);
+  assert.equal(value.options.ui.showOptions, true);
+  assert.deepEqual(value.options.nativeControls, {
+    zoom: true, scale: true, bookmark: false, print: false, selector: false, search: false
+  });
   assert.equal(value.options.interaction.zoomOnSelection, false);
 });
 
@@ -56,6 +61,31 @@ test('configuration normalization strips runtime, obsolete, and unknown properti
   assert.equal(value.config.defaults.maxAllowedFeatures, 1000);
   assert.equal(value.config.defaults.dynamicRequests, undefined);
   assert.equal(value.config.dynamicDocument.dynamicRequests, true, 'legacy global value is migrated');
+});
+
+
+test('native control settings normalize independently and migrate the first draft UI flags', () => {
+  const direct = normalizeMapConfigurationSettings({
+    options: {
+      nativeControls: { zoom: false, scale: false, bookmark: true, print: true, selector: true, search: true }
+    }
+  });
+  assert.deepEqual(direct.options.nativeControls, {
+    zoom: false,
+    scale: false,
+    bookmark: true,
+    print: true,
+    selector: false,
+    search: true
+  });
+
+  const migrated = normalizeMapConfigurationSettings({
+    options: { ui: { showZoomControl: false, showSearch: true } }
+  });
+  assert.equal(migrated.options.nativeControls.zoom, false);
+  assert.equal(migrated.options.nativeControls.search, true);
+  assert.equal(migrated.options.ui.showZoomControl, undefined);
+  assert.equal(migrated.options.ui.showSearch, undefined);
 });
 
 test('dynamic document zoom settings remain document-specific; global defaults normalize independently', () => {

@@ -42,7 +42,10 @@ if (typeof window !== 'undefined') {
   window.L = L;
 }
 
-const bootstrap = import('leaflet.markercluster').then(() => {
+const bootstrap = Promise.all([
+  import('leaflet.markercluster'),
+  import('leaflet-providers')
+]).then(() => {
   return config.viewerMode === 'configuration'
     ? initHeuristMapConfiguration(config)
     : initHeuristMap(config);

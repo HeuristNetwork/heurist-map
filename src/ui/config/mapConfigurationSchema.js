@@ -59,6 +59,7 @@ function unwrapSettings(value) {
 function normalizeOptions(source, defaults) {
   const ui = source.ui || {};
   const documents = source.mapDocuments || {};
+  const nativeControls = source.nativeControls || {};
   const baseMaps = source.baseMaps || {};
   const interaction = source.interaction || {};
 
@@ -73,10 +74,19 @@ function normalizeOptions(source, defaults) {
       showLayers: boolean(ui.showLayers, defaults.ui.showLayers),
       showBaseMaps: boolean(ui.showBaseMaps, defaults.ui.showBaseMaps),
       showLegend: boolean(ui.showLegend, defaults.ui.showLegend),
-      showZoomControl: boolean(ui.showZoomControl, defaults.ui.showZoomControl),
-      showSearch: boolean(ui.showSearch, defaults.ui.showSearch),
+      showHomeControl: boolean(ui.showHomeControl, defaults.ui.showHomeControl),
+      showOptions: boolean(ui.showOptions, defaults.ui.showOptions),
       showPublish: boolean(ui.showPublish, defaults.ui.showPublish),
       controlCss: nullableString(ui.controlCss)
+    },
+    nativeControls: {
+      // showZoomControl/showSearch were stored under ui in the first configuration draft.
+      zoom: boolean(nativeControls.zoom, boolean(ui.showZoomControl, defaults.nativeControls.zoom)),
+      scale: boolean(nativeControls.scale, defaults.nativeControls.scale),
+      bookmark: boolean(nativeControls.bookmark, defaults.nativeControls.bookmark),
+      print: boolean(nativeControls.print, defaults.nativeControls.print),
+      selector: false, // reserved for the later Leaflet.draw selection tool
+      search: boolean(nativeControls.search, boolean(ui.showSearch, defaults.nativeControls.search))
     },
     mapDocuments: {
       allowed: nullableList(documents.allowed, { numeric: true }),
@@ -141,7 +151,16 @@ function boundedNumber(value, fallback, min, max) {
 }
 
 function boolean(value, fallback) {
-  return typeof value === 'boolean' ? value : fallback;
+  if (typeof value === 'boolean') return value;
+
+  // Preferences saved through older/form-style host code can return checkbox
+  // values as 1/0 or their string equivalents. Accept those representations so
+  // an existing heurist-map preference is not silently replaced by defaults
+  // when MapConfigurationDialog is reopened.
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+
+  return fallback;
 }
 
 function enumValue(value, allowed, fallback) {

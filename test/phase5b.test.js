@@ -34,7 +34,8 @@ test('MapDocument activation is mutually exclusive and unload restores default b
   await application.activateMapDocument(1);
   assert.equal(application.getActiveMapDocument().id, 1);
   assert.equal(application.getActiveMapDocument().loadState, 'loaded');
-  assert.equal(baseMapChanges.at(-1), null);
+  // A MapDocument without an explicit basemap now uses the configured initial/default basemap.
+  assert.equal(baseMapChanges.at(-1), 'OpenStreetMap');
 
   await application.unloadMapDocument(1);
   assert.equal(application.getActiveMapDocument(), null);
