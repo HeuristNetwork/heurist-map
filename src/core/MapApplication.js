@@ -1192,7 +1192,7 @@ export class MapApplication {
       title: mapLayer.title,
       description: mapLayer.description,
       type: mapLayer.source?.type || null,
-      visible: preserveVisible ? mapLayer.visible !== false : false,
+      visible: preserveVisible ? (mapLayer.visible !== false && reference.visible !== false) : false,
       selectable: mapLayer.selectable !== false,
       source: mapLayer.source,
       style: mapLayer.style,
@@ -1202,7 +1202,7 @@ export class MapApplication {
       order: reference.order ?? 0
     };
     const state = createLayerState(definition);
-    state.visible = preserveVisible ? mapLayer.visible !== false : false;
+    state.visible = preserveVisible ? (mapLayer.visible !== false && reference.visible !== false) : false;
     state.loadState = 'deferred';
     this.layers.set(id, state);
     this.deferredLayers.set(id, { mapLayer, reference, dynamic: mapLayer.options?.dynamicRequests === true });
@@ -1777,7 +1777,10 @@ export class MapApplication {
         result.push(item);
         continue;
       }
-      if (mapLayer.visible === false) {
+      // A layer is operationally visible only when both its MapLayer definition
+      // and the containing MapDocument reference allow it. Hidden layers must be
+      // registered only; they must not cause source/data requests.
+      if (mapLayer.visible === false || reference.visible === false) {
         result.push({ mapLayer, reference, runtimeLayer: null });
         continue;
       }
@@ -1856,6 +1859,16 @@ export class MapApplication {
     return layerId;
   }
 
+  /** Resolve a deferred-layer registry key without assuming string/number identity. */
+  findDeferredLayerKey(layerId) {
+    if (this.deferredLayers.has(layerId)) return layerId;
+    const wanted = String(layerId);
+    for (const key of this.deferredLayers.keys()) {
+      if (String(key) === wanted) return key;
+    }
+    return null;
+  }
+
   async refreshDynamicLayer(view = null) {
     const document = this.mapDocuments.get(this.activeMapDocumentId);
     if (!document) return null;
@@ -1871,8 +1884,12 @@ export class MapApplication {
       const id = String(item.reference.id);
       const runtimeKey = this.findRuntimeLayerKey(id);
       const runtime = this.layers.get(runtimeKey);
-      if (id !== winnerId && runtime && !this.deferredLayers.has(id)) {
-        if (this.selectionLayerId === id) await this.clearSelection();
+      const deferredKey = this.findDeferredLayerKey(id);
+      // Deferred layers have application state but no native engine layer yet.
+      // Never address the map engine for them. This also covers layers hidden by
+      // configuration/reference visibility and dynamic layers outside zoom range.
+      if (id !== winnerId && runtime && deferredKey === null && runtime.loadState === 'loaded') {
+        if (String(this.selectionLayerId) === id) await this.clearSelection();
         await this.mapEngine.setLayerVisibility(runtimeKey, false);
       }
     }
@@ -1882,7 +1899,7 @@ export class MapApplication {
     const winnerRuntimeKey = this.findRuntimeLayerKey(winnerId);
     const currentState = this.layers.get(winnerRuntimeKey);
     if (requestKey && this.dynamicRequestKeys.get(winnerId) === requestKey
-      && currentState?.loadState === 'loaded' && !this.deferredLayers.has(winnerId)) {
+      && currentState?.loadState === 'loaded' && this.findDeferredLayerKey(winnerId) === null) {
       await this.mapEngine.setLayerVisibility(winnerRuntimeKey, true);
       return this.getLayer(winnerId);
     }
@@ -1911,9 +1928,8 @@ export class MapApplication {
       }
 
       const runtimeKey = this.findRuntimeLayerKey(layerId);
-      const deferredKey = this.deferredLayers.has(runtimeKey) ? runtimeKey
-        : [...this.deferredLayers.keys()].find((key) => String(key) === String(layerId));
-      if (deferredKey !== undefined) {
+      const deferredKey = this.findDeferredLayerKey(layerId);
+      if (deferredKey !== null) {
         this.deferredLayers.delete(deferredKey);
         this.layers.delete(runtimeKey);
       } else if (this.layers.has(runtimeKey)) {
