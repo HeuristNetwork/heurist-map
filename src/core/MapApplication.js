@@ -1154,6 +1154,36 @@ export class MapApplication {
    * @param {Object} reference MapDocument layer reference.
    * @returns {Object} Lightweight registered layer state.
    */
+  /** Register one failed MapLayer without aborting the containing MapDocument. */
+  registerFailedLayer(mapLayer, reference, error) {
+    const id = reference.id ?? `map-layer-${reference.recordId}`;
+    const definition = {
+      id,
+      recordId: mapLayer?.id ?? reference.recordId ?? null,
+      title: mapLayer?.title || reference.title || `Map layer ${reference.recordId}`,
+      description: mapLayer?.description || '',
+      type: mapLayer?.source?.type || null,
+      visible: mapLayer?.visible !== false && reference.visible !== false,
+      selectable: mapLayer?.selectable !== false,
+      source: mapLayer?.source || null,
+      style: mapLayer?.style || null,
+      options: mapLayer?.options || null,
+      order: reference.order ?? 0
+    };
+    const state = createLayerState(definition);
+    state.loadState = 'error';
+    state.error = clonePlain(error || { name: 'Error', message: 'Layer loading failed' });
+    this.layers.set(id, state);
+    this.deferredLayers.delete(id);
+    this.dispatch('heurist-map-layer-state-changed', { layer: this.getLayer(id) });
+    this.dispatch('heurist-map-error', {
+      operation: 'load-map-layer',
+      layer: this.getLayer(id),
+      error: state.error
+    });
+    return state;
+  }
+
   registerDeferredLayer(mapLayer, reference, { preserveVisible = false } = {}) {
     const id = reference.id ?? `map-layer-${reference.recordId}`;
     const definition = {
@@ -1711,23 +1741,42 @@ export class MapApplication {
     const references = [...mapDocument.layers].sort(compareLayerReferences);
     const prepared = [];
 
+    // A MapDocument is a collection of independent operational layers. One bad
+    // MapLayer record must not make the whole document unusable: preserve a
+    // lightweight failed entry so the panel can show the problem and retry it.
     for (const reference of references) {
       throwIfAborted(signal);
-      let mapLayer;
       try {
-        mapLayer = await this.providers.mapLayer.getById(reference.recordId, { signal, defaults: this.config.defaults });
+        const mapLayer = await this.providers.mapLayer.getById(reference.recordId, {
+          signal,
+          defaults: this.config.defaults
+        });
+        prepared.push({ mapLayer, reference });
       } catch (error) {
-        throw addContext(error, `Cannot load MapLayer record ${reference.recordId}`);
+        if (isAbortError(error)) throw error;
+        const contextualError = addContext(error, `Cannot load MapLayer record ${reference.recordId}`);
+        prepared.push({
+          mapLayer: createFailedMapLayer(reference),
+          reference,
+          runtimeLayer: null,
+          error: serializeError(contextualError)
+        });
       }
-      prepared.push({ mapLayer, reference });
     }
 
     const view = this.mapEngine.getViewState?.() || null;
-    const dynamicWinner = this.selectDynamicLayer(prepared, view);
+    const dynamicWinner = this.selectDynamicLayer(
+      prepared.filter((item) => !item.error),
+      view
+    );
     const result = [];
 
     for (const item of prepared) {
       const { mapLayer, reference } = item;
+      if (item.error) {
+        result.push(item);
+        continue;
+      }
       if (mapLayer.visible === false) {
         result.push({ mapLayer, reference, runtimeLayer: null });
         continue;
@@ -1747,7 +1796,14 @@ export class MapApplication {
           })
         });
       } catch (error) {
-        throw addContext(error, `Cannot prepare MapLayer record ${reference.recordId}`);
+        if (isAbortError(error)) throw error;
+        const contextualError = addContext(error, `Cannot prepare MapLayer record ${reference.recordId}`);
+        result.push({
+          mapLayer,
+          reference,
+          runtimeLayer: null,
+          error: serializeError(contextualError)
+        });
       }
     }
     return result;
@@ -1982,16 +2038,26 @@ export class MapApplication {
 
   /** Render already prepared operational layers into the active environment. */
   async renderPreparedLayers(preparedLayers) {
-    try {
-      for (const item of preparedLayers) {
-        if (item.runtimeLayer) {
-          await this.renderRuntimeLayer(item.runtimeLayer);
-        } else {
-          this.registerDeferredLayer(item.mapLayer, item.reference, { preserveVisible: item.dynamicDeferred === true });
-        }
+    for (const item of preparedLayers) {
+      if (item.error) {
+        this.registerFailedLayer(item.mapLayer, item.reference, item.error);
+        continue;
       }
-    } catch (error) {
-      throw addContext(error, 'MapDocument layer data could not be rendered');
+
+      if (!item.runtimeLayer) {
+        this.registerDeferredLayer(item.mapLayer, item.reference, {
+          preserveVisible: item.dynamicDeferred === true
+        });
+        continue;
+      }
+
+      try {
+        await this.renderRuntimeLayer(item.runtimeLayer);
+      } catch (error) {
+        if (isAbortError(error)) throw error;
+        // renderRuntimeLayer has already registered this layer as loadState=error
+        // and dispatched its layer-specific error. Continue with sibling layers.
+      }
     }
   }
 
@@ -2132,6 +2198,19 @@ function findStoredLayerIndex(document, layerId) {
 function findStoredLayer(document, layerId) {
   const index = findStoredLayerIndex(document, layerId);
   return index < 0 ? null : document.layerDefinitions[index];
+}
+
+function createFailedMapLayer(reference) {
+  return {
+    id: reference.recordId,
+    title: reference.title || `Map layer ${reference.recordId}`,
+    description: '',
+    visible: reference.visible !== false,
+    selectable: false,
+    source: null,
+    style: null,
+    options: {}
+  };
 }
 
 function createLayerState(definition) {

@@ -226,3 +226,91 @@ test('MapDocument normalizes API min/max bounds', async () => {
     north: 70.36205494
   });
 });
+
+test('MapDocument isolates individual layer failures and keeps sibling layers', async () => {
+  const added = [];
+  const engine = {
+    async initialize() {},
+    async destroy() {},
+    async addLayer(layer) {
+      if (Number(layer.id) === 30) throw new Error('Render failed');
+      added.push(layer.id);
+      return { id: layer.id };
+    },
+    async fitBounds() {},
+    getCapabilities() { return {}; },
+    async removeLayer() {},
+    async setLayerVisibility() {},
+    async setView() {},
+    async invalidateSize() {},
+    getViewState() { return {}; }
+  };
+  const document = {
+    ...mapDocumentFixture,
+    layers: [
+      { id: 20, recordId: 20, title: 'Good', order: 1, visible: true },
+      { id: 30, recordId: 30, title: 'Bad render', order: 2, visible: true },
+      { id: 40, recordId: 40, title: 'Bad record', order: 3, visible: true }
+    ]
+  };
+  const layerFor = (id) => ({
+    ...mapLayerFixture,
+    id,
+    title: `Layer ${id}`,
+    source: { ...mapLayerFixture.source, recordId: id, query: `id:${id}` }
+  });
+
+  const application = new MapApplication({
+    container: new EventTarget(),
+    config: {
+      mapDocument: mapDocumentFixture,
+      apiBaseUrl: '/heurist/api',
+      database: 'demo',
+      readonly: true
+    },
+    mapEngine: engine,
+    host: { async initialize() {}, async destroy() {}, supportsEditing() { return false; } },
+    providers: {
+      mapDocument: { getById: async () => document },
+      mapLayer: {
+        getById: async (id) => {
+          if (Number(id) === 40) throw new Error('MapLayer endpoint failed');
+          return layerFor(id);
+        }
+      },
+      queryGeoData: {
+        searchAll: async () => ({ type: 'FeatureCollection', features: [], meta: {} })
+      }
+    },
+    layerLoaders: {
+      async load(mapLayer, context) {
+        return {
+          id: context.reference.id,
+          recordId: mapLayer.id,
+          title: mapLayer.title,
+          type: 'geojson',
+          visible: mapLayer.visible !== false,
+          selectable: mapLayer.selectable !== false,
+          data: { type: 'FeatureCollection', features: [] },
+          source: mapLayer.source,
+          style: mapLayer.style,
+          popup: mapLayer.popup,
+          options: mapLayer.options,
+          order: context.reference.order
+        };
+      }
+    }
+  });
+
+  await application.initialize();
+  await application.loadMapDocument(123);
+
+  assert.deepEqual(added, [20]);
+  const layers = application.getLayers();
+  assert.deepEqual(layers.map((layer) => layer.id), [20, 30, 40]);
+  assert.equal(layers[0].loadState, 'loaded');
+  assert.equal(layers[1].loadState, 'error');
+  assert.match(layers[1].error.message, /Render failed/);
+  assert.equal(layers[2].loadState, 'error');
+  assert.match(layers[2].error.message, /MapLayer endpoint failed/);
+});
