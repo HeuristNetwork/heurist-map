@@ -106,3 +106,70 @@ test('Heurist host adapter accepts string ok status for publish save', async () 
   });
   assert.deepEqual(await host.publishMap({ format: 'heurist-map-publish' }), { id: 'abc123' });
 });
+
+test('Heurist host adapter uses legacy map symbol preferences as runtime defaults', async () => {
+  const requestedKeys = [];
+  const stored = {
+    map_default_style: JSON.stringify({ color: '#123456', fillOpacity: 40 }),
+    map_select_style: { color: '#abcdef', weight: 4 }
+  };
+  const host = new HeuristHostAdapter({
+    baseUrl: 'http://example.test/heurist/',
+    database: 'demo',
+    fetchImpl: async (url) => {
+      const key = new URL(String(url)).searchParams.get('key');
+      requestedKeys.push(key);
+      return { ok: true, json: async () => ({ status: 0, data: stored[key] ?? null }) };
+    }
+  });
+  const config = {
+    defaults: { symbology: null, selectSymbology: null },
+    persistedSettings: { config: { defaults: { symbology: null, selectSymbology: null } } }
+  };
+
+  await host.initialize({ config });
+
+  assert.deepEqual(config.defaults.symbology, { color: '#123456', fillOpacity: 40 });
+  assert.deepEqual(config.defaults.selectSymbology, { color: '#abcdef', weight: 4 });
+  assert.deepEqual(requestedKeys.sort(), ['map_default_style', 'map_select_style']);
+  assert.equal(config.persistedSettings.config.defaults.symbology, null,
+    'legacy compatibility defaults must not be copied into persisted heurist-map settings');
+});
+
+test('explicit heurist-map symbol defaults take precedence over legacy preferences', async () => {
+  let requests = 0;
+  const host = new HeuristHostAdapter({
+    baseUrl: 'http://example.test/heurist/',
+    database: 'demo',
+    fetchImpl: async () => {
+      requests++;
+      return { ok: true, json: async () => ({ status: 0, data: '{}' }) };
+    }
+  });
+  const config = {
+    defaults: {
+      symbology: { color: '#111111' },
+      selectSymbology: { color: '#222222' }
+    }
+  };
+
+  await host.initialize({ config });
+
+  assert.equal(requests, 0);
+  assert.deepEqual(config.defaults.symbology, { color: '#111111' });
+  assert.deepEqual(config.defaults.selectSymbology, { color: '#222222' });
+});
+
+test('legacy map preference failures do not block host initialization', async () => {
+  const host = new HeuristHostAdapter({
+    baseUrl: 'http://example.test/heurist/',
+    database: 'demo',
+    fetchImpl: async () => { throw new Error('preference endpoint unavailable'); }
+  });
+  const config = { defaults: { symbology: null, selectSymbology: null } };
+
+  await host.initialize({ config });
+
+  assert.equal(config.defaults.symbology, null);
+  assert.equal(config.defaults.selectSymbology, null);
+});

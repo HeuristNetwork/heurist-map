@@ -27,6 +27,37 @@ export class HeuristHostAdapter extends HostAdapter {
     return { mapPreferences: true, mapPublishing: true };
   }
 
+  /**
+   * Apply legacy Heurist map symbol preferences as runtime defaults.
+   *
+   * This is a temporary compatibility bridge while old and new mapping coexist.
+   * Explicit heurist-map defaults always win; legacy preferences only fill null
+   * symbology/selectSymbology values and are never copied into persistedSettings.
+   */
+  async initialize({ config } = {}) {
+    const defaults = config?.defaults;
+    if (!defaults) return;
+
+    const requests = [];
+    if (defaults.symbology == null) {
+      requests.push(this.loadLegacySymbolPreference('map_default_style')
+        .then((symbol) => { if (symbol) defaults.symbology = symbol; }));
+    }
+    if (defaults.selectSymbology == null) {
+      requests.push(this.loadLegacySymbolPreference('map_select_style')
+        .then((symbol) => { if (symbol) defaults.selectSymbology = symbol; }));
+    }
+
+    // Legacy preferences are compatibility defaults, not a startup dependency.
+    // A failed preference read must not prevent the map itself from loading.
+    if (requests.length) await Promise.allSettled(requests);
+  }
+
+  async loadLegacySymbolPreference(key) {
+    const response = await this.request('UserController', 'get_prefs', { key });
+    return normalizeSymbolPreference(response);
+  }
+
   async editRecord(recordId) {
     const id = Number(recordId);
     if (!(id > 0)) throw new Error('A valid Heurist record ID is required for editing');
@@ -106,6 +137,18 @@ export class HeuristHostAdapter extends HostAdapter {
     }
     return payload.data;
   }
+}
+
+function normalizeSymbolPreference(value) {
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return JSON.parse(JSON.stringify(value));
 }
 
 function isSuccessStatus(status) {
