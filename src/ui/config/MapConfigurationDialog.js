@@ -20,10 +20,11 @@ export class MapConfigurationDialog {
   constructor({
     mode = 'preferences', value = null, parent = null, title = null,
     onSave = null, onCancel = null, reportTemplateProvider = null,
-    mapDocumentListProvider = null, baseMapCatalog = []
+    mapDocumentListProvider = null, baseMapCatalog = [], publishContext = null
   } = {}) {
     this.mode = normalizeMapConfigurationMode(mode);
     this.value = normalizeMapConfigurationSettings(value || {});
+    if (this.mode === 'publish') this.value = preparePublishConfiguration(this.value);
     this.parent = parent;
     this.title = title || defaultTitle(this.mode);
     this.onSave = typeof onSave === 'function' ? onSave : null;
@@ -31,6 +32,8 @@ export class MapConfigurationDialog {
     this.reportTemplateProvider = reportTemplateProvider || null;
     this.mapDocumentListProvider = mapDocumentListProvider || null;
     this.baseMapCatalog = Array.isArray(baseMapCatalog) ? baseMapCatalog : [];
+    this.publishContext = publishContext && typeof publishContext === 'object' ? { ...publishContext } : {};
+    this.publishControls = null;
     this.defaultBaseMapIds = getDefaultBaseMaps().map((item) => String(item.id));
     this.element = null;
     this.dialog = null;
@@ -85,7 +88,7 @@ export class MapConfigurationDialog {
       if (event.key === 'Escape') { event.preventDefault(); this.cancel(); }
     });
 
-    this.form.append(this.buildAdvancedPanel());
+    if (this.mode !== 'publish') this.form.append(this.buildAdvancedPanel());
     this.buildSections();
 
     const footer = document.createElement('footer');
@@ -128,7 +131,11 @@ export class MapConfigurationDialog {
   async save() {
     try {
       const value = this.getValue();
-      const result = await this.onSave?.(value, { mode: this.mode, serialized: serializeMapConfigurationSettings(value) });
+      const result = await this.onSave?.(value, {
+        mode: this.mode,
+        serialized: serializeMapConfigurationSettings(value),
+        publishOptions: this.mode === 'publish' ? this.getPublishOptions() : null
+      });
       if (result === false) return false;
       this.close();
       return value;
@@ -147,6 +154,13 @@ export class MapConfigurationDialog {
   }
 
   buildSections() {
+    if (this.mode === 'publish') {
+      this.form.append(
+        this.section('Interface', (body) => this.buildInterface(body), { open: true }),
+        this.section('Published map', (body) => this.buildPublish(body), { open: true })
+      );
+      return;
+    }
     this.form.append(
       this.section('Interface', (body) => this.buildInterface(body), { open: true }),
       this.section('Current Results Map', (body) => this.buildCurrentResults(body), { open: true }),
@@ -155,6 +169,49 @@ export class MapConfigurationDialog {
       this.section('Base maps', (body) => this.buildBaseMaps(body), { advanced: true }),
       this.section('Interaction', (body) => this.buildInteraction(body), { advanced: true })
     );
+  }
+
+  buildPublish(body) {
+    const preserve = plainCheckbox('Preserve current state', true);
+    preserve.row.title = 'Preserve current extent, zoom, basemap, visible layers, opacity, thematic map and selection.';
+    const onlyActive = plainCheckbox('Show only active document', false);
+    body.append(preserve.row, onlyActive.row);
+
+    const activeId = this.publishContext.activeDocumentId;
+    const dynamicId = String(this.publishContext.dynamicDocumentId || 'dynamic');
+    const isDynamic = activeId == null || String(activeId) === dynamicId;
+    let titleRow = null;
+    if (isDynamic) {
+      titleRow = this.text(body, 'config.dynamicDocument.title', 'Title');
+    }
+
+    this.publishControls = {
+      preserveState: preserve.control,
+      showOnlyActiveDocument: onlyActive.control,
+      isDynamic,
+      titleRow
+    };
+    onlyActive.control.addEventListener('change', () => this.updatePublishDocumentControls());
+    this.updatePublishDocumentControls();
+  }
+
+  updatePublishDocumentControls() {
+    if (this.mode !== 'publish' || !this.publishControls) return;
+    const checked = this.publishControls.showOnlyActiveDocument.checked === true;
+    const path = this.publishControls.isDynamic
+      ? 'options.ui.showMapDocuments'
+      : 'options.ui.showCurrentDocument';
+    const field = this.fields.get(path);
+    if (!field?.control) return;
+    if (checked) field.control.checked = false;
+    field.control.disabled = checked;
+  }
+
+  getPublishOptions() {
+    return {
+      preserveCurrentState: this.publishControls?.preserveState?.checked !== false,
+      showOnlyActiveDocument: this.publishControls?.showOnlyActiveDocument?.checked === true
+    };
   }
 
   buildCurrentResults(body) {
@@ -709,7 +766,9 @@ export class MapConfigurationDialog {
   }
 
   readForm() {
-    const result = { options: {}, config: {} };
+    // Start from the current normalized value so publish mode can render only
+    // Interface/Published map without discarding settings from hidden sections.
+    const result = clone(this.value);
     for (const [path, field] of this.fields) setPath(result, path, readControl(field, path));
     return result;
   }
@@ -791,6 +850,32 @@ function button(text, title, handler) {
   item.type = 'button'; item.textContent = text; item.title = title; item.addEventListener('click', handler); return item;
 }
 function submitButton(text) { const item = document.createElement('button'); item.type = 'submit'; item.className = 'primary'; item.textContent = text; return item; }
+function preparePublishConfiguration(value) {
+  const result = clone(value);
+  result.options = result.options || {};
+  result.options.ui = { ...(result.options.ui || {}), showOptions: false, showPublish: false };
+  result.options.nativeControls = {
+    ...(result.options.nativeControls || {}),
+    zoom: true,
+    scale: true,
+    bookmark: false,
+    print: false,
+    selector: false,
+    search: false
+  };
+  return result;
+}
+
+function plainCheckbox(labelText, checked = false) {
+  const row = document.createElement('label');
+  row.className = 'heurist-map-config-check';
+  const control = document.createElement('input');
+  control.type = 'checkbox';
+  control.checked = checked;
+  row.append(control, document.createTextNode(labelText));
+  return { row, control };
+}
+
 function submitLabel(mode) { return mode === 'publish' ? 'Publish' : mode === 'website' ? 'Save' : 'Apply'; }
 function firstFocusable(root) { return root.querySelector('button, input, select, textarea, summary'); }
 function defaultTitle(mode) { return mode === 'website' ? 'Website map configuration' : mode === 'publish' ? 'Publish map configuration' : 'Map preferences'; }

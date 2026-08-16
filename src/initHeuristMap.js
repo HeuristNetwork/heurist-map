@@ -76,12 +76,7 @@ export async function initHeuristMap(config) {
 
   const publicApi = new HeuristMapPublicApi(application);
   publicApi.setConfigurationDialogFactory((options = {}) => {
-    const dialog = new MapConfigurationDialog({
-      ...options,
-      reportTemplateProvider: providers.reportTemplates,
-      mapDocumentListProvider: providers.mapDocumentList,
-      baseMapCatalog: mapEngine.getAvailableBaseMaps?.() || []
-    });
+    const dialog = new MapConfigurationDialog({ ...options, reportTemplateProvider: providers.reportTemplates });
     dialog.open();
     return dialog;
   });
@@ -96,7 +91,11 @@ export async function initHeuristMap(config) {
     application.controlPanel = controlPanel;
 
     if (apiClient.isConfigured()) {
-      await publicApi.loadMapDocuments(config.documents.query);
+      // Published state owns startup activation when it names a document. Do not
+      // first activate mapDocuments.initiallyActive and then switch documents again.
+      await publicApi.loadMapDocuments(config.documents.query, {
+        activateFirst: config.initialState?.activeDocumentId == null
+      });
     }
     if (config.initialState) {
       await publicApi.restoreState(config.initialState);

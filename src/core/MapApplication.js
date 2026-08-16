@@ -298,6 +298,13 @@ export class MapApplication {
       // to recreate, so do not leave the previous MapDocument on screen while
       // that work is in progress.
       await this.beginMapEnvironment(document, environment);
+
+      // Current Results has no persisted worldBaseMap. Re-entering the dynamic
+      // document after a persisted MapDocument must therefore restore the
+      // configured initial/first allowed basemap explicitly. Do not inherit the
+      // basemap (or lack of one) from the previously active MapDocument.
+      await this.restoreDefaultBaseMap();
+
       if (activationSerial !== this.documentActivationSerial) {
         throw new DOMException('Stale dynamic MapDocument activation', 'AbortError');
       }
@@ -1576,7 +1583,10 @@ export class MapApplication {
       }
     }
 
-    if (state.query) {
+    // The saved query belongs only to the Current Results document. A published
+    // persisted MapDocument may still carry state.query for later switching, but
+    // it must not create/reload current-results while that document is active.
+    if (state.query && String(this.activeMapDocumentId) === this.dynamicDocumentId) {
       const existing = this.getDocumentLayer('current-results', this.dynamicDocumentId);
       if (existing) {
         await this.setQueryForLayer('current-results', state.query, { reload: true });

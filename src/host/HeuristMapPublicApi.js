@@ -74,15 +74,38 @@ export class HeuristMapPublicApi {
     return this.application.restoreMapState(state);
   }
 
-  /** Publish settings plus current map state through the host. */
-  publishMap(settings) {
+  /** Publish settings plus the selected amount of current map state through the host. */
+  publishMap(settings, publishOptions = {}) {
     const serialized = serializeMapConfigurationSettings(settings);
+    const captured = this.captureState();
+    const dynamicId = String(this.application.dynamicDocumentId || 'dynamic');
+    const activeId = captured.activeDocumentId;
+
+    if (publishOptions.showOnlyActiveDocument === true) {
+      if (String(activeId) === dynamicId) {
+        serialized.options.mapDocuments.allowed = [];
+        serialized.options.mapDocuments.initiallyActive = null;
+        serialized.options.ui.showMapDocuments = false;
+      } else if (activeId != null && Number.isInteger(Number(activeId)) && Number(activeId) > 0) {
+        const documentId = Number(activeId);
+        serialized.options.mapDocuments.allowed = [documentId];
+        // Use the same document as the startup document. This avoids loading a
+        // different configured default and activating the published state again.
+        serialized.options.mapDocuments.initiallyActive = documentId;
+        serialized.options.ui.showCurrentDocument = false;
+      }
+    }
+
+    const state = publishOptions.preserveCurrentState === false
+      ? { activeDocumentId: captured.activeDocumentId ?? null, query: captured.query ?? null }
+      : captured;
+
     return this.application.host.publishMap({
       format: 'heurist-map-publish',
       version: 1,
       options: serialized.options,
       config: serialized.config,
-      state: this.captureState()
+      state
     });
   }
 
@@ -104,12 +127,17 @@ export class HeuristMapPublicApi {
 
   /** Open publish configuration and save a reproducible map snapshot. */
   openPublishDialog(options = {}) {
+    const currentState = this.captureState();
     return this.openConfigurationDialog({
       ...options,
       mode: 'publish',
       value: options.value || this.application.config.persistedSettings || null,
+      publishContext: {
+        activeDocumentId: currentState.activeDocumentId,
+        dynamicDocumentId: this.application.dynamicDocumentId || 'dynamic'
+      },
       onSave: async (value, context) => {
-        const result = await this.publishMap(value);
+        const result = await this.publishMap(value, context.publishOptions || {});
         this.application.dispatch('heurist-map-published', { publication: result, settings: context.serialized });
         if (options.onSave) await options.onSave(value, context, result);
         // MapConfigurationDialog closes after this callback resolves. Defer the

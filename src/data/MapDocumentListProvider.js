@@ -16,6 +16,9 @@ export class MapDocumentListProvider {
     const recordTypeId = await this.recordTypes.getIdByConceptCode(
       MAP_DOCUMENT_CONCEPT_CODE, { signal }
     );
+    if (isNoDocumentsQuery(query)) {
+      return { items: [], pagination: null, recordTypeId };
+    }
     const request = normalizeDocumentQuery(query, recordTypeId);
     const payload = await this.apiClient.get('/records/', {
       query: { fields: 'rec_Title', ...request }, signal
@@ -29,19 +32,37 @@ export class MapDocumentListProvider {
 }
 
 function normalizeDocumentQuery(query, recordTypeId) {
-  if (query == null || query === '') return { q: { t: recordTypeId } };
-  if (Array.isArray(query)) return { ids: query.join(',') };
-  if (typeof query === 'number') return { ids: String(query) };
-  if (typeof query === 'string') {
-    const value = query.trim();
-    if (/^\d+(?:\s*,\s*\d+)*$/.test(value)) return { ids: value.replace(/\s+/g, '') };
-    return { q: value };
-  }
+  if (query == null || query === '') return { q: JSON.stringify({ t: recordTypeId }) };
+
+  const ids = normalizeIds(query);
+  if (ids) return { q: JSON.stringify({ t: recordTypeId, ids: ids }) };
+
+  if (typeof query === 'string') return { q: query.trim() };
   if (typeof query === 'object') {
-    if (Array.isArray(query.ids)) return { ...query, ids: query.ids.join(',') };
-    return { ...query };
+    const objectQuery = { ...query, t: recordTypeId };
+    if (Array.isArray(objectQuery.ids)) objectQuery.ids = normalizeIds(objectQuery.ids) || [];
+    return { q: JSON.stringify(objectQuery) };
   }
   throw new TypeError('MapDocument query must be null, IDs, a Heurist query, or an object');
+}
+
+function isNoDocumentsQuery(query) {
+  if (query === false) return true;
+  if (Array.isArray(query)) return query.length === 0;
+  return typeof query === 'string' && query.trim().toLowerCase() === 'none';
+}
+
+function normalizeIds(query) {
+  let values = null;
+  if (Array.isArray(query)) values = query;
+  else if (typeof query === 'number') values = [query];
+  else if (typeof query === 'string' && /^\d+(?:\s*,\s*\d+)*$/.test(query.trim())) {
+    values = query.split(',');
+  } else if (query && typeof query === 'object' && Array.isArray(query.ids)) {
+    values = query.ids;
+  }
+  if (!values) return null;
+  return [...new Set(values.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
 }
 
 function normalizeRecords(records) {
