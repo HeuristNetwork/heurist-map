@@ -13,11 +13,12 @@
 import L from 'leaflet';
 import { normalizeBounds as normalizeGeographicBounds } from '../utils/normalizeBounds.js';
 import { MapEngineAdapter } from './MapEngineAdapter.js';
-import { createImageFilterCss } from '../utils/normalizeImageFilter.js';
+import { createImageFilterCss, transparentColorToRgb } from '../utils/normalizeImageFilter.js';
 import { normalizeZoomLimit } from '../utils/normalizeZoomLimit.js';
 import { resolveFeatureSymbol } from '../thematic/thematicSymbolResolver.js';
 import { hexToCssFilter } from '../utils/hexToCssFilter.js';
 import { createLeafletBaseMapLayer, getLeafletBaseMapCatalog } from './leaflet/LeafletBasemapCatalog.js';
+import { ensureLeafletPixelFilter } from './leaflet/LeafletPixelFilter.js';
 
 /**
  * Leaflet implementation hidden behind the engine-neutral adapter contract.
@@ -41,6 +42,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    */
   async initialize(container, options) {
     this.baseMapProviderOptions = { ...(options.baseMapProviderOptions || {}) };
+    await ensureLeafletPixelFilter(L);
     this.map = L.map(container, {
       // Native controls are created through setNativeControls() so they can be
       // changed live from MapConfigurationDialog without rebuilding Leaflet.
@@ -647,7 +649,25 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       */
     });
 
-    const layer = L.tileLayer(definition.url, options);
+    const transparentRgb = transparentColorToRgb(definition.imageFilter?.transparentColor);
+    const layer = transparentRgb
+      ? L.tileLayerPixelFilter(definition.url, {
+          ...options,
+          pixelCodes: [transparentRgb],
+          matchRGBA: [0, 0, 0, 0],
+          missRGBA: null
+        })
+      : L.tileLayer(definition.url, options);
+
+    const filterCss = createImageFilterCss(definition.imageFilter);
+    if (filterCss) {
+      layer.on('tileload', (event) => {
+        if (event.tile?.style) {
+          event.tile.style.filter = filterCss;
+        }
+      });
+    }
+
     return this.registerLayer(definition, layer);
   }
 

@@ -18,7 +18,7 @@ import { LayerLoaderRegistry } from '../src/engine/loaders/LayerLoaderRegistry.j
 import { normalizeMapLayer } from '../src/core/MapLayer.js';
 import { TileLayerLoader } from '../src/engine/loaders/TileLayerLoader.js';
 import { ImageLayerLoader } from '../src/engine/loaders/ImageLayerLoader.js';
-import { createImageFilterCss, normalizeImageFilter, normalizeOpacity } from '../src/utils/normalizeImageFilter.js';
+import { createImageFilterCss, normalizeImageFilter, normalizeOpacity, transparentColorToRgb } from '../src/utils/normalizeImageFilter.js';
 
 test('normalizes simple symbol defaults and percentage opacity', () => {
   const symbol = normalizeMapSymbol({ color: '#000', opacity: 2, radius: -1 });
@@ -86,15 +86,48 @@ test('normalizes image filters and supplies missing CSS units', () => {
     brightness: '3',
     opacity: 75,
     'hue-rotate': 360,
+    transparentColor: '#FfF',
     unsupported: 'ignored'
   });
 
   assert.deepEqual(filter, {
+    transparentColor: '#ffffff',
     blur: '10px',
     brightness: '3',
     'hue-rotate': '360deg'
   });
   assert.equal(createImageFilterCss(filter), 'blur(10px) brightness(3) hue-rotate(360deg)');
+  assert.deepEqual(transparentColorToRgb(filter.transparentColor), [255, 255, 255]);
+});
+
+test('tile loader propagates raster CSS filters and transparent color', async () => {
+  const runtime = await new TileLayerLoader().load({
+    id: 127,
+    title: 'Raster tiles',
+    visible: true,
+    source: {
+      type: 'tile',
+      url: '/tiles/{z}/{x}/{y}.jpeg',
+      minZoom: 13,
+      maxZoom: 19
+    },
+    style: {
+      symbol: {
+        opacity: 40,
+        contrast: '2.4',
+        grayscale: '0.9',
+        transparentColor: '#ffffff'
+      }
+    },
+    options: {}
+  }, { reference: { recordId: 127, order: 1 } });
+
+  assert.equal(runtime.opacity, 0.4);
+  assert.deepEqual(runtime.imageFilter, {
+    transparentColor: '#ffffff',
+    contrast: '2.4',
+    grayscale: '0.9'
+  });
 });
 
 test('loads an image source as an engine-neutral runtime layer', async () => {

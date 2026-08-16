@@ -31,6 +31,11 @@ export const IMAGE_FILTER_NAMES = Object.freeze([
 export function normalizeImageFilter(symbol = {}) {
   const result = {};
 
+  const transparentColor = normalizeTransparentColor(symbol?.transparentColor);
+  if (transparentColor) {
+    result.transparentColor = transparentColor;
+  }
+
   for (const name of IMAGE_FILTER_NAMES) {
     const value = symbol?.[name];
     if (value === undefined || value === null || value === '') {
@@ -54,6 +59,48 @@ export function createImageFilterCss(filter = {}) {
     .filter((name) => filter[name] !== undefined)
     .map((name) => `${name}(${filter[name]})`)
     .join(' ');
+}
+
+
+/**
+ * Convert a normalized transparent color to the RGB tuple required by
+ * Leaflet.TileLayer.PixelFilter.
+ *
+ * @param {*} value Color in #RGB/#RRGGBB form or as an RGB array.
+ * @returns {number[]|null} Three-channel RGB value, or null when invalid.
+ */
+export function transparentColorToRgb(value) {
+  const normalized = normalizeTransparentColor(value);
+  if (!normalized) return null;
+
+  return [
+    Number.parseInt(normalized.slice(1, 3), 16),
+    Number.parseInt(normalized.slice(3, 5), 16),
+    Number.parseInt(normalized.slice(5, 7), 16)
+  ];
+}
+
+/**
+ * Normalize a transparency-match color to lower-case #rrggbb.
+ */
+function normalizeTransparentColor(value) {
+  if (Array.isArray(value) && value.length >= 3) {
+    const rgb = value.slice(0, 3).map(Number);
+    if (rgb.every((channel) => Number.isInteger(channel) && channel >= 0 && channel <= 255)) {
+      return `#${rgb.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
+    }
+    return null;
+  }
+
+  if (value === undefined || value === null || value === '') return null;
+  const text = String(value).trim();
+  if (/^#[0-9a-f]{3}$/i.test(text)) {
+    return `#${text.slice(1).split('').map((digit) => digit + digit).join('').toLowerCase()}`;
+  }
+  if (/^#[0-9a-f]{6}$/i.test(text)) {
+    return text.toLowerCase();
+  }
+  return null;
 }
 
 /**

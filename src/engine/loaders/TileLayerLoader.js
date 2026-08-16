@@ -10,6 +10,8 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
+import { normalizeImageFilter, normalizeOpacity } from '../../utils/normalizeImageFilter.js';
+
 export class TileLayerLoader {
   /**
    * Load a MapLayer using the loader registered for its source type.
@@ -20,6 +22,8 @@ export class TileLayerLoader {
     if (!source.url) {
       throw new TypeError('tile source requires url');
     }
+
+    const symbol = mapLayer.style?.symbol || {};
 
     return {
       id: context.reference.id ?? `map-layer-${context.reference.recordId}`,
@@ -38,7 +42,8 @@ export class TileLayerLoader {
       maxZoom: source.maxZoom,
       subdomains: source.subdomains,
       bounds: source.bounds,
-      opacity: source.opacity ?? mapLayer.options?.opacity,
+      opacity: normalizeOpacity(symbol.opacity ?? source.opacity ?? mapLayer.options?.opacity, 1),
+      imageFilter: normalizeImageFilter(symbol),
       noWrap: source.noWrap ?? Boolean(source.bounds),
       options: {
         ...(mapLayer.options || {}),

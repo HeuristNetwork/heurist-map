@@ -62,6 +62,7 @@ export function normalizeMapSymbol(value = {}, defaults = DEFAULT_MAP_SYMBOL) {
     invert: nonEmptyStringOrNull(symbol.invert ?? fallback.invert),
     saturate: nonEmptyStringOrNull(symbol.saturate ?? fallback.saturate),
     sepia: nonEmptyStringOrNull(symbol.sepia ?? fallback.sepia),
+    transparentColor: nonEmptyStringOrNull(symbol.transparentColor ?? fallback.transparentColor),
   };
 }
 
@@ -103,6 +104,9 @@ export function normalizeMapSymbolOverride(value = {}) {
   if (hasOwn(symbol, 'invert')) result.invert = nonEmptyStringOrNull(symbol.invert);
   if (hasOwn(symbol, 'saturate')) result.saturate = nonEmptyStringOrNull(symbol.saturate);
   if (hasOwn(symbol, 'sepia')) result.sepia = nonEmptyStringOrNull(symbol.sepia);
+  if (hasOwn(symbol, 'transparentColor')) {
+    result.transparentColor = nonEmptyStringOrNull(symbol.transparentColor);
+  }
 
   return result;
 }
