@@ -23,10 +23,12 @@ import { getDefaultBaseMaps } from './basemaps/defaultBasemaps.js';
 export function getHeuristMapConfig() {
   const url = new URL(globalThis.location?.href || 'http://localhost/');
   const bridge = getHostBridge();
+  // Both mapViewer and standalone published pages provide the canonical
+  // { runtime, settings, state } bootstrap contract.
   const bootstrap = bridge?.getConfiguration?.() || getStandaloneBootstrap();
-  const runtime = bootstrap?.runtime || {};
-  const settings = normalizeMapConfigurationSettings(bootstrap?.settings || {});
-  const state = bootstrap?.state ?? null;
+  const runtime = bootstrap.runtime;
+  const settings = normalizeMapConfigurationSettings(bootstrap.settings || {});
+  const state = bootstrap.state;
 
   const documentQuery = parseDocumentQuery(url.searchParams.get('doc'));
   const configuredDefaultDocumentId = settings.options.mapDocuments.initiallyActive;
@@ -111,30 +113,7 @@ function getHostBridge() {
  */
 function getStandaloneBootstrap() {
   const bootstrap = globalThis.heuristMapBootstrap;
-  if (bootstrap && typeof bootstrap === 'object') {
-    // Preferred bootstrap shape is {runtime, settings, state}. Published pages
-    // historically also supplied the publish payload flattened as
-    // {runtime, options, config, state}; accept both so publish options (notably
-    // native controls and initial basemap) are never replaced by defaults.
-    let settings = bootstrap.settings && typeof bootstrap.settings === 'object'
-      ? bootstrap.settings
-      : null;
-    if (!settings && (bootstrap.options || bootstrap.config)) {
-      settings = {
-        options: bootstrap.options || {},
-        config: bootstrap.config || {}
-      };
-    }
-    return {
-      runtime: bootstrap.runtime && typeof bootstrap.runtime === 'object'
-        ? bootstrap.runtime
-        : {},
-      settings,
-      state: bootstrap.state ?? settings?.state ?? null
-    };
-  }
-
-  return { runtime: {}, settings: null, state: null };
+  return bootstrap && typeof bootstrap === 'object' ? bootstrap : {};
 }
 
 /** Build Heurist internal host persistence only when a Heurist base URL exists. */

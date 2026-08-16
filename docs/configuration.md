@@ -1,108 +1,64 @@
 # Heurist Map configuration
 
-This document describes how `heurist-map` is initialised and configured in the main Heurist interface, the Website Editor, standalone use, and published maps.
+This document describes how `heurist-map` is configured in the main Heurist interface, in websites, in standalone use, and for published maps.
 
-The design separates three concepts:
+The configuration model deliberately separates three concepts:
 
-1. **`heuristMapBootstrap`** — environment-specific information required to start one map instance.
-2. **Heurist configuration** (`heurist-map-settings`) — portable user-editable map settings.
-3. **Map state** — the current reproducible state of a particular map view.
+1. **Bootstrap** — everything required to start one map application instance.
+2. **Configuration/settings** — portable user-editable map behaviour and presentation settings.
+3. **State** — the reproducible current map state, such as active document, extent, query, and selection.
 
-The separation is intentional. Database/API connection details must not leak into portable preferences or website configuration, while current extent/query/selection should not become permanent user preferences.
+Keeping these concepts separate avoids mixing database/API connection details with settings that may be saved in user preferences, a website page, or a published-map JSON file.
 
 ## 1. `heuristMapBootstrap`
 
-`heuristMapBootstrap` is the launch envelope for one `heurist-map` instance:
+`heuristMapBootstrap` is the complete input used to initialise one `heurist-map` instance.
 
 ```javascript
 {
   runtime: {
     viewerMode: "map",                 // "map" | "configuration"
-    configurationMode: "preferences", // preferences | website | publish
-
+    configurationMode: "preferences", // "preferences" | "website" | "publish"
+    readonly: false,
     database: "my_database",
     apiBaseUrl: "/heurist/api",
     baseUrl: "/heurist/",
-
     accessToken: null,
-    requestHeaders: {}
+    requestHeaders: {},
+    baseMapProviderOptions: {}
   },
 
   settings: {
     format: "heurist-map-settings",
     version: 1,
-    options: { /* see section 2 */ },
-    config: { /* see section 2 */ }
+    options: { /* see below */ },
+    config: { /* see below */ }
   },
 
   state: null
 }
 ```
 
-Only `runtime`, `settings`, and `state` belong to the bootstrap contract.
+### `runtime`
 
-### 1.1 `runtime`
+`runtime` contains values required by the running application but which must **not** be stored as normal map preferences. Typical examples are:
 
-`runtime` contains environment-specific launch information. It is not persisted as map configuration.
+- database name;
+- API/server URL;
+- access token and request headers;
+- Heurist base URL used by the host adapter;
+- viewer/configuration mode;
+- provider-specific basemap credentials/options.
 
-For normal map mode the important properties are:
+Runtime values are environment-specific. For example, a user preference should not permanently store the database URL or an authentication token.
 
-| Property | Purpose |
-|---|---|
-| `database` | Heurist database name. |
-| `apiBaseUrl` | Base URL of the public Heurist API, for example `/heurist/api`. |
-| `baseUrl` | Heurist application root used by internal `FrontController` operations such as preferences and publishing. If omitted, the standalone host adapter is used. |
-| `accessToken` | Optional API access token. |
-| `requestHeaders` | Optional additional public-API request headers. |
+### `settings`
 
-`viewerMode` and `configurationMode` are needed when the same bundle is used as the lightweight configuration editor.
+`settings` contains the portable, persisted Heurist map configuration described in the next section.
 
-The following are deliberately **not** runtime properties:
+### `state`
 
-- MapDocument availability/defaults;
-- basemap availability/default;
-- Map Control/UI settings;
-- dynamic/current-results document settings;
-- global map/layer defaults;
-- a direct `mapDocument` object;
-- custom basemap definitions.
-
-Those concerns are either persisted configuration or internal application behaviour.
-
-### 1.2 Built-in application behaviour
-
-The current application uses:
-
-- container ID `heurist-map`;
-- Leaflet as the map engine;
-- the built-in basemap catalog;
-- automatic loading of the configured MapDocument list.
-
-These are implementation details rather than bootstrap options.
-
-The built-in basemap catalog currently contains `OpenStreetMap` and `None`. `settings.options.baseMaps` can restrict this catalog and choose the initial basemap, but the bootstrap does not provide an alternative catalog.
-
-### 1.3 `settings` is optional
-
-`heuristMapBootstrap.settings` may be omitted. `heurist-map` then uses the canonical defaults defined by the configuration schema.
-
-Therefore this is a valid minimal standalone bootstrap:
-
-```javascript
-window.heuristMapBootstrap = {
-  runtime: {
-    database: "my_database",
-    apiBaseUrl: "/heurist/api",
-    baseUrl: "/heurist/"
-  }
-};
-```
-
-`baseUrl` may also be omitted when preference/publish operations through the Heurist host are not required.
-
-### 1.4 `state`
-
-`state` is optional and represents a reproducible current map view rather than permanent behaviour. The current implementation can restore values such as:
+`state` is optional. It describes a reproducible map state rather than general behaviour. The current implementation can store values such as:
 
 ```javascript
 {
@@ -110,24 +66,31 @@ window.heuristMapBootstrap = {
   zoom: 10,
   activeDocumentId: 123,
   baseMap: "OpenStreetMap",
-  visibleLayerIds: ["layer-1", "layer-2"],
-  activeLayerId: "current-results",
+  visibleLayerIds: [1234, "current-results"],
+  layerOpacities: {
+    "1234": 0.65,
+    "current-results": 1
+  },
+  activeThemes: {
+    "1234": -1,
+    "current-results": 0
+  },
+  activeLayerId: null,
   query: "t:10",
   selection: [101, 102]
 }
 ```
 
-Normal user preferences usually do not include state. Published maps include it so a publication can reproduce the map that was published.
+User preferences normally do not require state. Published maps include state so that the published link can reproduce the map as it appeared when it was published.
 
-## 2. Heurist configuration (`heurist-map-settings`)
+## 2. Persisted Heurist map configuration
 
-Portable configuration is stored in the following versioned envelope:
+The portable configuration stored in preferences or a website is a versioned settings envelope:
 
 ```javascript
 {
   format: "heurist-map-settings",
   version: 1,
-
   options: {
     ui: {
       enabled: true,
@@ -139,10 +102,19 @@ Portable configuration is stored in the following versioned envelope:
       showLayers: true,
       showBaseMaps: true,
       showLegend: true,
-      showZoomControl: true,
-      showSearch: false,
+      showHomeControl: false,
+      showOptions: true,
       showPublish: true,
       controlCss: null
+    },
+
+    nativeControls: {
+      zoom: true,
+      scale: true,
+      bookmark: false,
+      print: false,
+      selector: false,
+      search: false
     },
 
     mapDocuments: {
@@ -169,6 +141,7 @@ Portable configuration is stored in the following versioned envelope:
       selectSymbology: null,
       preventContinuousWorldBasemap: false,
       markerClustering: false,
+      markerClusterGridPixels: 20,
       maxAllowedFeatures: 1000,
       popupTemplate: null
     },
@@ -187,96 +160,70 @@ Portable configuration is stored in the following versioned envelope:
 }
 ```
 
-The schema is an allowlist. Unknown properties, obsolete configuration properties, and runtime fields are discarded during normalization and serialization.
+In code this object is commonly passed as `heuristMapSettings`. In this document, **Heurist map configuration** means this persisted `heurist-map-settings` envelope.
 
-### 2.1 `options`
+The schema is an allowlist. Unknown fields and runtime fields are discarded during normalization/serialization.
 
-`options` controls viewer behaviour and UI capabilities:
+### `options`
 
-- Map Control visibility;
-- allowed/default MapDocuments;
-- allowed/default basemaps from the built-in catalog;
-- global interaction policy.
+`options` controls viewer behaviour and user-interface capabilities.
 
-`mapDocuments.allowed === null` means all MapDocuments are available.
+`options.ui` controls the **Heurist Map Controls** panel:
 
-`mapDocuments.initiallyActive === null` means the dynamic **Current Results Map** is the default document when it is enabled. If it is disabled, the first available persisted MapDocument is used.
+- `enabled` — show/hide the Heurist control panel as a whole;
+- `initiallyExpanded` — initial expanded/collapsed state;
+- `showCurrentDocument` — Current results entry;
+- `showMapDocuments` — Map documents section;
+- `showLayers` — Layers section;
+- `showBaseMaps` — Base maps section;
+- `showLegend` — Legend;
+- `showHomeControl` — Home tool;
+- `showOptions` — Options tool;
+- `showPublish` — Publish tool.
 
-`baseMaps.allowed === null` means the complete built-in basemap catalog is available.
+`options.nativeControls` controls Leaflet/native map tools independently:
 
-`options.interaction` is global policy, not a set of fallback values. For example, `selectionEnabled: false` disables selection even when a particular layer is selectable, and `popupEnabled: false` disables popups globally.
+- `zoom` — Leaflet zoom buttons;
+- `scale` — Leaflet scale;
+- `bookmark` — Leaflet.Bookmarks;
+- `print` — leaflet.browser.print;
+- `selector` — reserved for the future area-selection tool and currently disabled;
+- `search` — leaflet-control-geocoder.
 
-### 2.2 `config.defaults`
+The remaining `options` properties control available/default MapDocuments, available/default basemaps, and interaction behaviour.
 
-`config.defaults` contains global fallback values used when a MapDocument or MapLayer does not define the corresponding value itself.
+`mapDocuments.initiallyActive === null` means the dynamic **Current results** document is the default document.
 
-The precedence is:
+### `config`
 
-```text
-built-in application default
-    ↓
-config.defaults
-    ↓
-specific MapDocument / MapLayer value
-```
+`config.defaults` contains defaults shared by map content where the individual MapDocument/MapLayer does not provide a value, including symbology, marker clustering, feature limits, popup template, and continuous-world behaviour.
 
-The current global defaults are:
+`config.dynamicDocument` controls the dynamic **Current results** MapDocument, including its title, zoom restrictions, optional bounds, and `dynamicRequests` (Load by map extent).
 
-| Property | Applies to | Rule |
-|---|---|---|
-| `zoomToPointInKM` | MapDocument/view | Used when the active MapDocument does not define `zoomToPointInKM`. |
-| `symbology` | MapLayer | Used when the layer does not define `style.symbol` (including the base symbol for thematic layers). |
-| `selectSymbology` | MapLayer selection | Used when the layer does not define `style.selectSymbol` / `style.selectSymbology`. |
-| `preventContinuousWorldBasemap` | Map viewer | Applied to built-in tile basemaps globally (`noWrap`). |
-| `markerClustering` | MapLayer options | Inherited when the layer omits the option. When enabled, point features are grouped with Leaflet.markercluster; line and polygon features remain unclustered. |
-| `maxAllowedFeatures` | Query MapLayer | Inherited when omitted and used as the query source limit. Allowed values are 500, 1000, 2000, and 5000. |
-| `popupTemplate` | GeoJSON MapLayer | Inherited when omitted. Templates support escaped `{{property}}` placeholders; `{{heurist.recordId}}` addresses Heurist metadata. |
+## 3. Why bootstrap and persisted configuration are different
 
-Fallback values are applied with nullish semantics: explicit `false` and `0` values are not replaced by defaults.
+The structures differ intentionally.
 
-### 2.3 `config.dynamicDocument`
+A persisted configuration must be portable and safe. It can be copied between user preferences, website settings, and publishing without carrying authentication or server-specific details.
 
-`config.dynamicDocument` contains only properties specific to the internal dynamic **Current Results Map**:
-
-- `enabled`;
-- `title`;
-- native `minZoom` / `maxZoom`;
-- kilometre `minimumZoomKm` / `maximumZoomKm`;
-- `bounds`;
-- `dynamicRequests` (**Load by map extent**).
-
-The document has no separate `initiallyActive` flag. Startup activation is controlled only by `options.mapDocuments.initiallyActive`.
-
-The `current-results` layer also has no separate persisted configuration object. It is an internal layer with fixed ID `current-results`, initially visible and selectable. When `config.dynamicDocument.dynamicRequests` is enabled, this layer is loaded by the current map extent. Other MapLayers do not inherit this setting; they must explicitly define `options.dynamicRequests: true` if they are to use extent-based loading.
-
-## 3. Why bootstrap and configuration differ
-
-They have different lifetimes and portability requirements.
-
-`heuristMapBootstrap` describes **one concrete launch**. It may therefore contain the database name, API URL, Heurist root URL, authentication transport, portable settings, and optional state.
-
-The stored Heurist configuration describes **portable map behaviour**. It must be safe to store in user preferences, a website definition, or a publish JSON file without carrying database URLs, credentials, host objects, or callbacks.
-
-In short:
+`heuristMapBootstrap`, on the other hand, represents one concrete application launch. It therefore combines:
 
 ```text
-heuristMapBootstrap
-    = runtime environment
-    + optional portable configuration
-    + optional state
-
-heurist-map-settings
-    = portable options
-    + portable config
+runtime environment
++ persisted settings
++ optional map state
++ optional direct MapDocument
 ```
 
-The configuration is therefore one optional part of the bootstrap, not an alternative bootstrap format.
+The persisted configuration is therefore **part of** the bootstrap, not an alternative bootstrap format.
+
+This also prevents configuration precedence from being evaluated in multiple places. The host prepares the effective `settings` once, and `heurist-map` consumes them without rebuilding a competing configuration from runtime fields.
 
 ## 4. Standalone `heurist-map` initialisation
 
-A standalone page defines `window.heuristMapBootstrap` before loading the bundle.
+A standalone application defines `window.heuristMapBootstrap` before loading the `heurist-map` bundle.
 
-Minimal example using default map configuration:
+Example:
 
 ```html
 <div id="heurist-map"></div>
@@ -284,58 +231,52 @@ Minimal example using default map configuration:
 <script>
 window.heuristMapBootstrap = {
   runtime: {
+    viewerMode: "map",
+    containerId: "heurist-map",
     database: "my_database",
     apiBaseUrl: "https://example.org/heurist/api",
-    baseUrl: "https://example.org/heurist/"
-  }
+    host: null
+  },
+
+  settings: {
+    format: "heurist-map-settings",
+    version: 1,
+    options: {
+      ui: {
+        initiallyExpanded: true,
+        showMapDocuments: true,
+        showBaseMaps: true
+      }
+    },
+    config: {
+      defaults: {
+        maxAllowedFeatures: 1000
+      }
+    }
+  },
+
+  state: null
 };
 </script>
 
 <script type="module" src="/heurist/external/heurist-map/heurist-map.js"></script>
 ```
 
-Example with explicit configuration and initial state:
+Missing persisted settings are filled from the canonical defaults by the configuration normalizer.
 
-```javascript
-window.heuristMapBootstrap = {
-  runtime: {
-    database: "my_database",
-    apiBaseUrl: "https://example.org/heurist/api",
-    baseUrl: "https://example.org/heurist/"
-  },
-  settings: {
-    format: "heurist-map-settings",
-    version: 1,
-    options: {
-      ui: { initiallyExpanded: false },
-      mapDocuments: { allowed: [12, 14], initiallyActive: 14 },
-      baseMaps: { allowed: ["OpenStreetMap", "None"], initial: "OpenStreetMap" }
-    },
-    config: {
-      defaults: { maxAllowedFeatures: 2000 }
-    }
-  },
-  state: {
-    activeDocumentId: 14
-  }
-};
-```
+The old mixed `window.heuristMapOptions` startup object is **not supported**. Runtime parameters and persisted map settings must not be mixed together.
 
-The optional URL parameter `?doc=12,14` can be used as a standalone MapDocument filter when `settings.options.mapDocuments.allowed` is not specified. Persisted `mapDocuments.allowed` takes precedence.
+### Main Heurist iframe integration
 
-## 5. Main Heurist iframe integration
-
-When `heurist-map` runs inside `mapViewer`, the wrapper owns the bootstrap for the lifetime of the widget.
-
-The same-origin iframe reads it directly from the iframe DOM element:
+When `heurist-map` runs inside `mapViewer`, the wrapper owns the bootstrap for the lifetime of the widget. The same-origin iframe reads it through:
 
 ```javascript
 window.frameElement.heuristMapHost.getConfiguration()
 ```
 
-The bridge is owned by the parent iframe element, so iframe navigation/reload does not lose database/API information or current settings.
+The bridge is attached to the iframe DOM element, so it remains available after iframe navigation/reload. A reload therefore receives the current database/API information and the latest map settings without a registry or `postMessage` protocol.
 
-`mapViewer` constructs the effective settings once:
+For the main Heurist UI, `mapViewer` builds effective settings in this order:
 
 ```text
 user preference "heurist-map"
@@ -343,41 +284,41 @@ user preference "heurist-map"
 explicit mapViewer heuristMapSettings
 ```
 
-Explicit widget settings override user preferences. `getHeuristMapConfig()` does not perform a second competing settings merge.
+Explicit widget settings override the corresponding user preferences. `heurist-map` itself does not perform this merge again.
 
-## 6. Configuration dialog
+## 5. Configuration dialog
 
-`MapConfigurationDialog` is a reusable editor with three modes:
+`MapConfigurationDialog` is one reusable editor with three modes:
+
+- `preferences`
+- `website`
+- `publish`
+
+All modes edit the same allowlisted `heurist-map-settings` configuration. The mode determines the surrounding workflow and the primary action label.
 
 | Mode | Primary action | Purpose |
 |---|---|---|
 | `preferences` | **Apply** | Save the user's normal map preferences and apply compatible changes to the current map. |
-| `website` | **Save** | Return configuration to the Website Editor for storage with the page/widget. |
-| `publish` | **Publish** | Store portable configuration together with the current map state. |
+| `website` | **Save** | Return configuration to the Website Editor, which stores it with the web page/widget. |
+| `publish` | **Publish** | Save portable settings together with current map state as a published map. |
 
-All three modes edit the same `heurist-map-settings` schema. The mode changes the surrounding workflow, not the configuration format.
+### Advanced settings
 
-### 6.1 Advanced settings
+The dialog opens with **Advanced settings** disabled. This keeps the normal form small while retaining more specialized controls.
 
-The dialog opens with **Advanced settings** disabled.
+With Advanced settings disabled, entire sections such as **Map documents**, **Base maps**, and **Interaction** are hidden. Advanced-only individual controls are also hidden, including selected extent, zoom, popup, dynamic-request, selection-symbology, and Map Control CSS settings.
 
-With Advanced settings disabled:
+Advanced mode changes only what the dialog displays; it does not define a different JSON format. Advanced and non-advanced settings are stored in the same configuration schema.
 
-- the **Map documents**, **Base maps**, and **Interaction** sections are hidden;
-- Current Results Map extent and all of its zoom controls are hidden;
-- popup template, **Load by map extent**, selection symbology, continuous-world control, Map Control CSS, and other specialist settings are hidden.
+## 6. Preferences mode
 
-Advanced mode only changes form visibility. It does not define another JSON format.
-
-## 7. Preferences
-
-Preferences are user-specific configuration stored under the user preference key:
+Preferences are user-specific settings stored under the preference key:
 
 ```text
 heurist-map
 ```
 
-They are defined through the Map configuration dialog in the main Heurist map UI / Map tab.
+They are normally defined through the Map configuration dialog opened from the **Map** tab / Map options in the main Heurist interface.
 
 `mapViewer` reads the already-loaded preference with:
 
@@ -385,240 +326,111 @@ They are defined through the Map configuration dialog in the main Heurist map UI
 window.hWin.HAPI4.get_prefs('heurist-map')
 ```
 
-and places the effective value in `heuristMapBootstrap.settings`.
+and includes it in the bootstrap settings supplied to `heurist-map`.
 
-When **Apply** is pressed:
+When the user presses **Apply**:
 
 1. the `heurist-map` preference is saved;
-2. `applyConfiguration()` applies safe live changes without rebuilding the whole Leaflet application;
-3. current document/view/query/selection are retained where possible;
-4. the parent-owned bootstrap is updated so an iframe reload receives the newly saved settings.
+2. `applyConfiguration()` applies compatible changes to the running map without completely reinitialising Leaflet;
+3. the current document/view/query/selection are preserved where possible;
+4. the parent-owned bootstrap settings are updated, so an iframe reload uses the newly saved settings.
 
-Startup choices such as Default document are stored for the next initialisation and do not unexpectedly switch the current map during Apply.
+Startup defaults such as the default document are saved for subsequent initialisation; Apply does not force an unexpected document switch in the current map.
 
 These preferences affect `heurist-map` in the **main Heurist UI**.
 
-## 8. Website configuration
+## 7. Website mode
 
-Website mode is used by the Heurist Website Editor:
+Website mode is used by the Heurist Website Editor.
+
+The viewer is opened with:
 
 ```javascript
 viewerMode: "configuration"
 configurationMode: "website"
 ```
 
-This is a lightweight configuration-only mode. It creates the configuration API/dialog but does **not** initialise `MapApplication`, Leaflet, basemaps, MapDocuments, or map data.
+This is a lightweight configuration-only bootstrap. It creates the configuration API/dialog but does **not** initialise `MapApplication`, Leaflet, basemaps, MapDocuments, or map data.
 
-When **Save** is pressed, the serialized `heurist-map-settings` value is returned to the Website Editor. The Website Editor stores it with the page/widget.
+When the user presses **Save**, the serialized `heurist-map-settings` value is returned to the Website Editor. The Website Editor is responsible for storing that value with the web page/widget.
 
-Website configuration affects the `heurist-map` shown in the **user's website**. It is independent of the user's normal `heurist-map` preference.
+Website configuration affects the `heurist-map` instance shown in the **user's website**. It is not saved as the user's general `heurist-map` preference.
 
-## 9. Publish configuration
+## 8. Publish mode
 
-Publish mode is opened from the **Publish** control in a running map.
+Publish mode is opened from the **Publish** control in a running `heurist-map`.
 
-When **Publish** is pressed, the stored publish JSON contains portable settings plus current state:
+The user can adjust the map configuration before publishing. When **Publish** is pressed, `heurist-map` stores a publish envelope containing the portable configuration plus the current reproducible state:
 
 ```javascript
 {
   format: "heurist-map-publish",
   version: 1,
-  options: { /* settings.options */ },
-  config: { /* settings.config */ },
-  state: { /* captured current map state */ }
+  options: {
+    ui: {
+      enabled: true,
+      showHomeControl: false,
+      showOptions: false,
+      showPublish: false,
+      /* ...other ui fields... */
+    },
+    nativeControls: {
+      zoom: false,
+      scale: false,
+      bookmark: true,
+      print: true,
+      selector: false,
+      search: true
+    },
+    /* mapDocuments, baseMaps, interaction */
+  },
+  config: { /* serialized settings.config */ },
+  state: { /* captured map state */ }
 }
 ```
 
-The publish JSON deliberately does **not** persist runtime information such as database/API/base URLs. The generated published page supplies the runtime launch environment separately and combines it with the published settings/state.
+The published JSON deliberately includes `state`, unlike normal preferences, because the published map must reproduce the selected document, visible layers, extent, query, and related map state.
 
-The generated standalone page converts the stored publish JSON into the normal bootstrap contract before loading the bundle:
+After a successful publish, the configuration dialog closes and a small **Published map** dialog displays the public link with **Copy link**, **Open**, and **Close** actions.
+
+The server-side publish allowlist must preserve the complete current `options.ui` and `options.nativeControls` sections. Dropping one of these fields changes the published map because missing fields are interpreted as canonical defaults.
+
+The generated standalone page converts the stored publish document directly to the canonical bootstrap contract:
 
 ```javascript
 window.heuristMapBootstrap = {
   runtime: {
     database: "my_database",
-    apiBaseUrl: "/heurist/api",
-    baseUrl: "/heurist/"
+    baseUrl: "/heurist/",
+    apiBaseUrl: "/heurist/api"
   },
   settings: {
     format: "heurist-map-settings",
     version: 1,
-    options: { /* stored publish options */ },
-    config: { /* stored publish config */ }
+    options: published.options,
+    config: published.config
   },
-  state: { /* stored publish state */ }
+  state: published.state
 };
 ```
 
-There is no separate `window.heuristMapPublished` startup path.
+There is no secondary published-map bootstrap format to normalize inside `heurist-map`.
 
-After successful publishing, the configuration dialog closes and a small **Published map** dialog shows the public link with **Copy link**, **Open**, and **Close** actions.
-
-## 10. Configuration ownership and precedence
+## 9. Configuration ownership summary
 
 | Context | Stored value | Owner | Affects |
 |---|---|---|---|
-| Main Heurist preferences | `heurist-map-settings` | User preference `heurist-map` | Main Heurist map viewer |
-| Website | `heurist-map-settings` | Website/page/widget definition | Map embedded in a user's website |
+| Main Heurist preferences | `heurist-map-settings` | User preferences (`heurist-map` key) | Main Heurist map viewer |
+| Website | `heurist-map-settings` | Website/page/widget definition | Map embedded in the user's website |
 | Publish | `heurist-map-publish` = settings + state | Published-map JSON | Standalone published map |
-| Bootstrap | `{runtime, settings, state}` | Current host/application instance | One concrete map startup |
+| Bootstrap | `{runtime, settings, state}` | Current host/application instance | One concrete `heurist-map` startup |
 
-For the main Heurist viewer the settings precedence is:
+## 10. Design rules
 
-```text
-canonical defaults
-    ↓
-user preferences
-    ↓
-explicit mapViewer/website settings
-```
+The following rules should be kept when extending map configuration:
 
-Canonical defaults are applied by the configuration normalizer. They do not need to be copied into `heuristMapBootstrap` when no custom settings are required.
-
-Published state is restored after map initialisation; it is not another layer of general preferences.
-
-## 11. Loading by extent
-
-**Loading by extent** is intended for large Heurist query layers where loading the complete result set at once would be slow or unnecessarily expensive. Instead of requesting every matching record, `heurist-map` requests only records whose geographic values intersect the current map view.
-
-For the internal **Current Results Map**, this behaviour is enabled with:
-
-```javascript
-config: {
-  dynamicDocument: {
-    dynamicRequests: true
-  }
-}
-```
-
-The configuration dialog exposes this option as **Load by map extent** under **Current Results Map**. It is not a global MapLayer default. Persisted or runtime-added MapLayers use the same mechanism only when the individual layer explicitly defines:
-
-```javascript
-options: {
-  dynamicRequests: true
-}
-```
-
-### 11.1 Viewport query
-
-The original layer query is retained unchanged. For each extent request, `heurist-map` creates a temporary effective query by adding the current map bounds.
-
-For the preferred JSON Heurist query format, the added predicate is:
-
-```javascript
-{
-  geo: {
-    west: -16,
-    south: 32,
-    east: 40,
-    north: 72
-  }
-}
-```
-
-For the legacy plain-text query format, the equivalent predicate is appended as:
-
-```text
-geo:"-16,32,40,72"
-```
-
-Viewport coordinates are normalized before the request. Longitude (`west` / `east`) is limited to `-180 .. 180`, and latitude (`south` / `north`) is limited to `-90 .. 90`.
-
-The server interprets the extent as an intersection query. This is important for lines and polygons: a feature is eligible when it intersects the visible map extent; it does not have to be completely contained by it. Existing WKT `geo` queries retain their historical behaviour.
-
-### 11.2 One active extent-loaded layer per MapDocument
-
-A MapDocument may define more than one layer with `dynamicRequests: true`, for example to provide different datasets at different zoom levels. However, **only one dynamic layer is allowed to issue extent requests for a MapDocument at any one zoom level**. This prevents one pan or zoom operation from starting several expensive server queries.
-
-Dynamic layers should therefore normally have non-overlapping effective zoom ranges, for example:
-
-```text
-Overview layer     zoom 0-8
-Places layer       zoom 9-12
-Detailed layer     zoom 13-18
-```
-
-A layer participates in extent loading only when all of the following are true:
-
-- its source is a Heurist query;
-- `dynamicRequests` is `true`;
-- the layer is visible;
-- the current map zoom is within the layer's effective zoom range.
-
-If more than one dynamic layer is eligible because their zoom ranges overlap, `heurist-map` selects only the highest-priority/topmost eligible layer. The other layers do not issue requests. A warning is emitted for the configuration overlap so it can be corrected.
-
-A dynamic layer outside its zoom range remains configured but does not load data until its range becomes active. Moving into another dynamic layer's zoom range switches the active dynamic layer and removes the superseded runtime layer from the map.
-
-### 11.3 Refresh, debounce, and superseding requests
-
-Extent-loaded layers refresh after the map view changes. `heurist-map` listens to the map `moveend` event, which also covers the end of a zoom operation.
-
-Refreshes are debounced so intermediate pan/zoom movements do not immediately create server requests. The current implementation waits briefly after movement before issuing the request.
-
-If a newer viewport request becomes necessary while an earlier request is still in progress:
-
-1. the previous browser request is aborted with `AbortController`;
-2. the newer viewport request supersedes it;
-3. an aborted/superseded request is treated as normal internal control flow, not as a user-visible map error;
-4. the cancellation may be logged to the developer console for diagnostics.
-
-Aborting the browser request prevents a stale response from being applied to the map. It does not guarantee that a MySQL query already executing on the server is immediately cancelled, which is why debounce and the one-active-dynamic-layer rule are also important.
-
-`heurist-map` also avoids issuing another request when the effective zoom and viewport bounds have not changed.
-
-### 11.4 Result limits and partial loading
-
-Extent requests continue to respect the effective query feature/record limit, including `maxAllowedFeatures`. A viewport may therefore still contain more matching records than the configured request limit.
-
-The map API response includes result metadata such as:
-
-```javascript
-meta: {
-  totalRecords,
-  returnedRecords,
-  returnedFeatures,
-  offset,
-  limit,
-  isPartial
-}
-```
-
-When `isPartial` is `true`, the Map Control reports that only part of the result has been loaded. For the `current-results` layer, the row label itself reports the number of loaded features and explains the partial result; the full text is also available as the row title when the visible label is truncated.
-
-`returnedRecords` and `returnedFeatures` are deliberately separate. Some matching records have no geometry, while one record may produce more than one feature. Pagination and result-limit logic therefore must not assume that the number of returned features is the same as the number of processed records.
-
-### 11.5 Selection during extent refresh
-
-When the same dynamic layer is refreshed for a new viewport, selected record IDs are reapplied where those records are still present in the returned data. If a zoom-range change activates a different dynamic layer, selection belonging to the previous dynamic layer is cleared.
-
-This keeps selection stable where possible without retaining selections for features that are no longer part of the active viewport layer.
-
-## 12. Design rules
-
-When extending configuration, keep these rules:
-
-1. **Keep runtime small.** Only environment-specific launch values belong in `bootstrap.runtime`.
-2. **Do not duplicate persisted settings in runtime.** MapDocuments, basemap selection, UI, interaction, global defaults, and dynamic-document configuration belong in `heurist-map-settings` only.
-3. **Use the built-in basemap catalog.** Persist only which built-in basemaps are allowed and which one is initial.
-4. **Do not put a MapDocument in the bootstrap.** Persisted documents are loaded through the API; the Current Results Map is defined by `settings.config.dynamicDocument`.
-5. **Missing settings mean defaults.** `bootstrap.settings` is optional.
-6. **Merge configuration once.** The host resolves preference/widget precedence; `heurist-map` normalizes the result but does not repeat the merge.
-7. **Use state for reproducibility.** Extent, active document/layer, query, and selection belong to state when they need to be restored.
-8. **Keep configuration-only mode lightweight.** Website configuration must not create a map engine.
-
-
-### Marker clustering
-
-`markerClustering` enables Leaflet.markercluster for GeoJSON point features. It can be set globally in `config.defaults.markerClustering` or explicitly in a MapLayer `options.markerClustering`. The layer option takes precedence over the global default.
-
-When enabled:
-
-- point features are grouped into clusters as the map is zoomed out;
-- clicking a cluster zooms to its contents using the plugin default behaviour;
-- overlapping markers can spiderfy at maximum zoom;
-- line and polygon features in the same GeoJSON layer remain normal Leaflet paths;
-- bulk marker insertion uses `chunkedLoading` to reduce long UI blocking for large result sets;
-- clustering works with both normal and extent-loaded query layers because it is applied after GeoJSON retrieval.
-
-The setting affects presentation only. It does not alter the Heurist query, result limit, partial-result metadata, or dynamic-request rules.
-
+1. **Do not put runtime connection values into persisted settings.** Database, API URLs, tokens, request headers, callbacks, and host objects belong to `bootstrap.runtime`.
+2. **Add user-editable persisted properties to the configuration schema/defaults.** This keeps normalization and server-side publishing allowlists predictable.
+3. **Merge configuration once.** The host resolves preference/widget precedence before `heurist-map` starts; `getHeuristMapConfig()` consumes the resulting bootstrap rather than repeating the merge.
+4. **Use state for reproducibility, not preferences.** Current extent, active layer/document, query, and selection belong to state when they need to be restored.
+5. **Configuration-only mode must remain lightweight.** Website configuration should not create or reinitialise the map engine.
