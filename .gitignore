@@ -1,6 +1,6 @@
 node_modules/
-dist/
 .vite/
 *.log
+*.map
 .DS_Store
 CLAUDE.md

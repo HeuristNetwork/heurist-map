@@ -92,9 +92,6 @@ src/
     MapControlPanel.js
     MapDocumentSelector.js
 
-public/fixtures/
-  map-document.json
-  map-layer.json
 ```
 
 ## 4. Runtime configuration
