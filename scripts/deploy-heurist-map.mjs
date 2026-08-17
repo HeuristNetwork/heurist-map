@@ -1,71 +1,78 @@
-import {
-    cp,
-    mkdir,
-    readdir,
-    rm
-} from 'node:fs/promises';
+/**
+ * deploy-heurist-map.mjs - Publish the built heurist-map distribution to Heurist support files.
+ *
+ * The destination root is supplied by HEURIST_CLIENT_DIST_ROOT and defaults to the
+ * reference-server support directory. The deploy is staged before replacing the
+ * previous module directory, so a failed copy does not leave an empty deployment.
+ */
+
+import { cp, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const scriptDirectory = path.dirname(
-    fileURLToPath(import.meta.url)
-);
-
-const projectDirectory = path.resolve(
-    scriptDirectory,
-    '..'
-);
-
-const sourceDirectory = path.join(
-    projectDirectory,
-    'dist'
-);
-
-/*
- * Adjust this filesystem path to your installation.
- *
- * This is a filesystem path, not a browser URL.
- */
-const destinationDirectory =
-    'C:/xampp/htdocs/heurist/external/heurist-map';
-    //'/var/www/html/heurist/external/heurist-map';
+const moduleName = 'heurist-map';
+const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const projectDirectory = path.resolve(scriptDirectory, '..');
+const sourceDirectory = path.join(projectDirectory, 'dist');
+const distributionRoot = process.env.HEURIST_CLIENT_DIST_ROOT ||
+    '/var/www/html/HEURIST/HEURIST_SUPPORT/external_h5';
+const destinationDirectory = path.join(distributionRoot, moduleName);
+const stagingDirectory = `${destinationDirectory}.new-${process.pid}`;
+const previousDirectory = `${destinationDirectory}.old-${process.pid}`;
 
 async function verifyBuildDirectory() {
-    const files = await readdir(sourceDirectory);
+    const info = await stat(sourceDirectory).catch(() => null);
+    if (!info?.isDirectory()) {
+        throw new Error(`Build output directory does not exist: ${sourceDirectory}`);
+    }
 
-    if (!files.includes('index.html')) {
-        throw new Error(
-            `Build output does not contain index.html: ${sourceDirectory}`
-        );
+    const files = await readdir(sourceDirectory);
+    if (!files.includes('heurist-map.js')) {
+        throw new Error(`Build output does not contain heurist-map.js: ${sourceDirectory}`);
+    }
+    if (!files.includes('heurist-map-main.css')) {
+        throw new Error(`Build output does not contain heurist-map-main.css: ${sourceDirectory}`);
     }
 }
 
-async function deploy() {
-    //await verifyBuildDirectory();
-
-    /*
-     * Remove only the dedicated heurist-map distribution directory.
-     * Never point this at /heurist/external itself.
-     */
-    await rm(destinationDirectory, {
-        recursive: true,
-        force: true
-    });
-
-    await mkdir(destinationDirectory, {
-        recursive: true
-    });
-
-    await cp(sourceDirectory, destinationDirectory, {
-        recursive: true
-    });
-
-    console.log(
-        `Heurist Map deployed to ${destinationDirectory}`
-    );
+function productionFilter(source) {
+    return !source.endsWith('.map');
 }
 
-deploy().catch((error) => {
+async function deploy() {
+    await verifyBuildDirectory();
+    await mkdir(distributionRoot, { recursive: true });
+    await rm(stagingDirectory, { recursive: true, force: true });
+    await rm(previousDirectory, { recursive: true, force: true });
+
+    await cp(sourceDirectory, stagingDirectory, {
+        recursive: true,
+        filter: productionFilter
+    });
+
+    let hadPrevious = false;
+    try {
+        await rename(destinationDirectory, previousDirectory);
+        hadPrevious = true;
+    } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+    }
+
+    try {
+        await rename(stagingDirectory, destinationDirectory);
+    } catch (error) {
+        if (hadPrevious) {
+            await rename(previousDirectory, destinationDirectory).catch(() => {});
+        }
+        throw error;
+    }
+
+    await rm(previousDirectory, { recursive: true, force: true });
+    console.log(`Heurist Map deployed to ${destinationDirectory}`);
+}
+
+deploy().catch(async (error) => {
+    await rm(stagingDirectory, { recursive: true, force: true }).catch(() => {});
     console.error(error);
     process.exitCode = 1;
 });
