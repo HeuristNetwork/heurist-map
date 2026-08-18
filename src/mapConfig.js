@@ -26,9 +26,9 @@ export function getHeuristMapConfig() {
   // Both mapViewer and standalone published pages provide the canonical
   // { runtime, settings, state } bootstrap contract.
   const bootstrap = bridge?.getConfiguration?.() || getStandaloneBootstrap();
-  const runtime = bootstrap.runtime;
+  const runtime = bootstrap.runtime && typeof bootstrap.runtime === 'object' ? bootstrap.runtime : {};
   const settings = normalizeMapConfigurationSettings(bootstrap.settings || {});
-  const state = bootstrap.state;
+  const state = bootstrap.state ?? null;
 
   const documentQuery = parseDocumentQuery(url.searchParams.get('doc'));
   const configuredDefaultDocumentId = settings.options.mapDocuments.initiallyActive;
