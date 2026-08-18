@@ -806,11 +806,19 @@ function compactOptions(options) {
 
 
 function createPointLayerFactory(resolveSymbol, { markerClustering = false, iconContext = null } = {}) {
+  const imageIconCache = new Map();
+
   return (feature, latlng) => {
     const symbol = resolveSymbol(feature) || {};
     const imageUrl = resolveImageMarkerUrl(symbol, feature, iconContext);
     if (imageUrl) {
-      return L.marker(latlng, { icon: createImageMarkerIcon(symbol, imageUrl) });
+      const cacheKey = imageMarkerCacheKey(symbol, imageUrl);
+      let icon = imageIconCache.get(cacheKey);
+      if (!icon) {
+        icon = createImageMarkerIcon(symbol, imageUrl);
+        imageIconCache.set(cacheKey, icon);
+      }
+      return L.marker(latlng, { icon });
     }
 
     if (symbol.iconType === 'iconfont') {
@@ -861,6 +869,17 @@ function createMarkerClusterLayer(geoJsonLayer, gridPixels = 20) {
   });
   clusterLayer.addLayers(geoJsonLayer.getLayers());
   return clusterLayer;
+}
+
+
+function imageMarkerCacheKey(symbol, iconUrl) {
+  return JSON.stringify([
+    iconUrl,
+    symbol?.iconSize ?? null,
+    symbol?.iconAnchor ?? null,
+    symbol?.popupAnchor ?? null,
+    symbol?.color ?? null
+  ]);
 }
 
 function createImageMarkerIcon(symbol, iconUrl) {
