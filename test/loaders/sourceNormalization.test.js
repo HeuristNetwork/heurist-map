@@ -12,13 +12,13 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeMapSymbol } from '../src/utils/normalizeMapSymbol.js';
-import { normalizeGeoJson } from '../src/utils/normalizeGeoJson.js';
-import { LayerLoaderRegistry } from '../src/engine/loaders/LayerLoaderRegistry.js';
-import { normalizeMapLayer } from '../src/core/MapLayer.js';
-import { TileLayerLoader } from '../src/engine/loaders/TileLayerLoader.js';
-import { ImageLayerLoader } from '../src/engine/loaders/ImageLayerLoader.js';
-import { createImageFilterCss, normalizeImageFilter, normalizeOpacity, transparentColorToRgb } from '../src/utils/normalizeImageFilter.js';
+import { normalizeMapSymbol } from '../../src/utils/normalizeMapSymbol.js';
+import { normalizeGeoJson } from '../../src/utils/normalizeGeoJson.js';
+import { LayerLoaderRegistry } from '../../src/engine/loaders/LayerLoaderRegistry.js';
+import { normalizeMapLayer } from '../../src/core/MapLayer.js';
+import { TileLayerLoader } from '../../src/engine/loaders/TileLayerLoader.js';
+import { ImageLayerLoader } from '../../src/engine/loaders/ImageLayerLoader.js';
+import { createImageFilterCss, normalizeImageFilter, normalizeOpacity, transparentColorToRgb } from '../../src/utils/normalizeImageFilter.js';
 
 test('normalizes simple symbol defaults and percentage opacity', () => {
   const symbol = normalizeMapSymbol({ color: '#000', opacity: 2, radius: -1 });
@@ -153,7 +153,7 @@ test('loads an image source as an engine-neutral runtime layer', async () => {
 });
 
 test('application registry excludes GeoJSON payloads', async () => {
-  const { MapApplication } = await import('../src/core/MapApplication.js');
+  const { MapApplication } = await import('../../src/core/MapApplication.js');
   const mapEngine = {
     async addLayer(definition) {
       assert.equal(definition.data.features.length, 100);
@@ -205,7 +205,7 @@ test('application registry excludes GeoJSON payloads', async () => {
 });
 
 test('initially hidden MapLayers defer source loading until first show', async () => {
-  const { MapApplication } = await import('../src/core/MapApplication.js');
+  const { MapApplication } = await import('../../src/core/MapApplication.js');
   let sourceLoadCount = 0;
   const rendered = [];
 

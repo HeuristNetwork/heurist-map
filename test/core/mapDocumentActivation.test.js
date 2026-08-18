@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MapApplication } from '../src/core/MapApplication.js';
+import { MapApplication } from '../../src/core/MapApplication.js';
 
 function createApplication() {
   const baseMapChanges = [];

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PopupProvider } from '../src/data/PopupProvider.js';
-import { ReportTemplateProvider } from '../src/data/ReportTemplateProvider.js';
-import { MapApplication } from '../src/core/MapApplication.js';
+import { PopupProvider } from '../../src/data/PopupProvider.js';
+import { ReportTemplateProvider } from '../../src/data/ReportTemplateProvider.js';
+import { MapApplication } from '../../src/core/MapApplication.js';
 
 test('PopupProvider builds legacy built-in and Smarty popup URLs', () => {
   const provider = new PopupProvider({ baseUrl: 'http://127.0.0.1/heurist/', database: 'osmak_mapping', fetchImpl: async () => null });

@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const panelSource = await readFile(new URL('../src/ui/MapControlPanel.js', import.meta.url), 'utf8');
-const layerPanelSource = await readFile(new URL('../src/ui/LayerPanel.js', import.meta.url), 'utf8');
-const layerItemSource = await readFile(new URL('../src/ui/LayerPanelItem.js', import.meta.url), 'utf8');
-const cssSource = await readFile(new URL('../src/style.css', import.meta.url), 'utf8');
+const panelSource = await readFile(new URL('../../src/ui/MapControlPanel.js', import.meta.url), 'utf8');
+const layerPanelSource = await readFile(new URL('../../src/ui/LayerPanel.js', import.meta.url), 'utf8');
+const layerItemSource = await readFile(new URL('../../src/ui/LayerPanelItem.js', import.meta.url), 'utf8');
+const cssSource = await readFile(new URL('../../src/style.css', import.meta.url), 'utf8');
 
 test('current-results document panel is independent from persisted MapDocument visibility', () => {
   assert.match(panelSource, /showCurrentDocument !== false \|\| this\.options\.showMapDocuments !== false/);
@@ -39,7 +39,7 @@ test('Map Control custom CSS supports declarations and complete CSS rules', () =
 });
 
 test('configuration dialog keeps Interface first and uses flat Default settings layout', async () => {
-  const dialogSource = await readFile(new URL('../src/ui/config/MapConfigurationDialog.js', import.meta.url), 'utf8');
+  const dialogSource = await readFile(new URL('../../src/ui/config/MapConfigurationDialog.js', import.meta.url), 'utf8');
   const interfaceIndex = dialogSource.indexOf("this.section('Interface'");
   const currentResultsIndex = dialogSource.indexOf("this.section('Current Results Map'");
   assert.ok(interfaceIndex >= 0 && currentResultsIndex > interfaceIndex);
@@ -73,7 +73,7 @@ test('Base maps control is omitted when None is the only configured basemap', ()
 });
 
 test('configuration transfer lists keep None and use first-selected basemap fallback', async () => {
-  const dialogSource = await readFile(new URL('../src/ui/config/MapConfigurationDialog.js', import.meta.url), 'utf8');
+  const dialogSource = await readFile(new URL('../../src/ui/config/MapConfigurationDialog.js', import.meta.url), 'utf8');
   assert.match(dialogSource, /fixedSelectedValues: \['None'\]/);
   assert.match(dialogSource, /fixedSelectedValues: new Set/);
   assert.match(dialogSource, /option\.disabled = true/);

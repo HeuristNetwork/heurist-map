@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HostAdapter } from '../src/host/HostAdapter.js';
-import { HeuristHostAdapter } from '../src/host/HeuristHostAdapter.js';
-import { MapApplication } from '../src/core/MapApplication.js';
+import { HostAdapter } from '../../src/host/HostAdapter.js';
+import { HeuristHostAdapter } from '../../src/host/HeuristHostAdapter.js';
+import { MapApplication } from '../../src/core/MapApplication.js';
 
 test('HeuristHostAdapter exposes generic record editing only when bridge supports it', async () => {
   const calls = [];

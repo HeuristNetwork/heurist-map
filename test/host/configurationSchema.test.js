@@ -5,10 +5,10 @@ import {
   MAP_CONFIGURATION_VERSION,
   normalizeMapConfigurationSettings,
   serializeMapConfigurationSettings
-} from '../src/ui/config/mapConfigurationSchema.js';
-import { createMapConfigurationDefaults } from '../src/ui/config/mapConfigurationDefaults.js';
-import { MapConfigurationDialog } from '../src/ui/config/MapConfigurationDialog.js';
-import { normalizeMapLayer } from '../src/core/MapLayer.js';
+} from '../../src/ui/config/mapConfigurationSchema.js';
+import { createMapConfigurationDefaults } from '../../src/ui/config/mapConfigurationDefaults.js';
+import { MapConfigurationDialog } from '../../src/ui/config/MapConfigurationDialog.js';
+import { normalizeMapLayer } from '../../src/core/MapLayer.js';
 
 test('map configuration defaults contain agreed global fallback settings', () => {
   const value = createMapConfigurationDefaults();

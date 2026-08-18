@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getHeuristMapConfig } from '../src/mapConfig.js';
-import { HeuristHostAdapter } from '../src/host/HeuristHostAdapter.js';
+import { getHeuristMapConfig } from '../../src/mapConfig.js';
+import { HeuristHostAdapter } from '../../src/host/HeuristHostAdapter.js';
 
 function response(data = true) {
   return Promise.resolve({
@@ -123,6 +123,42 @@ test('runtime cannot inject custom basemap catalog or UI settings', () => {
     globalThis.frameElement = previousFrameElement;
     globalThis.heuristMapBootstrap = previousBootstrap;
     globalThis.location = previousLocation;
+  }
+});
+
+test('standalone bootstrap resolves the canonical {runtime, settings, state} contract', () => {
+  // Published pages now convert their stored payload into this canonical shape
+  // server-side (see docs/integration.md §4.3) before loading heurist-map, so
+  // the client only needs to support {runtime, settings, state} directly.
+  const previousBootstrap = globalThis.heuristMapBootstrap;
+  globalThis.heuristMapBootstrap = {
+    runtime: { database: 'my_database', apiBaseUrl: '/heurist/api' },
+    settings: { options: { ui: { initiallyExpanded: false } } },
+    state: { activeDocumentId: 14 }
+  };
+
+  try {
+    const config = getHeuristMapConfig();
+    assert.equal(config.database, 'my_database');
+    assert.equal(config.apiBaseUrl, '/heurist/api');
+    assert.equal(config.ui.initiallyExpanded, false);
+    assert.deepEqual(config.initialState, { activeDocumentId: 14 });
+  } finally {
+    globalThis.heuristMapBootstrap = previousBootstrap;
+  }
+});
+
+test('standalone bootstrap does not crash when window.heuristMapBootstrap is unset', () => {
+  const previousBootstrap = globalThis.heuristMapBootstrap;
+  delete globalThis.heuristMapBootstrap;
+
+  try {
+    assert.doesNotThrow(() => getHeuristMapConfig());
+    const config = getHeuristMapConfig();
+    assert.equal(config.viewerMode, 'map');
+    assert.equal(config.apiBaseUrl, null);
+  } finally {
+    globalThis.heuristMapBootstrap = previousBootstrap;
   }
 });
 

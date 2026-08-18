@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeMapLayer } from '../src/core/MapLayer.js';
-import { normalizeMapDocument } from '../src/core/MapDocument.js';
-import { createMapEnvironment } from '../src/core/createMapEnvironment.js';
-import { createGeoJsonRuntimeLayer } from '../src/engine/loaders/GeoJsonLayerLoader.js';
+import { normalizeMapLayer } from '../../src/core/MapLayer.js';
+import { normalizeMapDocument } from '../../src/core/MapDocument.js';
+import { createMapEnvironment } from '../../src/core/createMapEnvironment.js';
+import { createGeoJsonRuntimeLayer } from '../../src/engine/loaders/GeoJsonLayerLoader.js';
 
 const defaults = {
   zoomToPointInKM: 7,
@@ -84,7 +84,7 @@ test('preventContinuousWorldBasemap applies noWrap to resolved tile basemap', ()
 });
 
 test('reapplying defaults updates inherited values but preserves explicit layer values', async () => {
-  const { reapplyMapLayerDefaults } = await import('../src/core/MapLayer.js');
+  const { reapplyMapLayerDefaults } = await import('../../src/core/MapLayer.js');
   const inherited = normalizeMapLayer({
     source: { type: 'heurist-query', query: 't:10' },
     style: {},

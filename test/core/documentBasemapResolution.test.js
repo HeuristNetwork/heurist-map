@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { normalizeMapDocument } from '../src/core/MapDocument.js';
+import { normalizeMapDocument } from '../../src/core/MapDocument.js';
 
 test('MapDocument without a basemap no longer hardcodes OpenStreetMap', () => {
   const document = normalizeMapDocument({});
@@ -11,7 +11,7 @@ test('MapDocument without a basemap no longer hardcodes OpenStreetMap', () => {
 });
 
 test('published state captures opacity and restores basemap after document activation', () => {
-  const source = fs.readFileSync(new URL('../src/core/MapApplication.js', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../../src/core/MapApplication.js', import.meta.url), 'utf8');
   assert.match(source, /layerOpacities:\s*Object\.fromEntries/);
   assert.match(source, /state\.layerOpacities.*setLayerOpacity/s);
   const activation = source.indexOf('const targetDocument = state.activeDocumentId');
@@ -20,13 +20,6 @@ test('published state captures opacity and restores basemap after document activ
 });
 
 test('runtime map initialization falls back to configured initial basemap when document has none', () => {
-  const source = fs.readFileSync(new URL('../src/core/MapApplication.js', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../../src/core/MapApplication.js', import.meta.url), 'utf8');
   assert.match(source, /environment\.baseMapSpecified\s*\?\s*environment\.baseMap\s*:\s*this\.getConfiguredDefaultBaseMap\(\)/s);
-});
-
-test('standalone bootstrap accepts flattened published options/config', () => {
-  const source = fs.readFileSync(new URL('../src/mapConfig.js', import.meta.url), 'utf8');
-  assert.match(source, /bootstrap\.options \|\| bootstrap\.config/);
-  assert.match(source, /options:\s*bootstrap\.options \|\| \{\}/);
-  assert.match(source, /state:\s*bootstrap\.state \?\? settings\?\.state \?\? null/);
 });

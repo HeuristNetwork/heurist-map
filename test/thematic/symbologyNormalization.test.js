@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeMapLayer } from '../src/core/MapLayer.js';
-import { DEFAULT_MAP_SYMBOL } from '../src/utils/normalizeMapSymbol.js';
+import { normalizeMapLayer } from '../../src/core/MapLayer.js';
+import { DEFAULT_MAP_SYMBOL } from '../../src/utils/normalizeMapSymbol.js';
 
 const globalDefaults = {
   symbology: {

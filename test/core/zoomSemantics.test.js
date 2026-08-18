@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeMapDocument } from '../src/core/MapDocument.js';
-import { normalizeMapLayer } from '../src/core/MapLayer.js';
-import { MapApplication } from '../src/core/MapApplication.js';
+import { normalizeMapDocument } from '../../src/core/MapDocument.js';
+import { normalizeMapLayer } from '../../src/core/MapLayer.js';
+import { MapApplication } from '../../src/core/MapApplication.js';
 
 test('MapDocument preserves native and kilometre zoom semantics separately', () => {
   const document = normalizeMapDocument({
@@ -77,7 +77,7 @@ test('point selection uses zoomToPointInKM instead of fitBounds', async () => {
   assert.equal(calls.some((item) => item[0] === 'fit'), false);
 });
 
-import { normalizeZoomLimit } from '../src/utils/normalizeZoomLimit.js';
+import { normalizeZoomLimit } from '../../src/utils/normalizeZoomLimit.js';
 
 test('absent native zoom values remain absent rather than becoming zoom zero', () => {
   assert.equal(normalizeZoomLimit(null), null);

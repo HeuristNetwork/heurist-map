@@ -1,14 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ThematicAttributeProvider } from '../src/data/ThematicAttributeProvider.js';
-import { GeoJsonLayerLoader } from '../src/engine/loaders/GeoJsonLayerLoader.js';
+import { ThematicAttributeProvider } from '../../src/data/ThematicAttributeProvider.js';
+import { GeoJsonLayerLoader } from '../../src/engine/loaders/GeoJsonLayerLoader.js';
 import {
   applyThematicAttributes,
   collectThematicRecordIds,
   getActiveThematicMap,
   getThematicFieldCodes
-} from '../src/thematic/thematicAttributes.js';
+} from '../../src/thematic/thematicAttributes.js';
 
 const thematicStyle = {
   type: 'thematic',
@@ -211,7 +211,7 @@ test('simple and inline GeoJSON layers do not request thematic attributes', asyn
 });
 
 test('all thematic field codes are collected so runtime theme switching needs no data reload', async () => {
-  const { getAllThematicFieldCodes } = await import('../src/thematic/thematicAttributes.js');
+  const { getAllThematicFieldCodes } = await import('../../src/thematic/thematicAttributes.js');
   const style = {
     thematic: [
       { active: false, fields: [{ code: '12:133' }, { code: 'rec_GeoField' }] },
@@ -222,7 +222,7 @@ test('all thematic field codes are collected so runtime theme switching needs no
 });
 
 test('activateThematicMap selects one theme or restores default symbology', async () => {
-  const { activateThematicMap } = await import('../src/thematic/thematicAttributes.js');
+  const { activateThematicMap } = await import('../../src/thematic/thematicAttributes.js');
   const style = {
     symbol: { color: '#123456' },
     thematic: [

@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { HeuristApiClient } from '../src/data/HeuristApiClient.js';
-import { MapDocumentProvider } from '../src/data/MapDocumentProvider.js';
-import { MapLayerProvider } from '../src/data/MapLayerProvider.js';
-import { QueryGeoDataProvider } from '../src/data/QueryGeoDataProvider.js';
-import { MapApplication } from '../src/core/MapApplication.js';
+import { HeuristApiClient } from '../../src/data/HeuristApiClient.js';
+import { MapDocumentProvider } from '../../src/data/MapDocumentProvider.js';
+import { MapLayerProvider } from '../../src/data/MapLayerProvider.js';
+import { QueryGeoDataProvider } from '../../src/data/QueryGeoDataProvider.js';
+import { MapApplication } from '../../src/core/MapApplication.js';
 
 const mapDocumentFixture = {
   format: 'heurist-map-document',

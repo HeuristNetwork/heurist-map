@@ -7,7 +7,7 @@ import {
   resolveThematicFieldSymbol,
   thematicRangeMatches,
   mergeThematicSymbol
-} from '../src/thematic/thematicSymbolResolver.js';
+} from '../../src/thematic/thematicSymbolResolver.js';
 
 const base = {
   iconType: 'circle',

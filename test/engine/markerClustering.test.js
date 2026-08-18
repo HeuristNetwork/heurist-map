@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { normalizeMapLayer } from '../src/core/MapLayer.js';
-import { createGeoJsonRuntimeLayer } from '../src/engine/loaders/GeoJsonLayerLoader.js';
+import { normalizeMapLayer } from '../../src/core/MapLayer.js';
+import { createGeoJsonRuntimeLayer } from '../../src/engine/loaders/GeoJsonLayerLoader.js';
 
 test('markerClustering is preserved from MapLayer normalization to runtime layer', () => {
   const mapLayer = normalizeMapLayer({
@@ -23,8 +23,8 @@ test('markerClustering is preserved from MapLayer normalization to runtime layer
 });
 
 test('Leaflet.markercluster is declared and loaded by the application entry point', () => {
-  const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  const main = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  const pkg = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const main = fs.readFileSync(new URL('../../src/main.js', import.meta.url), 'utf8');
 
   assert.match(pkg.dependencies['leaflet.markercluster'], /^\^1\.5\.3$/);
   assert.match(main, /import L from 'leaflet';/);
@@ -36,7 +36,7 @@ test('Leaflet.markercluster is declared and loaded by the application entry poin
 });
 
 test('Leaflet adapter enables clustering with chunked bulk loading', () => {
-  const adapter = fs.readFileSync(new URL('../src/engine/LeafletMapAdapter.js', import.meta.url), 'utf8');
+  const adapter = fs.readFileSync(new URL('../../src/engine/LeafletMapAdapter.js', import.meta.url), 'utf8');
 
   assert.match(adapter, /L\.markerClusterGroup\(\{[\s\S]*chunkedLoading:\s*true/);
   assert.match(adapter, /clusterLayer\.addLayers\(geoJsonLayer\.getLayers\(\)\)/);

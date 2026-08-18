@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { detectGeometryTypes } from '../src/utils/geometryTypes.js';
+import { detectGeometryTypes } from '../../src/utils/geometryTypes.js';
 import { readFile } from 'node:fs/promises';
 
-const layerItemSource = await readFile(new URL('../src/ui/LayerPanelItem.js', import.meta.url), 'utf8');
-const loaderSource = await readFile(new URL('../src/engine/loaders/GeoJsonLayerLoader.js', import.meta.url), 'utf8');
-const appSource = await readFile(new URL('../src/core/MapApplication.js', import.meta.url), 'utf8');
-const legendSource = await readFile(new URL('../src/ui/legend/LegendRenderer.js', import.meta.url), 'utf8');
+const layerItemSource = await readFile(new URL('../../src/ui/LayerPanelItem.js', import.meta.url), 'utf8');
+const loaderSource = await readFile(new URL('../../src/engine/loaders/GeoJsonLayerLoader.js', import.meta.url), 'utf8');
+const appSource = await readFile(new URL('../../src/core/MapApplication.js', import.meta.url), 'utf8');
+const legendSource = await readFile(new URL('../../src/ui/legend/LegendRenderer.js', import.meta.url), 'utf8');
 
 test('geometry family detection handles mixed GeoJSON and GeometryCollection', () => {
   assert.deepEqual(detectGeometryTypes({

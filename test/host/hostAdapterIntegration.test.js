@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { HeuristHostAdapter } from '../src/host/HeuristHostAdapter.js';
-import { createHostAdapter } from '../src/host/createHostAdapter.js';
-import { HeuristMapConfigurationApi } from '../src/host/HeuristMapConfigurationApi.js';
+import { HeuristHostAdapter } from '../../src/host/HeuristHostAdapter.js';
+import { createHostAdapter } from '../../src/host/createHostAdapter.js';
+import { HeuristMapConfigurationApi } from '../../src/host/HeuristMapConfigurationApi.js';
 
 test('Heurist host adapter uses keyed preference FrontController contract', async () => {
   const calls = [];
