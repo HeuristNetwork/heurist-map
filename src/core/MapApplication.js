@@ -434,7 +434,19 @@ export class MapApplication {
   async applyDocumentBaseMap(document) {
     // MapPresentationService returns worldBaseMap as a Heurist term descriptor.
     // The term id/code are not basemap identifiers; the reliable value is label.
-    const baseMap = findBaseMapByName(this.baseMaps, document?.worldBaseMap?.label);
+    const label = document?.worldBaseMap?.label;
+    let baseMap = findBaseMapByName(this.baseMaps, label);
+    if (!baseMap) {
+      // The document's basemap may fall outside the site's configured "allowed"
+      // catalog. It is still authored document content, so honor it as long as
+      // it resolves to one of Heurist's curated basemaps, and register it so
+      // the base-map selector reflects what is actually rendered.
+      const curated = findBaseMapByName(getCuratedBaseMapsById(), label);
+      if (curated) {
+        baseMap = clonePlain(curated);
+        this.baseMaps.set(String(baseMap.id), baseMap);
+      }
+    }
     return baseMap ? this.setBaseMap(baseMap.id) : this.restoreDefaultBaseMap();
   }
 
@@ -2179,6 +2191,16 @@ function findBaseMapByName(baseMaps, name) {
     }
   }
   return null;
+}
+
+let curatedBaseMapsById = null;
+
+/** Full Heurist curated basemap catalog, independent of any site "allowed" filter. */
+function getCuratedBaseMapsById() {
+  if (!curatedBaseMapsById) {
+    curatedBaseMapsById = new Map(getDefaultBaseMaps().map((item) => [String(item.id), item]));
+  }
+  return curatedBaseMapsById;
 }
 
 function createDynamicMapDocument(config, entry) {
