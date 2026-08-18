@@ -263,7 +263,9 @@ export class LeafletMapAdapter extends MapEngineAdapter {
   /** Open a popup for one rendered feature, binding HTML lazily when supplied. */
   async openFeaturePopup(layerId, featureId, html = null) {
     const entry = this.getLayerEntry(layerId);
-    const nativeLayer = entry.featureLayers?.get(String(featureId));
+    const id = String(featureId);
+    const nativeLayer = entry.featurePopupLayers?.get(id)
+      || getFirstPopupCapableLayer(entry.featureLayers?.get(id));
     if (!nativeLayer || typeof nativeLayer.openPopup !== 'function') return false;
 
     if (html !== null && html !== undefined) {
@@ -570,6 +572,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     const featureLayers = new Map();
     const featureRecordIds = new Map();
     const recordFeatureIds = new Map();
+    const featurePopupLayers = new Map();
     const selectionBaseStyles = new WeakMap();
 
     const geoJsonLayer = L.geoJSON(definition.data, {
@@ -585,13 +588,13 @@ export class LeafletMapAdapter extends MapEngineAdapter {
         }
         rememberSelectionBaseStyle(nativeLayer, selectionBaseStyles);
 
-        // A click on a GeoJSON feature must not bubble to the map background.
-        // Otherwise MapApplication handles onFeatureClick and then immediately
-        // handles onMapClick, which clears the new selection.
-        nativeLayer.options.bubblingMouseEvents = false;
-
-        nativeLayer.on('click', (event) => {
-          if (event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
+        // GeometryCollection features are represented by a FeatureGroup. Bind
+        // interaction handlers to the actual leaf marker/path layers so the
+        // child click itself stops propagation to the map and we can reopen the
+        // popup on the exact geometry that was clicked. Selection remains
+        // associated with the logical top-level feature via metadata.featureId.
+        bindFeatureClickHandlers(nativeLayer, (event, clickedLayer) => {
+          featurePopupLayers.set(metadata.featureId, clickedLayer);
 
           this.interactionHandlers.onFeatureClick?.({
             layerId: definition.id,
@@ -615,6 +618,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     entry.featureLayers = featureLayers;
     entry.featureRecordIds = featureRecordIds;
     entry.recordFeatureIds = recordFeatureIds;
+    entry.featurePopupLayers = featurePopupLayers;
     entry.selectionBaseStyles = selectionBaseStyles;
     entry.selectionSymbol = definition.style?.selectSymbol || null;
     entry.selectedFeatureIds = new Set();
@@ -1047,7 +1051,45 @@ function toPublicLatLng(latlng) {
   return latlng ? { latitude: latlng.lat, longitude: latlng.lng } : null;
 }
 
+function bindFeatureClickHandlers(layer, handler) {
+  if (!layer) return;
+
+  if (typeof layer.eachLayer === 'function') {
+    layer.eachLayer((child) => bindFeatureClickHandlers(child, handler));
+    return;
+  }
+
+  layer.options = layer.options || {};
+  layer.options.bubblingMouseEvents = false;
+  if (typeof layer.on !== 'function') return;
+
+  layer.on('click', (event) => {
+    if (event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
+    handler(event, layer);
+  });
+}
+
+function getFirstPopupCapableLayer(layer) {
+  if (!layer) return null;
+  if (typeof layer.eachLayer === 'function') {
+    let found = null;
+    layer.eachLayer((child) => {
+      if (!found) found = getFirstPopupCapableLayer(child);
+    });
+    return found;
+  }
+  return typeof layer.openPopup === 'function' ? layer : null;
+}
+
 function rememberSelectionBaseStyle(layer, storage) {
+  // GeometryCollection and other compound GeoJSON features are represented by
+  // Leaflet FeatureGroup/LayerGroup instances. Selection is rendered by the
+  // child paths, so remember each child's own style rather than only the group.
+  if (typeof layer.eachLayer === 'function') {
+    layer.eachLayer((child) => rememberSelectionBaseStyle(child, storage));
+    return;
+  }
+
   const options = layer.options || {};
   storage.set(layer, {
     color: options.color,
@@ -1060,6 +1102,16 @@ function rememberSelectionBaseStyle(layer, storage) {
 }
 
 function applyNativeSelection(layer, selected, storage, opacityMultiplier = 1, selectionSymbol = null) {
+  // Apply selection recursively to compound features. Calling setStyle() only on
+  // the FeatureGroup can propagate the selected style, but the group's options
+  // do not contain the individual child base styles needed to restore them.
+  if (typeof layer.eachLayer === 'function') {
+    layer.eachLayer((child) => {
+      applyNativeSelection(child, selected, storage, opacityMultiplier, selectionSymbol);
+    });
+    return;
+  }
+
   const base = storage.get(layer) || {};
   const symbol = selectionSymbol && typeof selectionSymbol === 'object' ? selectionSymbol : {};
   if (typeof layer.setStyle === 'function') {

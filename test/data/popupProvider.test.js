@@ -67,7 +67,8 @@ test('feature click selects first, lazily loads popup once, then reopens cached 
       return true;
     },
     setFeatureSelection: async () => { calls.push('select'); },
-    getFeatureRecordId: () => 55
+    getFeatureRecordId: () => 55,
+    getFeatureIdsByRecord: () => ['f1']
   };
   let loads = 0;
   const application = Object.create(MapApplication.prototype);

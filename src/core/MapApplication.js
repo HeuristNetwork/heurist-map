@@ -682,12 +682,24 @@ export class MapApplication {
       && layer?.selectable !== false;
     if (selectionEnabled) {
       try {
-        await this.selectFeature(detail.layerId, detail.featureId, {
-          recordId: detail.recordId,
-          additive: Boolean(detail.additive),
-          toggle: Boolean(detail.additive),
-          zoom: this.config.interaction?.zoomOnSelection === true
-        });
+        // Heurist selection is record-based. A record may be represented by
+        // several rendered geometries (for example birth and death places).
+        // Select all geometries for the clicked record in one operation instead
+        // of first selecting one feature and relying on the host selection
+        // round-trip to expand it to the whole record. The clicked featureId is
+        // still retained below for opening the popup on the geometry clicked.
+        if (payload.recordId != null && !detail.additive) {
+          await this.selectRecord(detail.layerId, payload.recordId, {
+            zoom: this.config.interaction?.zoomOnSelection === true
+          });
+        } else {
+          await this.selectFeature(detail.layerId, detail.featureId, {
+            recordId: detail.recordId,
+            additive: Boolean(detail.additive),
+            toggle: Boolean(detail.additive),
+            zoom: this.config.interaction?.zoomOnSelection === true
+          });
+        }
       } catch (error) {
         this.dispatch('heurist-map-error', { operation: 'select-feature', error: serializeError(error) });
       }

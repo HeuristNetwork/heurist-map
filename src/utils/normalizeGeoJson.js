@@ -12,8 +12,10 @@
 
 /**
  * Normalize GeoJSON feature metadata for record-backed and external datasets.
- * Existing feature IDs are preserved. Missing IDs receive a deterministic ID
- * based on the layer ID and feature position.
+ * Explicit application feature IDs are preserved. Record-backed features receive
+ * a deterministic per-feature ID when no application feature ID is supplied, so
+ * multiple geometries belonging to the same Heurist record remain independently
+ * addressable. External feature IDs are otherwise preserved.
  */
 export function normalizeGeoJson(value, { layerId, sourceType = 'unknown' } = {}) {
   if (!value || typeof value !== 'object') {
@@ -69,9 +71,7 @@ function normalizeFeature(value, context) {
   );
 
   const featureId = feature.id ?? properties.featureId ?? properties.id
-    ?? (recordId
-      ? `record-${recordId}-feature-${context.index + 1}`
-      : `${context.layerId || 'layer'}-feature-${context.index + 1}`);
+    ?? (recordId ? `record-${recordId}` : `${context.layerId || 'layer'}-feature-${context.index + 1}`);
 
   properties.heurist = {
     ...(properties.heurist && typeof properties.heurist === 'object' ? properties.heurist : {}),

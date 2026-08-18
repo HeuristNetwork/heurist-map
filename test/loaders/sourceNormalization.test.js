@@ -36,11 +36,12 @@ test('normalizes Heurist and external feature metadata', () => {
     ]
   }, { layerId: 'layer-a', sourceType: 'remote-geojson' });
 
-  assert.equal(result.features[0].id, 'record-123-feature-1');
+  assert.equal(result.features[0].id, 'record-123');
   assert.equal(result.features[0].properties.heurist.recordId, 123);
   assert.equal(result.features[1].id, 'layer-a-feature-2');
   assert.equal(result.features[1].properties.heurist.title, 'External feature');
 });
+
 
 test('layer loader registry rejects unknown source types', async () => {
   const registry = new LayerLoaderRegistry();

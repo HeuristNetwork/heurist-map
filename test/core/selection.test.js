@@ -119,6 +119,34 @@ test('feature click emits public events and respects selectable', async () => {
   assert.ok(events.some((event) => event.type === 'heurist-map-layer-click'));
 });
 
+
+test('normal feature click selects all geometries for the clicked record and replaces the previous record', async () => {
+  const { application, nativeSelections } = createSelectionApplication();
+
+  await application.handleFeatureClick({
+    layerId: 'layer-a', featureId: 'a1', recordId: 101,
+    selectable: true, additive: false, latlng: { latitude: 1, longitude: 2 }
+  });
+  assert.deepEqual(application.getSelection(), {
+    layerId: 'layer-a',
+    features: [
+      { featureId: 'a1', recordId: 101 },
+      { featureId: 'a1-secondary', recordId: 101 }
+    ]
+  });
+
+  await application.handleFeatureClick({
+    layerId: 'layer-a', featureId: 'a2', recordId: 102,
+    selectable: true, additive: false, latlng: { latitude: 3, longitude: 4 }
+  });
+
+  assert.deepEqual(application.getSelection(), {
+    layerId: 'layer-a',
+    features: [{ featureId: 'a2', recordId: 102 }]
+  });
+  assert.deepEqual(nativeSelections.at(-1), { layerId: 'layer-a', featureIds: ['a2'] });
+});
+
 test('hiding selected layer clears selection', async () => {
   const { application } = createSelectionApplication();
   application.mapEngine.setLayerVisibility = async () => {};
