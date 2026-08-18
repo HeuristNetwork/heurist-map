@@ -48,6 +48,7 @@ export class QueryGeoDataProvider {
     limit = DEFAULT_LIMIT,
     offset = 0,
     simplify = false,
+    geoFields = null,
     method = 'auto',
     signal
   }) {
@@ -57,8 +58,9 @@ export class QueryGeoDataProvider {
 
     const normalizedLimit = normalizeLimit(limit);
     const normalizedOffset = normalizeOffset(offset);
+    const hasGeoFields = Array.isArray(geoFields) && geoFields.length > 0;
     const usePost = method === 'post'
-      || (method === 'auto' && shouldUsePost(query));
+      || (method === 'auto' && (hasGeoFields || shouldUsePost(query)));
 
 
     const response = usePost
@@ -67,7 +69,8 @@ export class QueryGeoDataProvider {
             query,
             limit: normalizedLimit,
             offset: normalizedOffset,
-            simplify: Boolean(simplify)
+            simplify: Boolean(simplify),
+            ...(hasGeoFields ? { geofields: geoFields } : {})
           },
           signal
         })
@@ -76,7 +79,8 @@ export class QueryGeoDataProvider {
             q: query,
             limit: normalizedLimit,
             offset: normalizedOffset,
-            simplify: Boolean(simplify)
+            simplify: Boolean(simplify),
+            ...(hasGeoFields ? { geofields: geoFields } : {})
           },
           signal
         });
@@ -91,6 +95,7 @@ export class QueryGeoDataProvider {
     query,
     limit = DEFAULT_LIMIT,
     simplify = false,
+    geoFields = null,
     method = 'auto',
     signal,
     maxPages = 100,
@@ -118,6 +123,7 @@ export class QueryGeoDataProvider {
         limit: Math.min(pageSize, remaining),
         offset,
         simplify,
+        geoFields,
         method,
         signal
       });

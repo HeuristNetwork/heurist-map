@@ -45,6 +45,7 @@ export class GeoJsonLayerLoader {
           limit: source.limit || mapLayer.options?.maxAllowedFeatures || 1000,
           maxFeatures: source.limit || mapLayer.options?.maxAllowedFeatures || 1000,
           simplify: source.simplify === true,
+          geoFields: source.geoFields,
           signal: context.signal
         });
         break;

@@ -96,6 +96,34 @@ test('QueryGeoDataProvider merges paginated GeoJSON', async () => {
 
 
 
+test('QueryGeoDataProvider sends raw geo field paths as a POST array', async () => {
+  let request = null;
+  const provider = new QueryGeoDataProvider({
+    apiClient: {
+      post: async (path, options) => {
+        request = { path, options };
+        return {
+          type: 'FeatureCollection',
+          features: [],
+          meta: { total: 0, offset: 0, limit: 1000 }
+        };
+      },
+      get: async () => { throw new Error('geoFields request must use POST'); }
+    }
+  });
+
+  await provider.search({
+    query: 't:10',
+    geoFields: ['10:lt134:12:28', '10:lt240:48:lt134:12:28']
+  });
+
+  assert.equal(request.path, '/map');
+  assert.deepEqual(request.options.body.geofields, [
+    '10:lt134:12:28',
+    '10:lt240:48:lt134:12:28'
+  ]);
+});
+
 test('QueryGeoDataProvider caps merged GeoJSON at maxAllowedFeatures', async () => {
   const limits = [];
   const provider = new QueryGeoDataProvider({

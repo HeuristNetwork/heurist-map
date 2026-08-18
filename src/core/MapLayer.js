@@ -117,8 +117,18 @@ function normalizeSource(value) {
     type: String(source.type || ''),
     recordId: positiveIntegerOrNull(source.recordId),
     title: String(source.title || ''),
+    geoFields: normalizeGeoFields(source.geoFields),
     bounds: normalizeBounds(source.bounds)
   };
+}
+
+
+function normalizeGeoFields(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item) => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function normalizeStyle(value, defaults) {
