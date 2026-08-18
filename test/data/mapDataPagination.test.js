@@ -36,6 +36,46 @@ test('map API pagination advances by returned records, not emitted features', as
   assert.equal(result.meta.isPartial, false);
 });
 
+
+test('map API pagination keeps record page size when only a few features remain', async () => {
+  const requests = [];
+  const provider = new QueryGeoDataProvider({
+    apiClient: {
+      get: async (_path, options) => {
+        requests.push({ offset: options.query.offset, limit: options.query.limit });
+
+        if (options.query.offset === 0) {
+          return {
+            type: 'FeatureCollection',
+            features: Array.from({ length: 8 }, (_, index) => ({
+              type: 'Feature', id: index + 1, properties: {}, geometry: null
+            })),
+            meta: { totalRecords: 30, returnedRecords: 10, returnedFeatures: 8, offset: 0, limit: 10, isPartial: true }
+          };
+        }
+
+        return {
+          type: 'FeatureCollection',
+          features: Array.from({ length: 7 }, (_, index) => ({
+            type: 'Feature', id: index + 11, properties: {}, geometry: null
+          })),
+          meta: { totalRecords: 30, returnedRecords: 10, returnedFeatures: 7, offset: 10, limit: 10, isPartial: true }
+        };
+      }
+    }
+  });
+
+  const result = await provider.searchAll({ query: 'sortby:-m', limit: 10, maxFeatures: 10 });
+
+  assert.deepEqual(requests, [
+    { offset: 0, limit: 10 },
+    { offset: 10, limit: 10 }
+  ]);
+  assert.equal(result.features.length, 10);
+  assert.equal(result.meta.returnedFeatures, 10);
+  assert.equal(result.meta.isPartial, true);
+});
+
 test('GeoJSON runtime layer preserves map API result metadata', () => {
   const layer = createGeoJsonRuntimeLayer(
     {

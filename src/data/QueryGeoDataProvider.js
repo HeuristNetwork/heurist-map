@@ -108,19 +108,19 @@ export class QueryGeoDataProvider {
     let page = 0;
     let latestMeta = {};
     let complete = false;
+    let truncatedByFeatureLimit = false;
 
     while (page < maxPages) {
       throwIfAborted(signal);
 
-      const remaining = featureLimit == null ? pageSize : Math.max(0, featureLimit - features.length);
-      if (remaining === 0) {
+      if (featureLimit != null && features.length >= featureLimit) {
         complete = true;
         break;
       }
 
       const response = await this.search({
         query,
-        limit: Math.min(pageSize, remaining),
+        limit: pageSize,
         offset,
         simplify,
         geoFields,
@@ -128,9 +128,15 @@ export class QueryGeoDataProvider {
         signal
       });
 
+      const remaining = featureLimit == null
+        ? response.features.length
+        : Math.max(0, featureLimit - features.length);
       const accepted = featureLimit == null
         ? response.features
-        : response.features.slice(0, Math.max(0, featureLimit - features.length));
+        : response.features.slice(0, remaining);
+      if (accepted.length < response.features.length) {
+        truncatedByFeatureLimit = true;
+      }
       features.push(...accepted);
       latestMeta = response.meta || {};
       page += 1;
@@ -166,7 +172,8 @@ export class QueryGeoDataProvider {
         offset: 0,
         limit: pageSize,
         returnedFeatures: features.length,
-        isPartial: Number.isFinite(totalRecords) ? offset < totalRecords : Boolean(latestMeta.isPartial)
+        isPartial: truncatedByFeatureLimit
+          || (Number.isFinite(totalRecords) ? offset < totalRecords : Boolean(latestMeta.isPartial))
       }
     };
   }
