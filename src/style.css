@@ -261,3 +261,151 @@ html.heurist-map-configuration-mode .heurist-map-config-backdrop {
 
 /* Map Configuration: grouped Heurist/native map controls. */
 .heurist-map-config-control-section{display:flex;flex-direction:column;gap:4px;padding:2px 0 5px}.heurist-map-config-control-section+.heurist-map-config-control-section{margin-top:4px;padding-top:7px;border-top:1px solid #ddd}.heurist-map-config-control-section-title{font-weight:700}.heurist-map-config-master-control{font-weight:600}.heurist-map-config-check input:disabled{opacity:.58}.heurist-map-config-native-controls .heurist-map-config-inline-checks{gap:3px 14px}
+
+
+/* Compact row actions. Layer actions do not reserve title width while hidden. */
+.heurist-map-row-actions{
+  gap:0;
+}
+.heurist-map-row-actions .heurist-map-icon-button{
+  padding:2px;
+  font-size:11px;
+  line-height:1;
+}
+.heurist-map-layer-row>.heurist-map-row-actions{
+  display:none;
+}
+.heurist-map-layer-row:hover>.heurist-map-row-actions,
+.heurist-map-layer-row:focus-within>.heurist-map-row-actions{
+  display:flex;
+}
+
+/* Symbology/thematic editors live in the top-right corner of the legend. */
+.heurist-map-layer-legend{
+  position:relative;
+  padding-right:36px;
+}
+.heurist-map-legend-actions{
+  position:absolute;
+  top:0;
+  right:0;
+  display:flex;
+  align-items:center;
+  gap:0;
+  opacity:0;
+  visibility:hidden;
+  pointer-events:none;
+  transition:opacity .12s ease;
+}
+.heurist-map-layer-row:hover .heurist-map-legend-actions,
+.heurist-map-layer-row:focus-within .heurist-map-legend-actions{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}
+.heurist-map-legend-actions .heurist-map-icon-button{
+  padding:2px;
+  font-size:11px;
+  line-height:1;
+}
+
+/* Compact symbol preview/edit row in MapConfigurationDialog. */
+.heurist-map-config-symbology-content{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:5px 9px;
+  min-width:0;
+}
+.heurist-map-config-symbology-preview{
+  display:inline-flex;
+  align-items:center;
+  min-width:92px;
+  min-height:28px;
+}
+.heurist-map-config-symbology-preview.is-default{opacity:.65}
+.heurist-map-symbol-preview{
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  min-height:24px;
+}
+.heurist-map-config-symbology-links{
+  display:inline-flex;
+  align-items:center;
+  gap:9px;
+  white-space:nowrap;
+}
+.heurist-map-config-link{
+  min-width:0!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+  color:#315b8a;
+  text-decoration:underline;
+  cursor:pointer;
+  font:inherit;
+}
+.heurist-map-config-link:hover{background:transparent!important;color:#173e69}
+.heurist-map-config-link:disabled{color:#999;cursor:default;text-decoration:none}
+.heurist-map-config-symbology-clear{
+  width:17px;
+  height:17px;
+  font-size:17px!important;
+  line-height:15px!important;
+  color:#666;
+  text-decoration:none;
+}
+.heurist-map-config-symbology-raw{
+  flex:0 0 100%;
+  margin-top:2px;
+}
+
+
+/* Phase C corrective follow-up: keep the layer title and row actions in one stable line. */
+.heurist-map-layer-header{
+  display:flex;
+  align-items:center;
+  width:100%;
+  min-width:0;
+  gap:0;
+}
+.heurist-map-layer-header>.heurist-map-row-main{
+  flex:1 1 auto;
+  min-width:0;
+  width:auto;
+}
+.heurist-map-layer-header>.heurist-map-row-actions{
+  display:none;
+  flex:0 0 auto;
+  margin-left:2px;
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}
+.heurist-map-layer-row:hover>.heurist-map-layer-header>.heurist-map-row-actions,
+.heurist-map-layer-row:focus-within>.heurist-map-layer-header>.heurist-map-row-actions{
+  display:flex;
+}
+/* Disable the older direct-child hover rules now that actions live in the header. */
+.heurist-map-layer-row>.heurist-map-row-actions{display:none!important}
+.heurist-map-layer-title-block{
+  display:block;
+  min-width:0;
+  overflow:hidden;
+}
+.heurist-map-layer-title{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+/* Legend edit controls are independent of the row-action flex layout. */
+.heurist-map-legend-actions{background:transparent}
+.heurist-map-layer-row:hover .heurist-map-legend-actions,
+.heurist-map-layer-row:focus-within .heurist-map-legend-actions,
+.heurist-map-layer-legend:hover .heurist-map-legend-actions{
+  opacity:1;
+  visibility:visible;
+  pointer-events:auto;
+}

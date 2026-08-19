@@ -8,6 +8,15 @@
 import { mergeThematicSymbol } from '../../thematic/thematicSymbolResolver.js';
 import { hexToCssFilter } from '../../utils/hexToCssFilter.js';
 
+
+/** Create a compact geometry-neutral preview for configuration forms. */
+export function createSymbolPreview(symbol = {}) {
+  const preview = document.createElement('span');
+  preview.className = 'heurist-map-symbol-preview';
+  appendGeometrySamples(preview, symbol || {}, { point: true, line: true, polygon: true });
+  return preview;
+}
+
 /** Create the legend for the currently selected layer symbology. */
 export function createLayerLegend(layer) {
   if (layer?.loadState !== 'loaded') return null;

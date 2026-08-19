@@ -15,6 +15,7 @@ import {
   serializeMapConfigurationSettings
 } from './mapConfigurationSchema.js';
 import { getDefaultBaseMaps } from '../../basemaps/defaultBasemaps.js';
+import { createSymbolPreview } from '../legend/LegendRenderer.js';
 
 export class MapConfigurationDialog {
   constructor({
@@ -42,6 +43,7 @@ export class MapConfigurationDialog {
     this.fields = new Map();
     this.previousFocus = null;
     this.advanced = false;
+    this.initialFormState = null;
   }
 
   setValue(value) {
@@ -64,9 +66,8 @@ export class MapConfigurationDialog {
     this.previousFocus = document.activeElement;
     this.element = document.createElement('div');
     this.element.className = 'heurist-map-config-backdrop';
-    this.element.addEventListener('mousedown', (event) => {
-      if (event.target === this.element) this.cancel();
-    });
+    // This is a modal editor, not a click-away popup. Host-side child dialogs
+    // (symbology/thematic editors) may temporarily sit above it.
 
     this.dialog = document.createElement('section');
     this.dialog.className = 'heurist-map-config-dialog';
@@ -102,6 +103,7 @@ export class MapConfigurationDialog {
     (this.parent || document.body).append(this.element);
     this.populate();
     this.updateAdvancedVisibility();
+    this.initialFormState = this.formStateSignature();
     firstFocusable(this.dialog)?.focus();
     return this;
   }
@@ -124,9 +126,25 @@ export class MapConfigurationDialog {
   }
 
   cancel() {
-    const value = this.getValue();
+    if (this.initialFormState !== null && this.formStateSignature() !== this.initialFormState) {
+      const confirmDiscard = globalThis.confirm;
+      if (typeof confirmDiscard === 'function' && !confirmDiscard('Discard changes to map configuration?')) return false;
+    }
+    let value;
+    try { value = this.getValue(); } catch { value = clone(this.value); }
     this.close();
     this.onCancel?.(value, { mode: this.mode });
+    return true;
+  }
+
+  formStateSignature() {
+    if (!this.form) return '';
+    return JSON.stringify([...this.fields.entries()].map(([path, field]) => [
+      path,
+      field.control?.type === 'checkbox' ? field.control.checked : field.control?.value,
+      field.defaultToggle?.checked ?? null,
+      field.selectedControl ? [...field.selectedControl.options].map((option) => option.value) : null
+    ]));
   }
 
   async save() {
@@ -150,6 +168,7 @@ export class MapConfigurationDialog {
     this.element?.remove();
     this.element = this.dialog = this.form = null;
     this.fields.clear();
+    this.initialFormState = null;
     if (this.previousFocus?.focus) this.previousFocus.focus();
     this.previousFocus = null;
   }
@@ -699,15 +718,39 @@ export class MapConfigurationDialog {
   }
 
   symbology(body, path, labelText, options = {}) {
-    const { row, control } = labelledControl('textarea', labelText);
-    control.rows = 2;
-    control.readOnly = true;
-    control.placeholder = 'Default';
-    this.register(path, control, 'json');
+    const row = document.createElement('div');
+    row.className = 'heurist-map-config-field heurist-map-config-symbology-field';
 
-    const actions = document.createElement('span');
-    actions.className = 'heurist-map-config-field-actions';
-    const edit = button('Edit', `Edit ${labelText.toLowerCase()}`, async () => {
+    const label = document.createElement('span');
+    label.textContent = labelText;
+
+    const content = document.createElement('div');
+    content.className = 'heurist-map-config-symbology-content';
+    const previewHost = document.createElement('span');
+    previewHost.className = 'heurist-map-config-symbology-preview';
+
+    const links = document.createElement('span');
+    links.className = 'heurist-map-config-symbology-links';
+
+    const raw = document.createElement('textarea');
+    raw.rows = 3;
+    raw.placeholder = 'Default';
+    raw.className = 'heurist-map-config-symbology-raw';
+    raw.hidden = true;
+    this.register(path, raw, 'json');
+
+    const refreshPreview = (value = null) => {
+      let symbol = value;
+      if (symbol == null) {
+        try { symbol = raw.value.trim() ? JSON.parse(raw.value) : null; } catch { return; }
+      }
+      if (symbol?.symbol && Array.isArray(symbol?.thematic)) symbol = symbol.symbol;
+      previewHost.replaceChildren(createSymbolPreview(symbol || {}));
+      previewHost.classList.toggle('is-default', !symbol);
+    };
+    this.fields.get(path).onPopulate = refreshPreview;
+
+    const edit = linkButton('Edit', `Edit ${labelText.toLowerCase()}`, async () => {
       if (!this.onEditSymbology) return;
       try {
         const current = getPath(this.readForm(), path);
@@ -718,19 +761,30 @@ export class MapConfigurationDialog {
         });
         if (result == null) return;
         setPath(this.value, path, clone(result));
-        control.value = JSON.stringify(result, null, 2);
+        raw.value = JSON.stringify(result, null, 2);
+        refreshPreview(result);
       } catch (error) {
         this.showError(error?.message || String(error));
       }
     });
     edit.disabled = !this.onEditSymbology;
 
-    const clear = button('Clear', `Clear ${labelText.toLowerCase()}`, () => {
-      setPath(this.value, path, null);
-      control.value = '';
+    const toggleRaw = linkButton('Show raw', `Show or hide raw ${labelText.toLowerCase()}`, () => {
+      raw.hidden = !raw.hidden;
+      toggleRaw.textContent = raw.hidden ? 'Show raw' : 'Hide raw';
     });
-    actions.append(edit, clear);
-    row.append(actions);
+
+    const clear = linkButton('×', `Clear ${labelText.toLowerCase()}`, () => {
+      setPath(this.value, path, null);
+      raw.value = '';
+      refreshPreview(null);
+    });
+    clear.classList.add('heurist-map-config-symbology-clear');
+
+    raw.addEventListener('input', () => refreshPreview());
+    links.append(edit, toggleRaw, clear);
+    content.append(previewHost, links, raw);
+    row.append(label, content);
     this.decorate(row, options);
     body.append(row);
     return row;
@@ -802,6 +856,7 @@ export class MapConfigurationDialog {
     } else {
       field.control.value = current == null || current === '' ? 'standard' : String(current);
     }
+    field.onPopulate?.(current);
   }
 
   readForm() {
@@ -887,6 +942,12 @@ function sectionTitle(text) { const item = document.createElement('div'); item.c
 function button(text, title, handler) {
   const item = document.createElement('button');
   item.type = 'button'; item.textContent = text; item.title = title; item.addEventListener('click', handler); return item;
+}
+
+function linkButton(text, title, handler) {
+  const item = button(text, title, handler);
+  item.classList.add('heurist-map-config-link');
+  return item;
 }
 function submitButton(text) { const item = document.createElement('button'); item.type = 'submit'; item.className = 'primary'; item.textContent = text; return item; }
 function preparePublishConfiguration(value) {

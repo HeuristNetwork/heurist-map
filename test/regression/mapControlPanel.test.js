@@ -80,3 +80,11 @@ test('configuration transfer lists keep None and use first-selected basemap fall
   assert.doesNotMatch(dialogSource, /First selected/);
   assert.match(dialogSource, /choices\[0\]\?\.\[0\] \?\? ''/);
 });
+
+test('hidden layer actions do not reserve title width and legend editors appear on hover', () => {
+  assert.match(cssSource, /\.heurist-map-layer-row>\.heurist-map-row-actions\{[\s\S]*?display:none/);
+  assert.match(cssSource, /\.heurist-map-layer-row:hover>\.heurist-map-row-actions[\s\S]*?display:flex/);
+  assert.doesNotMatch(cssSource, /background:linear-gradient\(to right/);
+  assert.match(cssSource, /\.heurist-map-legend-actions\{[\s\S]*?opacity:0/);
+  assert.match(cssSource, /\.heurist-map-layer-row:hover \.heurist-map-legend-actions[\s\S]*?opacity:1/);
+});

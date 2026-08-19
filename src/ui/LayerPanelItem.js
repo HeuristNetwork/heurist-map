@@ -54,23 +54,6 @@ export class LayerPanelItem {
       zoomButton.classList.add('heurist-map-layer-zoom-action');
       actions.append(zoomButton);
       actions.append(createOpacityControl(this.api, this.layer, row));
-      if (this.symbologyEditingEnabled && supportsSymbologyLegend(this.layer)) {
-        const isCurrentResults = String(this.layer.id) === 'current-results';
-        if (isCurrentResults || Number(this.layer.recordId) > 0) {
-          actions.append(button(
-            'fa-solid fa-palette',
-            isCurrentResults ? 'Edit default symbology' : 'Edit layer symbology',
-            () => this.api.requestEditLayerSymbology(this.layer.id, { thematic: false })
-          ));
-        }
-        if (!isCurrentResults && Number(this.layer.recordId) > 0 && supportsThematicSelection(this.layer)) {
-          actions.append(button(
-            'fa-solid fa-chart-simple',
-            'Edit thematic renderers',
-            () => this.api.requestEditLayerSymbology(this.layer.id, { thematic: true })
-          ));
-        }
-      }
       if (String(this.layer.id) !== 'current-results' && this.editingEnabled && typeof this.onEditLayer === 'function') {
         actions.append(button(
           'fa-solid fa-pencil',
@@ -80,14 +63,56 @@ export class LayerPanelItem {
       }
     }
 
-    row.append(main, actions);
+    const header = document.createElement('div');
+    header.className = 'heurist-map-layer-header';
+    header.append(main, actions);
+    row.append(header);
+
     const thematicSelector = this.createThematicSelector();
     if (thematicSelector) row.append(thematicSelector);
+
+    const symbologyActions = this.createSymbologyActions();
+    let legend = null;
     if (this.showLegend && supportsSymbologyLegend(this.layer)) {
-      const legend = createLayerLegend(this.layer);
-      if (legend) row.append(legend);
+      legend = createLayerLegend(this.layer);
+      if (legend) {
+        if (symbologyActions) legend.append(symbologyActions);
+        row.append(legend);
+      }
+    }
+    // If the legend is deliberately disabled, retain access to the editors in
+    // the normal row actions rather than dropping the functionality entirely.
+    if (!legend && symbologyActions) {
+      while (symbologyActions.firstChild) actions.append(symbologyActions.firstChild);
     }
     return row;
+  }
+
+  createSymbologyActions() {
+    if (!this.symbologyEditingEnabled || !supportsSymbologyLegend(this.layer) || this.layer.loadState !== 'loaded') {
+      return null;
+    }
+
+    const isCurrentResults = String(this.layer.id) === 'current-results';
+    const hasPersistentLayer = Number(this.layer.recordId) > 0;
+    if (!isCurrentResults && !hasPersistentLayer) return null;
+
+    const actions = document.createElement('span');
+    actions.className = 'heurist-map-legend-actions';
+    actions.append(button(
+      'fa-solid fa-palette',
+      isCurrentResults ? 'Edit default symbology' : 'Edit layer symbology',
+      () => this.api.requestEditLayerSymbology(this.layer.id, { thematic: false })
+    ));
+
+    if (!isCurrentResults && hasPersistentLayer && supportsThematicSelection(this.layer)) {
+      actions.append(button(
+        'fa-solid fa-chart-simple',
+        'Edit thematic renderers',
+        () => this.api.requestEditLayerSymbology(this.layer.id, { thematic: true })
+      ));
+    }
+    return actions;
   }
 
 
