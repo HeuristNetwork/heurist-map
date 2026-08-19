@@ -1,11 +1,12 @@
 /** LayerPanel.js - Render ordered layers for the active MapDocument. */
 import { LayerPanelItem } from './LayerPanelItem.js';
 export class LayerPanel {
-  constructor({ api, container, editingEnabled = false, onEditLayer = null, showLegend = true }) {
+  constructor({ api, container, editingEnabled = false, symbologyEditingEnabled = false, onEditLayer = null, showLegend = true }) {
     this.api = api;
     this.container = container;
     this.editingEnabled = editingEnabled;
     this.onEditLayer = onEditLayer;
+    this.symbologyEditingEnabled = symbologyEditingEnabled;
     this.showLegend = showLegend !== false;
   }
   render(layers, { loading = false } = {}) {
@@ -15,6 +16,7 @@ export class LayerPanel {
         api: this.api,
         layer,
         editingEnabled: this.editingEnabled,
+        symbologyEditingEnabled: this.symbologyEditingEnabled,
         onEditLayer: this.onEditLayer,
         showLegend: this.showLegend
       }).element);

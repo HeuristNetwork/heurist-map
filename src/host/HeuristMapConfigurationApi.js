@@ -13,10 +13,11 @@ import {
 
 /** Public API used when heurist-map is loaded only as a configuration editor. */
 export class HeuristMapConfigurationApi {
-  constructor({ mapDocumentListProvider = null, baseMapCatalog = [] } = {}) {
+  constructor({ mapDocumentListProvider = null, baseMapCatalog = [], hostBridge = null } = {}) {
     this.configurationDialog = null;
     this.mapDocumentListProvider = mapDocumentListProvider;
     this.baseMapCatalog = Array.isArray(baseMapCatalog) ? baseMapCatalog : [];
+    this.hostBridge = hostBridge || null;
   }
 
   ready() { return Promise.resolve(this); }
@@ -26,7 +27,10 @@ export class HeuristMapConfigurationApi {
     this.configurationDialog = new MapConfigurationDialog({
       ...options,
       mapDocumentListProvider: options.mapDocumentListProvider || this.mapDocumentListProvider,
-      baseMapCatalog: options.baseMapCatalog || this.baseMapCatalog
+      baseMapCatalog: options.baseMapCatalog || this.baseMapCatalog,
+      onEditSymbology: options.onEditSymbology || (typeof this.hostBridge?.editSymbology === 'function'
+        ? ((value, editorOptions) => this.hostBridge.editSymbology(value, { ...editorOptions, persist: false }))
+        : null)
     });
     this.configurationDialog.open();
     return this.configurationDialog;

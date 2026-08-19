@@ -134,6 +134,7 @@ export class MapControlPanel {
   refresh() {
     const activeId = this.api.getActiveMapDocument()?.id;
     const editingEnabled = this.api.getCapabilities?.().editing === true;
+    const symbologyEditingEnabled = this.api.getCapabilities?.().symbologyEditing === true;
     const allDocuments = this.api.getMapDocuments();
     const documentActivating = allDocuments.some((item) => item.activating === true || item.loadState === 'loading');
     const documents = allDocuments.filter((item) => {
@@ -149,6 +150,7 @@ export class MapControlPanel {
         api: this.api,
         container,
         editingEnabled,
+        symbologyEditingEnabled,
         onEditLayer: (layerId) => this.editLayer(layerId),
         showLegend: this.options.showLegend !== false
       }).render(this.api.getLayers(), { loading: documentActivating });

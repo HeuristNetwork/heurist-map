@@ -76,7 +76,11 @@ export async function initHeuristMap(config) {
 
   const publicApi = new HeuristMapPublicApi(application);
   publicApi.setConfigurationDialogFactory((options = {}) => {
-    const dialog = new MapConfigurationDialog({ ...options, reportTemplateProvider: providers.reportTemplates });
+    const dialog = new MapConfigurationDialog({
+      ...options,
+      reportTemplateProvider: providers.reportTemplates,
+      onEditSymbology: options.onEditSymbology || ((value, editorOptions) => publicApi.editSymbology(value, editorOptions))
+    });
     dialog.open();
     return dialog;
   });

@@ -34,7 +34,8 @@ export async function initHeuristMapConfiguration(config = {}) {
     : null;
   const publicApi = new HeuristMapConfigurationApi({
     mapDocumentListProvider,
-    baseMapCatalog: getLeafletBaseMapCatalog()
+    baseMapCatalog: getLeafletBaseMapCatalog(),
+    hostBridge: config.host?.bridge || null
   });
   window.heuristMap = publicApi;
   return publicApi;

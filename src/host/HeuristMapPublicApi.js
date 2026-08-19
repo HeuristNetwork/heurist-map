@@ -44,6 +44,14 @@ export class HeuristMapPublicApi {
   }
 
 
+  /** Open the host symbology editor without persistence (used by map configuration). */
+  editSymbology(value, options = {}) {
+    if (!this.application.host.supportsSymbologyEditing()) {
+      throw new Error('Symbology editor is not available from this host');
+    }
+    return this.application.host.editSymbology(value, { ...options, persist: false });
+  }
+
   /** Return optional host persistence capabilities. */
   getHostCapabilities() {
     return this.application.getHostCapabilities();
@@ -232,6 +240,14 @@ export class HeuristMapPublicApi {
 
   /** Activate one thematic map for a layer, or null for default symbology. */
   setLayerTheme(layerId, themeIndex = null) { return this.application.setLayerTheme(layerId, themeIndex); }
+
+  /** Replace one layer style in memory without reloading its data. */
+  setLayerStyle(layerId, style) { return this.application.setLayerStyle(layerId, style); }
+
+  /** Open the host symbology or thematic editor for a persisted MapLayer. */
+  requestEditLayerSymbology(layerId, options = {}) {
+    return this.application.requestEditLayerSymbology(layerId, options);
+  }
 
   /** Return the current lightweight single-layer selection. */
   getSelection() { return this.application.getSelection(); }

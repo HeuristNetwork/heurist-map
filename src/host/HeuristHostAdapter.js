@@ -23,6 +23,17 @@ export class HeuristHostAdapter extends HostAdapter {
     return typeof this.bridge?.editRecord === 'function';
   }
 
+  supportsSymbologyEditing() {
+    return typeof this.bridge?.editSymbology === 'function';
+  }
+
+  async editSymbology(value, options = {}) {
+    if (!this.supportsSymbologyEditing()) {
+      throw new Error('Symbology editing is not available from the Heurist host');
+    }
+    return this.bridge.editSymbology(value ?? null, options || {});
+  }
+
   getCapabilities() {
     return { mapPreferences: true, mapPublishing: true };
   }

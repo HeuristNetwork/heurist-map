@@ -511,6 +511,79 @@ export class MapApplication {
     return this.getLayer(layerId);
   }
 
+  /** Replace a layer style in memory and redraw it without reloading geometry/data. */
+  async setLayerStyle(layerId, style) {
+    const layer = this.layers.get(layerId);
+    if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
+
+    const activeDocument = this.mapDocuments.get(this.activeMapDocumentId)
+      || this.mapDocuments.get(String(this.activeMapDocumentId));
+    const stored = activeDocument ? findStoredLayer(activeDocument, layerId) : null;
+    const defaults = this.getLayerDefaults(activeDocument);
+    const normalized = normalizeMapLayer({
+      ...(stored?.mapLayer || {}),
+      style: style || {}
+    }, { defaults }).style;
+
+    if (stored?.mapLayer) stored.mapLayer.style = clonePlain(normalized);
+    layer.style = clonePlain(normalized);
+    const deferred = this.deferredLayers.get(layerId);
+    if (deferred?.mapLayer) deferred.mapLayer.style = clonePlain(normalized);
+
+    if (layer.loadState === 'loaded' && !this.deferredLayers.has(layerId)) {
+      await this.mapEngine.setLayerStyle(layerId, normalized);
+    }
+
+    this.dispatch('heurist-map-layer-style-changed', {
+      layerId,
+      layer: this.getLayer(layerId)
+    });
+    return this.getLayer(layerId);
+  }
+
+  /** Open the host symbology editor and apply the returned canonical DT_SYMBOLOGY value. */
+  async requestEditLayerSymbology(layerId, { thematic = false } = {}) {
+    const layer = this.layers.get(layerId);
+    if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
+    if (this.config.readonly || !this.host.supportsSymbologyEditing()) return null;
+
+    const isCurrentResults = String(layerId) === 'current-results';
+    const recordId = Number(layer.recordId);
+    if (!isCurrentResults && !(recordId > 0)) {
+      throw new Error(`Layer "${layerId}" is not backed by a persisted MapLayer record`);
+    }
+    if (isCurrentResults && thematic === true) return null;
+
+    const currentValue = canonicalVectorSymbology(layer.style);
+    const value = await this.host.editSymbology(currentValue, {
+      recordId: recordId > 0 ? recordId : null,
+      layerId,
+      query: layer.source?.query ?? null,
+      thematic: thematic === true,
+      persist: !isCurrentResults
+    });
+    if (value == null) return null;
+
+    if (isCurrentResults) {
+      const canonical = canonicalVectorSymbology(value);
+      const baseSymbol = canonical?.symbol && Array.isArray(canonical?.thematic)
+        ? canonical.symbol
+        : canonical;
+      this.config.defaults = { ...(this.config.defaults || {}), symbology: clonePlain(baseSymbol || {}) };
+      if (this.config.persistedSettings?.config?.defaults) {
+        this.config.persistedSettings.config.defaults.symbology = clonePlain(baseSymbol || {});
+      }
+      return this.setLayerStyle(layerId, baseSymbol || {});
+    }
+
+    // Ordinary symbology can be redrawn in place. Thematic edits may add/remove
+    // field paths, so reload the layer to refresh its thematic attribute payload.
+    if (thematic === true) {
+      return this.reloadLayer(layerId);
+    }
+    return this.setLayerStyle(layerId, value);
+  }
+
   /** Return the lightweight single-layer selection. */
   getSelection() {
     return this.selectionLayerId == null
@@ -1725,7 +1798,8 @@ export class MapApplication {
       queryGeoJson: Boolean(this.providers.queryGeoData),
       remoteGeoJson: true,
       timeline: false,
-      editing: !this.config.readonly && this.host.supportsEditing()
+      editing: !this.config.readonly && this.host.supportsEditing(),
+      symbologyEditing: !this.config.readonly && this.host.supportsSymbologyEditing()
     };
   }
 
@@ -2407,6 +2481,24 @@ function resolveConfiguredBaseMaps(settings = {}, preventContinuousWorldBasemap 
     if (index > 0) result = [result[index], ...result.slice(0, index), ...result.slice(index + 1)];
   }
   return result;
+}
+
+function canonicalVectorSymbology(style) {
+  const value = style && typeof style === 'object' && !Array.isArray(style) ? style : {};
+  const rawSymbol = value.symbol && typeof value.symbol === 'object' && !Array.isArray(value.symbol)
+    ? value.symbol
+    : value;
+  const symbol = clonePlain(rawSymbol || {});
+  delete symbol.selectSymbol;
+  delete symbol.selectSymbology;
+  delete symbol.thematic;
+  delete symbol.type;
+
+  const thematic = Array.isArray(value.thematic)
+    ? clonePlain(value.thematic)
+    : [];
+
+  return thematic.length ? { symbol, thematic } : symbol;
 }
 
 function sameJson(left, right) {

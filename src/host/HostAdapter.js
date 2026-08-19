@@ -28,6 +28,16 @@ export class HostAdapter {
     return false;
   }
 
+  /** Return whether the host can open the legacy symbology/thematic editors. */
+  supportsSymbologyEditing() {
+    return false;
+  }
+
+  /** Open a host symbology editor and return the edited JSON value, or null on cancel. */
+  async editSymbology(value, options = {}) {
+    throw new Error('Symbology editing is not supported by this host');
+  }
+
   /**
    * Open the host record editor for an existing Heurist record.
    * MapDocument and MapLayer editing intentionally share this generic record-level contract.

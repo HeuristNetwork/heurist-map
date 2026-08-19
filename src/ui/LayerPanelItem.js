@@ -7,10 +7,11 @@
 import { createLayerLegend } from './legend/LegendRenderer.js';
 
 export class LayerPanelItem {
-  constructor({ api, layer, editingEnabled = false, onEditLayer = null, showLegend = true }) {
+  constructor({ api, layer, editingEnabled = false, symbologyEditingEnabled = false, onEditLayer = null, showLegend = true }) {
     this.api = api;
     this.layer = layer;
     this.editingEnabled = editingEnabled;
+    this.symbologyEditingEnabled = symbologyEditingEnabled;
     this.onEditLayer = onEditLayer;
     this.showLegend = showLegend !== false;
     this.element = this.create();
@@ -53,6 +54,23 @@ export class LayerPanelItem {
       zoomButton.classList.add('heurist-map-layer-zoom-action');
       actions.append(zoomButton);
       actions.append(createOpacityControl(this.api, this.layer, row));
+      if (this.symbologyEditingEnabled && supportsSymbologyLegend(this.layer)) {
+        const isCurrentResults = String(this.layer.id) === 'current-results';
+        if (isCurrentResults || Number(this.layer.recordId) > 0) {
+          actions.append(button(
+            'fa-solid fa-palette',
+            isCurrentResults ? 'Edit default symbology' : 'Edit layer symbology',
+            () => this.api.requestEditLayerSymbology(this.layer.id, { thematic: false })
+          ));
+        }
+        if (!isCurrentResults && Number(this.layer.recordId) > 0 && supportsThematicSelection(this.layer)) {
+          actions.append(button(
+            'fa-solid fa-chart-simple',
+            'Edit thematic renderers',
+            () => this.api.requestEditLayerSymbology(this.layer.id, { thematic: true })
+          ));
+        }
+      }
       if (String(this.layer.id) !== 'current-results' && this.editingEnabled && typeof this.onEditLayer === 'function') {
         actions.append(button(
           'fa-solid fa-pencil',

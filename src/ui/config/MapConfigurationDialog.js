@@ -19,7 +19,7 @@ import { getDefaultBaseMaps } from '../../basemaps/defaultBasemaps.js';
 export class MapConfigurationDialog {
   constructor({
     mode = 'preferences', value = null, parent = null, title = null,
-    onSave = null, onCancel = null, reportTemplateProvider = null,
+    onSave = null, onCancel = null, onEditSymbology = null, reportTemplateProvider = null,
     mapDocumentListProvider = null, baseMapCatalog = [], publishContext = null
   } = {}) {
     this.mode = normalizeMapConfigurationMode(mode);
@@ -29,6 +29,7 @@ export class MapConfigurationDialog {
     this.title = title || defaultTitle(this.mode);
     this.onSave = typeof onSave === 'function' ? onSave : null;
     this.onCancel = typeof onCancel === 'function' ? onCancel : null;
+    this.onEditSymbology = typeof onEditSymbology === 'function' ? onEditSymbology : null;
     this.reportTemplateProvider = reportTemplateProvider || null;
     this.mapDocumentListProvider = mapDocumentListProvider || null;
     this.baseMapCatalog = Array.isArray(baseMapCatalog) ? baseMapCatalog : [];
@@ -226,8 +227,8 @@ export class MapConfigurationDialog {
   buildDefaults(body) {
     const pointExtent = this.number(body, 'config.defaults.zoomToPointInKM', 'Point selection extent (km)', { min: 0 });
     pointExtent.classList.add('heurist-map-config-inline-number', 'heurist-map-config-narrow-number');
-    this.json(body, 'config.defaults.symbology', 'Default symbology');
-    this.json(body, 'config.defaults.selectSymbology', 'Select symbology', { advanced: true });
+    this.symbology(body, 'config.defaults.symbology', 'Default symbology');
+    this.symbology(body, 'config.defaults.selectSymbology', 'Select symbology', { advanced: true, selection: true });
     this.checkbox(body, 'config.defaults.preventContinuousWorldBasemap', 'Prevent continuous world basemap', { advanced: true });
     const clustering = document.createElement('div');
     clustering.className = 'heurist-map-config-inline-checks';
@@ -692,6 +693,44 @@ export class MapConfigurationDialog {
     control.rows = 3;
     control.placeholder = 'JSON (optional)';
     this.register(path, control, 'json');
+    this.decorate(row, options);
+    body.append(row);
+    return row;
+  }
+
+  symbology(body, path, labelText, options = {}) {
+    const { row, control } = labelledControl('textarea', labelText);
+    control.rows = 2;
+    control.readOnly = true;
+    control.placeholder = 'Default';
+    this.register(path, control, 'json');
+
+    const actions = document.createElement('span');
+    actions.className = 'heurist-map-config-field-actions';
+    const edit = button('Edit', `Edit ${labelText.toLowerCase()}`, async () => {
+      if (!this.onEditSymbology) return;
+      try {
+        const current = getPath(this.readForm(), path);
+        const result = await this.onEditSymbology(current, {
+          path,
+          selection: options.selection === true,
+          mode: this.mode
+        });
+        if (result == null) return;
+        setPath(this.value, path, clone(result));
+        control.value = JSON.stringify(result, null, 2);
+      } catch (error) {
+        this.showError(error?.message || String(error));
+      }
+    });
+    edit.disabled = !this.onEditSymbology;
+
+    const clear = button('Clear', `Clear ${labelText.toLowerCase()}`, () => {
+      setPath(this.value, path, null);
+      control.value = '';
+    });
+    actions.append(edit, clear);
+    row.append(actions);
     this.decorate(row, options);
     body.append(row);
     return row;

@@ -15,8 +15,8 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(scriptDirectory, '..');
 const sourceDirectory = path.join(projectDirectory, 'dist');
 const distributionRoot = process.env.HEURIST_CLIENT_DIST_ROOT ||
-    '/var/www/html/HEURIST/heurist/hclient/bundles';
-    //'C:/xampp/htdocs/heurist/hclient/bundles/';
+    //'/var/www/html/HEURIST/heurist/hclient/bundles';
+    'C:/xampp/htdocs/heurist/hclient/bundles/';
     //'/var/www/html/HEURIST/HEURIST_SUPPORT/external_h5';
 const destinationDirectory = path.join(distributionRoot, moduleName);
 const stagingDirectory = `${destinationDirectory}.new-${process.pid}`;
@@ -38,7 +38,7 @@ async function verifyBuildDirectory() {
 }
 
 function productionFilter(source) {
-    return !source.endsWith('.map');
+    return true; //!source.endsWith('.map');
 }
 
 async function deploy() {
