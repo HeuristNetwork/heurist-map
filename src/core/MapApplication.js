@@ -17,6 +17,7 @@ import { normalizeMapConfigurationSettings } from '../ui/config/mapConfiguration
 import { getDefaultBaseMaps } from '../basemaps/defaultBasemaps.js';
 import { activateThematicMap } from '../thematic/thematicAttributes.js';
 import { normalizePopupMode } from '../data/PopupProvider.js';
+import { DEFAULT_MAP_SYMBOL, normalizeMapSymbol } from '../utils/normalizeMapSymbol.js';
 
 /**
  * Engine-neutral application controller.
@@ -494,10 +495,20 @@ export class MapApplication {
     const sourceStyle = stored?.mapLayer?.style ?? layer.style ?? {};
     const nextStyle = activateThematicMap(sourceStyle, themeIndex);
 
-    if (stored?.mapLayer) stored.mapLayer.style = clonePlain(nextStyle);
+    if (stored?.mapLayer) {
+      stored.mapLayer.style = clonePlain(nextStyle);
+      if (Object.prototype.hasOwnProperty.call(stored.mapLayer, '_sourceStyle')) {
+        stored.mapLayer._sourceStyle = activateThematicMap(stored.mapLayer._sourceStyle, themeIndex);
+      }
+    }
     layer.style = clonePlain(nextStyle);
     const deferred = this.deferredLayers.get(layerId);
-    if (deferred?.mapLayer) deferred.mapLayer.style = clonePlain(nextStyle);
+    if (deferred?.mapLayer) {
+      deferred.mapLayer.style = clonePlain(nextStyle);
+      if (Object.prototype.hasOwnProperty.call(deferred.mapLayer, '_sourceStyle')) {
+        deferred.mapLayer._sourceStyle = activateThematicMap(deferred.mapLayer._sourceStyle, themeIndex);
+      }
+    }
 
     if (layer.loadState === 'loaded' && !this.deferredLayers.has(layerId)) {
       await this.mapEngine.setLayerStyle(layerId, nextStyle);
@@ -525,10 +536,20 @@ export class MapApplication {
       style: style || {}
     }, { defaults }).style;
 
-    if (stored?.mapLayer) stored.mapLayer.style = clonePlain(normalized);
+    if (stored?.mapLayer) {
+      stored.mapLayer.style = clonePlain(normalized);
+      if (Object.prototype.hasOwnProperty.call(stored.mapLayer, '_sourceStyle')) {
+        stored.mapLayer._sourceStyle = clonePlain(style || {});
+      }
+    }
     layer.style = clonePlain(normalized);
     const deferred = this.deferredLayers.get(layerId);
-    if (deferred?.mapLayer) deferred.mapLayer.style = clonePlain(normalized);
+    if (deferred?.mapLayer) {
+      deferred.mapLayer.style = clonePlain(normalized);
+      if (Object.prototype.hasOwnProperty.call(deferred.mapLayer, '_sourceStyle')) {
+        deferred.mapLayer._sourceStyle = clonePlain(style || {});
+      }
+    }
 
     if (layer.loadState === 'loaded' && !this.deferredLayers.has(layerId)) {
       await this.mapEngine.setLayerStyle(layerId, normalized);
@@ -555,11 +576,20 @@ export class MapApplication {
     if (isCurrentResults && thematic === true) return null;
 
     const currentValue = canonicalVectorSymbology(layer.style);
+    // Main Heurist's editor displays the effective symbol but persists only the
+    // sparse difference from this parent. Default/current-results symbology
+    // inherits directly from the built-in symbol; persisted MapLayers inherit
+    // from the configured effective default symbol. The thematic editor uses the
+    // same parent to resolve layer -> theme -> range internally.
+    const parentSymbol = isCurrentResults
+      ? normalizeMapSymbol({}, DEFAULT_MAP_SYMBOL)
+      : normalizeMapSymbol(this.config.defaults?.symbology ?? {}, DEFAULT_MAP_SYMBOL);
     const value = await this.host.editSymbology(currentValue, {
       recordId: recordId > 0 ? recordId : null,
       layerId,
       query: layer.source?.query ?? null,
       thematic: thematic === true,
+      parentSymbol,
       persist: !isCurrentResults
     });
     if (value == null) return null;

@@ -129,6 +129,9 @@ test('persisted layer ordinary symbology edit passes canonical value and redraws
   });
   assert.equal(calls[0][2].persist, true);
   assert.equal(calls[0][2].query, 't:10');
+  assert.equal(calls[0][2].parentSymbol.color, '#ff0000');
+  assert.equal(calls[0][2].parentSymbol.opacity, 1);
+  assert.equal(calls[0][2].parentSymbol.fillOpacity, 0.2);
   assert.equal(calls.some((call) => call[0] === 'reload'), false);
   assert.equal(calls.at(-1)[0], 'style');
 });
@@ -162,6 +165,7 @@ test('persisted layer thematic edit reloads layer so thematic attributes are ref
   await app.requestEditLayerSymbology('map-layer-122', { thematic: true });
 
   assert.equal(calls[0][2].thematic, true);
+  assert.equal(calls[0][2].parentSymbol.color, '#ff0000');
   assert.deepEqual(calls.at(-1), ['reload', 'map-layer-122']);
   assert.equal(calls.some((call) => call[0] === 'style'), false);
 });
@@ -195,6 +199,8 @@ test('current-results default symbology edit is non-persistent and updates runti
   await app.requestEditLayerSymbology('current-results');
 
   assert.equal(calls[0][2].persist, false);
+  assert.equal(calls[0][2].parentSymbol.color, '#ff0000');
+  assert.equal(calls[0][2].parentSymbol.fillOpacity, 0.2);
   assert.deepEqual(app.config.defaults.symbology, { iconType: 'iconfont', iconFont: 'location' });
   assert.deepEqual(calls.at(-1), ['style', 'current-results', { iconType: 'iconfont', iconFont: 'location' }]);
 });

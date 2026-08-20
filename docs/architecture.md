@@ -203,6 +203,8 @@ Simple symbol normalization is shared across layer rendering, selection, and leg
 
 A MapLayer may provide ordinary/default symbology and thematic maps. The thematic subsystem retrieves only the requested attribute fields for the relevant record IDs, resolves ranges/categories to symbols, and applies the selected theme without exposing Heurist record objects to the rendering engine.
 
+Vector symbols are resolved through one explicit inheritance chain: `DEFAULT_MAP_SYMBOL` → configured default → MapLayer → thematic renderer → range/facet. Persisted values remain sparse while runtime symbols are complete. Host editing receives the effective parent symbol so main Heurist can show effective values and save only the difference. Canonical opacity is `0..1`; circle radius is derived from the semantic `iconSize` diameter.
+
 `LegendRenderer` presents ordinary/thematic symbols using the same normalized symbol model. Selection symbology is likewise an application default and is passed to the engine in normalized form.
 
 While old and new mapping coexist, the host may fill missing default and selection symbols from legacy user preferences; this is a compatibility bridge rather than a second persisted configuration format.

@@ -32,7 +32,7 @@ test('MapLayer inherits agreed global layer defaults when omitted', () => {
 
   assert.equal(layer.style.symbol.color, '#123456');
   assert.equal(layer.style.symbol.fillColor, '#abcdef');
-  assert.deepEqual(layer.style.selectSymbol, defaults.selectSymbology);
+  assert.deepEqual(layer.style.selectSymbol, { color: '#ff00ff', fillColor: '#ffff00', iconSize: [24, 24], radius: 12 });
   assert.equal(layer.options.markerClustering, true);
   assert.equal(layer.options.maxAllowedFeatures, 500);
   assert.equal(layer.options.dynamicRequests, true);
@@ -120,8 +120,9 @@ test('reapplying defaults updates inherited values but preserves explicit layer 
   assert.equal(inherited.options.popupTemplate, 'Changed {{title}}');
   assert.equal(inherited.source.limit, 5000);
 
-  assert.equal(reapplyMapLayerDefaults(explicit, next), false);
-  assert.equal(explicit.style.symbol.color, '#010203');
+  assert.equal(reapplyMapLayerDefaults(explicit, next), true);
+  assert.equal(explicit.style.symbol.color, '#010203'); // explicit override survives
+  assert.equal(explicit.style.symbol.fillColor, '#ff0000'); // inherited parent value is recomputed
   assert.equal(explicit.style.selectSymbol.color, '#040506');
   assert.equal(explicit.options.maxAllowedFeatures, 2000);
   assert.equal(explicit.source.limit, 42);

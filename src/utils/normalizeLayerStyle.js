@@ -19,12 +19,9 @@ import {
 /**
  * Normalize layer style.
  *
- * Ordinary symbol inheritance is deliberately local:
- * - no explicit layer symbol -> configured global symbol, completed from DEFAULT_MAP_SYMBOL;
- * - explicit layer symbol -> that symbol, completed from DEFAULT_MAP_SYMBOL (never global defaults).
- *
- * Each thematic base symbol is also completed directly from DEFAULT_MAP_SYMBOL.
- * Thematic range symbols remain partial overrides.
+ * Vector inheritance follows the same chain as main Heurist:
+ * DEFAULT_MAP_SYMBOL -> configured default -> layer -> thematic renderer -> range.
+ * Thematic range symbols remain sparse until feature resolution.
  */
 export function normalizeLayerStyle(value = {}, defaults = {}) {
   const style = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -32,9 +29,8 @@ export function normalizeLayerStyle(value = {}, defaults = {}) {
     ? (hasMeaningfulSymbol(style.symbol) ? style.symbol : null)
     : (hasInlineSymbol(style) ? style : null);
 
-  const symbol = explicitSymbol
-    ? normalizeMapSymbol(explicitSymbol, DEFAULT_MAP_SYMBOL)
-    : normalizeMapSymbol(defaults.symbol ?? {}, DEFAULT_MAP_SYMBOL);
+  const defaultSymbol = normalizeMapSymbol(defaults.symbol ?? {}, DEFAULT_MAP_SYMBOL);
+  const symbol = normalizeMapSymbol(explicitSymbol ?? {}, defaultSymbol);
 
   const selectSymbol = style.selectSymbol
     ?? style.selectSymbology
@@ -44,14 +40,23 @@ export function normalizeLayerStyle(value = {}, defaults = {}) {
 
   return {
     symbol,
-    selectSymbol: selectSymbol && typeof selectSymbol === 'object' && !Array.isArray(selectSymbol)
-      ? structuredCloneSafe(selectSymbol)
-      : null,
-    thematic: normalizeThematicMaps(style.thematic)
+    selectSymbol: normalizeSelectionSymbol(selectSymbol),
+    thematic: normalizeThematicMaps(style.thematic, symbol)
   };
 }
 
-function normalizeThematicMaps(value) {
+
+function normalizeSelectionSymbol(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const symbol = normalizeMapSymbolOverride(value);
+  if (Object.hasOwn(symbol, 'iconSize')) {
+    const size = Array.isArray(symbol.iconSize) ? Number(symbol.iconSize[0]) : Number(symbol.iconSize);
+    if (Number.isFinite(size) && size >= 0) symbol.radius = size / 2;
+  }
+  return symbol;
+}
+
+function normalizeThematicMaps(value, layerSymbol) {
   const source = Array.isArray(value)
     ? value
     : (value && typeof value === 'object' ? [value] : []);
@@ -68,7 +73,7 @@ function normalizeThematicMaps(value) {
         ...structuredCloneSafe(theme),
         active,
         fields: normalizeThematicFields(theme.fields),
-        symbol: normalizeMapSymbol(theme.symbol ?? {}, DEFAULT_MAP_SYMBOL)
+        symbol: normalizeMapSymbol(theme.symbol ?? {}, layerSymbol)
       };
     });
 }

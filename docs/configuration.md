@@ -198,6 +198,8 @@ The remaining `options` properties control available/default MapDocuments, avail
 
 `config.defaults` contains defaults shared by map content where the individual MapDocument/MapLayer does not provide a value, including symbology, selection symbology, marker clustering, feature limits, popup template, and continuous-world behaviour.
 
+Vector symbology uses sparse inheritance: built-in `DEFAULT_MAP_SYMBOL` → configured default symbology → MapLayer symbol → thematic renderer symbol → thematic range/facet symbol. Missing properties are resolved from the effective parent at runtime. Opacity values are canonical fractions in the range `0..1`; legacy percentages are accepted only when normalizing incoming data. `iconSize` is the semantic marker diameter and Leaflet circle `radius` is derived as `iconSize / 2`.
+
 `config.dynamicDocument` controls the dynamic **Current results** MapDocument, including its title, zoom restrictions, optional bounds, and `dynamicRequests` (Load by map extent).
 
 ### Temporary legacy symbology compatibility

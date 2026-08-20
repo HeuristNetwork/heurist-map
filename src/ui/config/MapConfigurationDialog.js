@@ -16,6 +16,7 @@ import {
 } from './mapConfigurationSchema.js';
 import { getDefaultBaseMaps } from '../../basemaps/defaultBasemaps.js';
 import { createSymbolPreview } from '../legend/LegendRenderer.js';
+import { DEFAULT_MAP_SYMBOL, normalizeMapSymbol } from '../../utils/normalizeMapSymbol.js';
 
 export class MapConfigurationDialog {
   constructor({
@@ -757,7 +758,9 @@ export class MapConfigurationDialog {
         const result = await this.onEditSymbology(current, {
           path,
           selection: options.selection === true,
-          mode: this.mode
+          mode: this.mode,
+          // Configuration-level symbols inherit directly from the built-in map symbol.
+          parentSymbol: normalizeMapSymbol({}, DEFAULT_MAP_SYMBOL)
         });
         if (result == null) return;
         setPath(this.value, path, clone(result));

@@ -351,7 +351,7 @@ A MapLayer with `source.type: "image"` is rendered as a georeferenced image over
   "style": {
     "type": "simple",
     "symbol": {
-      "opacity": 75,
+      "opacity": 0.75,
       "blur": "10px",
       "brightness": "3",
       "contrast": "3"
@@ -360,7 +360,7 @@ A MapLayer with `source.type: "image"` is rendered as a georeferenced image over
 }
 ```
 
-`opacity` accepts either `0-1` values or percentages from `0-100`. Image filter properties remain in `style.symbol`. Supported filters are `blur`, `brightness`, `contrast`, `grayscale`, `hue-rotate`, `invert`, `saturate`, and `sepia`. Raster symbols may also define `transparentColor` (for example `#ffffff`); tiled layers use Leaflet.TileLayer.PixelFilter to replace exact matching pixels with transparency.
+`opacity` is stored and emitted canonically in the `0-1` range. Legacy `0-100` values are accepted only at normalization boundaries and are converted immediately to `0-1`. Image filter properties remain in `style.symbol`. Supported filters are `blur`, `brightness`, `contrast`, `grayscale`, `hue-rotate`, `invert`, `saturate`, and `sepia`. Raster symbols may also define `transparentColor` (for example `#ffffff`); tiled layers use Leaflet.TileLayer.PixelFilter to replace exact matching pixels with transparency.
 
 ### GeoJSON rendering performance
 

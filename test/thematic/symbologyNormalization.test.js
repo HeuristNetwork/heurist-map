@@ -7,8 +7,8 @@ const globalDefaults = {
   symbology: {
     color: '#123456',
     fillColor: '#abcdef',
-    radius: 9,
-    opacity: 75
+    iconSize: 18,
+    opacity: 0.75
   }
 };
 
@@ -27,41 +27,42 @@ test('layer without an own symbol uses global symbology completed from DEFAULT_M
   assert.equal(layer.style.symbol.radius, 9);
   assert.equal(layer.style.symbol.opacity, 0.75);
   assert.equal(layer.style.symbol.weight, DEFAULT_MAP_SYMBOL.weight);
-  assert.deepEqual(layer.style.symbol.iconSize, DEFAULT_MAP_SYMBOL.iconSize);
+  assert.deepEqual(layer.style.symbol.iconSize, [18, 18]);
 });
 
-test('layer with any own symbol ignores global symbology for missing properties', () => {
+test('sparse layer symbol inherits missing properties from effective global symbology', () => {
   const layer = layerWith({
     symbol: { color: '#000000' }
   });
   assert.equal(layer.style.symbol.color, '#000000');
-  assert.equal(layer.style.symbol.fillColor, DEFAULT_MAP_SYMBOL.fillColor);
-  assert.equal(layer.style.symbol.radius, DEFAULT_MAP_SYMBOL.radius);
+  assert.equal(layer.style.symbol.fillColor, '#abcdef');
+  assert.equal(layer.style.symbol.radius, 9);
   assert.equal(layer.style.symbol.weight, DEFAULT_MAP_SYMBOL.weight);
+  assert.equal(layer.style.symbol.opacity, 0.75);
 });
 
-test('thematic base symbol is complete and inherits only DEFAULT_MAP_SYMBOL', () => {
+test('thematic base symbol inherits from effective layer symbol', () => {
   const layer = layerWith({
     symbol: { color: '#111111', fillColor: '#222222' },
     thematic: [{
       title: 'Population',
       active: true,
       fields: [],
-      symbol: { color: '#0070c0', iconSize: '10', fill: '0', opacity: '100' }
+      symbol: { color: '#0070c0', iconSize: '10', fill: '0', opacity: 1 }
     }]
   });
 
   const theme = layer.style.thematic[0];
   assert.equal(theme.active, true);
   assert.equal(theme.symbol.color, '#0070c0');
-  assert.equal(theme.symbol.fillColor, DEFAULT_MAP_SYMBOL.fillColor);
-  assert.equal(theme.symbol.radius, DEFAULT_MAP_SYMBOL.radius);
+  assert.equal(theme.symbol.fillColor, '#222222');
+  assert.equal(theme.symbol.radius, 5);
   assert.deepEqual(theme.symbol.iconSize, [10, 10]);
   assert.equal(theme.symbol.fill, false);
   assert.equal(theme.symbol.opacity, 1);
 });
 
-test('thematic range symbols remain partial while legacy values are normalized', () => {
+test('thematic range symbols remain partial while legacy boundary values are normalized', () => {
   const layer = layerWith({
     thematic: [{
       active: true,

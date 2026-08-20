@@ -20,11 +20,12 @@ import { TileLayerLoader } from '../../src/engine/loaders/TileLayerLoader.js';
 import { ImageLayerLoader } from '../../src/engine/loaders/ImageLayerLoader.js';
 import { createImageFilterCss, normalizeImageFilter, normalizeOpacity, transparentColorToRgb } from '../../src/utils/normalizeImageFilter.js';
 
-test('normalizes simple symbol defaults and percentage opacity', () => {
-  const symbol = normalizeMapSymbol({ color: '#000', opacity: 2, radius: -1 });
+test('normalizes legacy opacity at the boundary and derives radius from iconSize', () => {
+  const symbol = normalizeMapSymbol({ color: '#000', opacity: 2, iconSize: 18 });
   assert.equal(symbol.color, '#000');
   assert.equal(symbol.opacity, 0.02);
-  assert.equal(symbol.radius, 6);
+  assert.deepEqual(symbol.iconSize, [18, 18]);
+  assert.equal(symbol.radius, 9);
 });
 
 test('normalizes Heurist and external feature metadata', () => {

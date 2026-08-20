@@ -61,6 +61,14 @@ export function normalizeMapLayer(value = {}, { defaults = {} } = {}) {
     configurable: true,
     writable: true
   });
+  // Preserve the sparse/source style privately so changed global defaults can be
+  // resolved again without materialising inherited values into persistence.
+  Object.defineProperty(result, '_sourceStyle', {
+    value: cloneObject(source.style) || {},
+    enumerable: false,
+    configurable: true,
+    writable: true
+  });
   return result;
 }
 
@@ -70,18 +78,29 @@ export function reapplyMapLayerDefaults(mapLayer, defaults = {}) {
   if (!inherited) return false;
   let changed = false;
 
-  if (inherited.symbology) {
-    const symbol = normalizeMapSymbol(defaults.symbology ?? {});
-    if (!sameJson(mapLayer.style?.symbol, symbol)) {
-      mapLayer.style = { ...(mapLayer.style || {}), symbol };
+  // Every sparse layer/thematic symbol inherits from global defaults, even when
+  // it has some explicit properties. Re-resolve from the private source style so
+  // only inherited properties change. Explicit overrides remain untouched.
+  if (mapLayer._sourceStyle) {
+    const style = normalizeStyle(mapLayer._sourceStyle, defaults);
+    if (!sameJson(mapLayer.style, style)) {
+      mapLayer.style = style;
       changed = true;
     }
-  }
-  if (inherited.selectSymbology) {
-    const selectSymbol = cloneObject(defaults.selectSymbology);
-    if (!sameJson(mapLayer.style?.selectSymbol, selectSymbol)) {
-      mapLayer.style = { ...(mapLayer.style || {}), selectSymbol };
-      changed = true;
+  } else {
+    if (inherited.symbology) {
+      const symbol = normalizeMapSymbol(defaults.symbology ?? {});
+      if (!sameJson(mapLayer.style?.symbol, symbol)) {
+        mapLayer.style = { ...(mapLayer.style || {}), symbol };
+        changed = true;
+      }
+    }
+    if (inherited.selectSymbology) {
+      const selectSymbol = cloneObject(defaults.selectSymbology);
+      if (!sameJson(mapLayer.style?.selectSymbol, selectSymbol)) {
+        mapLayer.style = { ...(mapLayer.style || {}), selectSymbol };
+        changed = true;
+      }
     }
   }
 
