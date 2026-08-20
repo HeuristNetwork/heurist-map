@@ -92,3 +92,19 @@ test('non-circle marker renderers ignore vector fill background styling', () => 
   assert.match(source, /heurist-map-iconfont-marker[\s\S]*background:none/);
   assert.doesNotMatch(source, /const backgroundStyle = symbol\.fill && symbol\.fillColor/);
 });
+
+test('operational layers use stable per-layer panes ordered independently of load timing', () => {
+  const source = fs.readFileSync(new URL('../../src/engine/LeafletMapAdapter.js', import.meta.url), 'utf8');
+  assert.match(source, /createPane\('heurist-map-operational-layers'\)/);
+  assert.match(source, /ensureOperationalLayerPane\(definition\)/);
+  assert.match(source, /pane:\s*paneName/);
+  assert.match(source, /refreshOperationalLayerOrder\(\)/);
+  assert.match(source, /Number\(a\.definition\?\.order \|\| 0\) - Number\(b\.definition\?\.order \|\| 0\)/);
+});
+
+test('deselection restores normal SVG feature order after bringToFront selection', () => {
+  const source = fs.readFileSync(new URL('../../src/engine/LeafletMapAdapter.js', import.meta.url), 'utf8');
+  assert.match(source, /if \(pathOrderChanged\) \{\s*restoreNativeLayerOrder\(entry\.layer\)/s);
+  assert.match(source, /function restoreNativeLayerOrder\(layer\)/);
+  assert.match(source, /function bringNativeFeatureToFront\(layer\)/);
+});

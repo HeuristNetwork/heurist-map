@@ -34,6 +34,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     this.interactionHandlers = {};
     this.baseMapProviderOptions = {};
     this.nativeControls = new Map();
+    this.operationalLayersPane = null;
   }
 
   /**
@@ -51,6 +52,13 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       minZoom: options.minZoom,
       maxZoom: options.maxZoom
     });
+
+    // Put every operational layer in its own child pane. Leaflet SVG paths do
+    // not support useful per-path z-index values: their visual order is DOM
+    // order inside one SVG renderer. Separate panes give each MapLayer a stable
+    // stacking level which is independent of the time the layer becomes visible.
+    this.operationalLayersPane = this.map.createPane('heurist-map-operational-layers');
+    this.operationalLayersPane.style.zIndex = '400';
 
     this.map.setView(
       [options.center.latitude, options.center.longitude],
@@ -205,6 +213,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
 
     entry.layer.removeFrom(this.map);
     this.layers.delete(layerId);
+    this.refreshOperationalLayerOrder();
     return true;
   }
 
@@ -236,6 +245,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
 
     const previous = entry.selectedFeatureIds || new Set();
     const selected = new Set(featureIds.map(String));
+    let pathOrderChanged = false;
 
     // Restore only features that were selected before and are no longer selected.
     for (const featureId of previous) {
@@ -243,6 +253,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       const nativeLayer = entry.featureLayers.get(featureId);
       if (nativeLayer) {
         applyNativeSelection(nativeLayer, false, entry.selectionBaseStyles, entry.opacity, entry.selectionSymbol);
+        pathOrderChanged = pathOrderChanged || canBringNativeFeatureToFront(nativeLayer);
       }
     }
 
@@ -257,6 +268,18 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     }
 
     entry.selectedFeatureIds = selected;
+
+    // bringToFront() changes SVG DOM order. Once a selected path is restored,
+    // rebuild the original feature order inside this layer's private pane, then
+    // put any still-selected features back on top. This keeps selection useful
+    // without permanently changing normal feature order.
+    if (pathOrderChanged) {
+      restoreNativeLayerOrder(entry.layer);
+      for (const featureId of selected) {
+        const nativeLayer = entry.featureLayers.get(featureId);
+        if (nativeLayer) bringNativeFeatureToFront(nativeLayer);
+      }
+    }
     return true;
   }
 
@@ -546,6 +569,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
 
     const map = this.map;
     this.map = null;
+    this.operationalLayersPane = null;
     this.layers.clear();
 
     for (const control of this.nativeControls.values()) {
@@ -564,10 +588,15 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    * @returns {*} Method result.
    */
   addGeoJsonLayer(definition) {
+    const paneName = this.ensureOperationalLayerPane(definition);
     const resolveSymbol = (feature) => resolveFeatureSymbol(feature, definition.style);
     const markerClustering = definition.options?.markerClustering === true;
     const markerClusterGridPixels = finiteNonNegativeNumber(definition.options?.markerClusterGridPixels, 20);
-    const pointToLayer = createPointLayerFactory(resolveSymbol, { markerClustering, iconContext: definition.iconContext });
+    const pointToLayer = createPointLayerFactory(resolveSymbol, {
+      markerClustering,
+      iconContext: definition.iconContext,
+      paneName
+    });
     const selectable = definition.selectable !== false;
     const featureLayers = new Map();
     const featureRecordIds = new Map();
@@ -576,7 +605,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     const selectionBaseStyles = new WeakMap();
 
     const geoJsonLayer = L.geoJSON(definition.data, {
-      style: (feature) => createPathStyle(resolveSymbol(feature)),
+      style: (feature) => createPathStyle(resolveSymbol(feature), paneName),
       pointToLayer,
       onEachFeature: (feature, nativeLayer) => {
         const metadata = getFeatureSelectionMetadata(feature);
@@ -610,7 +639,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     });
 
     const layer = markerClustering
-      ? createMarkerClusterLayer(geoJsonLayer, markerClusterGridPixels)
+      ? createMarkerClusterLayer(geoJsonLayer, markerClusterGridPixels, paneName)
       : geoJsonLayer;
 
     const result = this.registerLayer(definition, layer);
@@ -639,8 +668,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     // Do not pass undefined properties. In particular, explicitly assigning
     // `subdomains: undefined` overrides Leaflet's default "abc" value and
     // causes TileLayer._getSubdomain() to read `.length` from undefined.
+    const paneName = this.ensureOperationalLayerPane(definition);
     const options = compactOptions({
       ...definition.options,
+      pane: paneName,
       attribution: definition.attribution,
       minZoom: definition.minZoom,
       maxZoom: definition.maxZoom,
@@ -692,8 +723,10 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       [normalized.north, normalized.east]
     ];
 
+    const paneName = this.ensureOperationalLayerPane(definition);
     const options = compactOptions({
       ...definition.options,
+      pane: paneName,
       opacity: definition.opacity,
       interactive: false,
       className: `heurist-map-image-layer heurist-map-image-layer-${sanitizeClassToken(definition.id)}`
@@ -721,15 +754,48 @@ export class LeafletMapAdapter extends MapEngineAdapter {
    */
   registerLayer(definition, layer) {
     const visible = definition.visible !== false;
-    const entry = { definition, layer, visible, zoomVisible: true, opacity: 1, baseOpacity: new WeakMap(), featureLayers: null, featureRecordIds: null, recordFeatureIds: null, selectionBaseStyles: new WeakMap(), selectedFeatureIds: new Set() };
+    const paneName = definition.id === '__base__' ? null : this.ensureOperationalLayerPane(definition);
+    const entry = { definition, layer, paneName, visible, zoomVisible: true, opacity: 1, baseOpacity: new WeakMap(), featureLayers: null, featureRecordIds: null, recordFeatureIds: null, selectionBaseStyles: new WeakMap(), selectedFeatureIds: new Set() };
 
     this.layers.set(definition.id, entry);
+    this.refreshOperationalLayerOrder();
     this.applyLayerEffectiveVisibility(entry);
 
     return {
       id: definition.id,
       type: definition.type
     };
+  }
+
+  /**
+   * Ensure one stable Leaflet pane exists for an operational MapLayer.
+   * All panes are children of one parent stacking context so their local
+   * z-index never competes with Leaflet popups/tooltips/control panes.
+   */
+  ensureOperationalLayerPane(definition) {
+    const paneName = `heurist-map-layer-${sanitizeClassToken(definition.id)}`;
+    if (!this.map.getPane(paneName)) {
+      const container = this.operationalLayersPane || this.map.getPane('overlayPane');
+      const pane = this.map.createPane(paneName, container);
+      pane.classList.add('heurist-map-operational-layer-pane');
+    }
+    return paneName;
+  }
+
+  /** Keep native layer panes in the same order as the engine-neutral layer list. */
+  refreshOperationalLayerOrder() {
+    if (!this.map) return;
+    const entries = [...this.layers.entries()]
+      .filter(([id, entry]) => id !== '__base__' && entry.paneName)
+      .sort(([, a], [, b]) => {
+        const order = Number(a.definition?.order || 0) - Number(b.definition?.order || 0);
+        return order || String(a.definition?.id).localeCompare(String(b.definition?.id));
+      });
+
+    entries.forEach(([, entry], index) => {
+      const pane = this.map.getPane(entry.paneName);
+      if (pane) pane.style.zIndex = String(index + 1);
+    });
   }
 
   /**
@@ -805,7 +871,7 @@ function compactOptions(options) {
 }
 
 
-function createPointLayerFactory(resolveSymbol, { markerClustering = false, iconContext = null } = {}) {
+function createPointLayerFactory(resolveSymbol, { markerClustering = false, iconContext = null, paneName = null } = {}) {
   const imageIconCache = new Map();
 
   return (feature, latlng) => {
@@ -818,21 +884,22 @@ function createPointLayerFactory(resolveSymbol, { markerClustering = false, icon
         icon = createImageMarkerIcon(symbol, imageUrl);
         imageIconCache.set(cacheKey, icon);
       }
-      return L.marker(latlng, { icon });
+      return L.marker(latlng, compactOptions({ icon, pane: paneName }));
     }
 
     if (symbol.iconType === 'iconfont') {
-      return L.marker(latlng, { icon: createIconFontIcon(symbol) });
+      return L.marker(latlng, compactOptions({ icon: createIconFontIcon(symbol), pane: paneName }));
     }
 
     // Leaflet.markercluster is designed for Marker instances. The normal
     // renderer uses CircleMarker for default point symbols, so clustering uses
     // a marker-backed divIcon that preserves the same circle appearance.
     if (markerClustering) {
-      return L.marker(latlng, { icon: createClusterPointIcon(symbol) });
+      return L.marker(latlng, compactOptions({ icon: createClusterPointIcon(symbol), pane: paneName }));
     }
 
     return L.circleMarker(latlng, compactOptions({
+      pane: paneName,
       radius: symbol.radius,
       color: symbol.color,
       weight: symbol.weight,
@@ -845,8 +912,9 @@ function createPointLayerFactory(resolveSymbol, { markerClustering = false, icon
   };
 }
 
-function createPathStyle(symbol = {}) {
+function createPathStyle(symbol = {}, paneName = null) {
   return compactOptions({
+    pane: paneName,
     color: symbol.color,
     weight: symbol.weight,
     opacity: symbol.opacity,
@@ -858,13 +926,14 @@ function createPathStyle(symbol = {}) {
   });
 }
 
-function createMarkerClusterLayer(geoJsonLayer, gridPixels = 20) {
+function createMarkerClusterLayer(geoJsonLayer, gridPixels = 20, paneName = null) {
   if (typeof L.markerClusterGroup !== 'function') {
     throw new Error('Marker clustering is enabled but Leaflet.markercluster is not available');
   }
 
   const clusterLayer = L.markerClusterGroup({
     chunkedLoading: true,
+    clusterPane: paneName || 'markerPane',
     maxClusterRadius: finiteNonNegativeNumber(gridPixels, 20)
   });
   clusterLayer.addLayers(geoJsonLayer.getLayers());
@@ -1164,6 +1233,44 @@ function applyNativeSelection(layer, selected, storage, opacityMultiplier = 1, s
   const element = typeof layer.getElement === 'function' ? layer.getElement() : null;
   element?.classList.toggle('heurist-map-feature-selected', selected);
   if (selected && typeof layer.bringToFront === 'function') layer.bringToFront();
+}
+
+/**
+ * Restore the native insertion order of path features in one GeoJSON layer.
+ * Leaflet Path.bringToFront() physically moves an SVG element to the end of its
+ * renderer, so deselection must rebuild the normal DOM order explicitly.
+ */
+function restoreNativeLayerOrder(layer) {
+  if (!layer || typeof layer.eachLayer !== 'function') return;
+  layer.eachLayer((child) => {
+    if (typeof child.eachLayer === 'function') {
+      restoreNativeLayerOrder(child);
+    } else if (typeof child.bringToFront === 'function') {
+      child.bringToFront();
+    }
+  });
+}
+
+/** Bring one logical feature (including compound geometries) to the front. */
+function bringNativeFeatureToFront(layer) {
+  if (!layer) return;
+  if (typeof layer.eachLayer === 'function') {
+    layer.eachLayer((child) => bringNativeFeatureToFront(child));
+    return;
+  }
+  if (typeof layer.bringToFront === 'function') layer.bringToFront();
+}
+
+/** Return whether a logical feature contains at least one Leaflet Path. */
+function canBringNativeFeatureToFront(layer) {
+  if (!layer) return false;
+  if (typeof layer.bringToFront === 'function') return true;
+  if (typeof layer.eachLayer !== 'function') return false;
+  let found = false;
+  layer.eachLayer((child) => {
+    if (!found && canBringNativeFeatureToFront(child)) found = true;
+  });
+  return found;
 }
 
 function getNativeFeatureBounds(layer) {

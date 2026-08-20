@@ -40,6 +40,6 @@ test('Leaflet adapter enables clustering with chunked bulk loading', () => {
 
   assert.match(adapter, /L\.markerClusterGroup\(\{[\s\S]*chunkedLoading:\s*true/);
   assert.match(adapter, /clusterLayer\.addLayers\(geoJsonLayer\.getLayers\(\)\)/);
-  assert.match(adapter, /createPointLayerFactory\(resolveSymbol, \{ markerClustering, iconContext: definition\.iconContext \}\)/);
+  assert.match(adapter, /createPointLayerFactory\(resolveSymbol, \{[\s\S]*markerClustering,[\s\S]*iconContext: definition\.iconContext,[\s\S]*paneName[\s\S]*\}\)/);
   assert.match(adapter, /maxClusterRadius:\s*finiteNonNegativeNumber\(gridPixels, 20\)/);
 });
