@@ -1038,13 +1038,13 @@ function createIconFontIcon(symbol) {
 
   const fontSize = Math.min(width, height);
   const color = (symbol.color || '#000000'); //escapeHtml
-  const backgroundStyle = symbol.fill && symbol.fillColor
-    ? `background-color:${symbol.fillColor};` 
-    : 'background:none;';
 
+  // Image-backed markers (url/rectype) already ignore vector fill properties.
+  // Icon-font markers must follow the same marker semantics: fill/fillColor are
+  // path/polygon properties and must not create a background behind the glyph.
   return L.divIcon({
     className: 'heurist-map-iconfont-marker',
-    html: `<span class="${safeClassName}" style="display:flex;align-items:center;justify-content:center;border:none;font-size:${fontSize}px;width:${width}px;height:${height}px;color:${color};${backgroundStyle}"></span>`,
+    html: `<span class="${safeClassName}" style="display:flex;align-items:center;justify-content:center;border:none;font-size:${fontSize}px;width:${width}px;height:${height}px;color:${color};background:none;"></span>`,
     iconSize: [width, height],
     iconAnchor: symbol.iconAnchor || [width / 2, height / 2]
   });

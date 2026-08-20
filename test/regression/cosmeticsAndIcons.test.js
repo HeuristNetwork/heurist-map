@@ -83,3 +83,12 @@ test('image marker icons do not pass null Leaflet anchors', () => {
   assert.match(source, /if \(value == null\) return undefined/);
   assert.doesNotMatch(source, /popupAnchor: symbol\.popupAnchor/);
 });
+
+
+test('non-circle marker renderers ignore vector fill background styling', () => {
+  const source = fs.readFileSync(new URL('../../src/engine/LeafletMapAdapter.js', import.meta.url), 'utf8');
+  assert.match(source, /createImageMarkerIcon\(symbol, imageUrl\)/);
+  assert.match(source, /createIconFontIcon\(symbol\)/);
+  assert.match(source, /heurist-map-iconfont-marker[\s\S]*background:none/);
+  assert.doesNotMatch(source, /const backgroundStyle = symbol\.fill && symbol\.fillColor/);
+});
