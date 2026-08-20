@@ -489,8 +489,9 @@ export class MapApplication {
     const layer = this.layers.get(layerId);
     if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
 
-    const activeDocument = this.mapDocuments.get(this.activeMapDocumentId)
-      || this.mapDocuments.get(String(this.activeMapDocumentId));
+    const activeDocument = this.mapDocuments?.get?.(this.activeMapDocumentId)
+      || this.mapDocuments?.get?.(String(this.activeMapDocumentId))
+      || null;
     const stored = activeDocument ? findStoredLayer(activeDocument, layerId) : null;
     const sourceStyle = stored?.mapLayer?.style ?? layer.style ?? {};
     const nextStyle = activateThematicMap(sourceStyle, themeIndex);
@@ -527,8 +528,9 @@ export class MapApplication {
     const layer = this.layers.get(layerId);
     if (!layer) throw new Error(`Layer "${layerId}" is not registered`);
 
-    const activeDocument = this.mapDocuments.get(this.activeMapDocumentId)
-      || this.mapDocuments.get(String(this.activeMapDocumentId));
+    const activeDocument = this.mapDocuments?.get?.(this.activeMapDocumentId)
+      || this.mapDocuments?.get?.(String(this.activeMapDocumentId))
+      || null;
     const stored = activeDocument ? findStoredLayer(activeDocument, layerId) : null;
     const defaults = this.getLayerDefaults(activeDocument);
     const normalized = normalizeMapLayer({
@@ -575,7 +577,19 @@ export class MapApplication {
     }
     if (isCurrentResults && thematic === true) return null;
 
-    const currentValue = canonicalVectorSymbology(layer.style);
+    // Edit the sparse/source definition rather than the normalized runtime style.
+    // Runtime styles contain inherited values and engine-only compatibility fields
+    // (for example radius and normalized iconSize arrays); sending those back to the
+    // host would materialise defaults and can leak raster filter properties into a
+    // vector DT_SYMBOLOGY value.
+    const activeDocument = this.mapDocuments?.get?.(this.activeMapDocumentId)
+      || this.mapDocuments?.get?.(String(this.activeMapDocumentId))
+      || null;
+    const stored = activeDocument ? findStoredLayer(activeDocument, layerId) : null;
+    const sourceStyle = isCurrentResults
+      ? (this.config.defaults?.symbology ?? {})
+      : (stored?.mapLayer?._sourceStyle ?? layer.style);
+    const currentValue = canonicalVectorSymbology(sourceStyle);
     // Main Heurist's editor displays the effective symbol but persists only the
     // sparse difference from this parent. Default/current-results symbology
     // inherits directly from the built-in symbol; persisted MapLayers inherit
@@ -599,16 +613,28 @@ export class MapApplication {
       const baseSymbol = canonical?.symbol && Array.isArray(canonical?.thematic)
         ? canonical.symbol
         : canonical;
-      this.config.defaults = { ...(this.config.defaults || {}), symbology: clonePlain(baseSymbol || {}) };
-      if (this.config.persistedSettings?.config?.defaults) {
-        this.config.persistedSettings.config.defaults.symbology = clonePlain(baseSymbol || {});
+
+      // Current Results uses the same Default symbology edited in Map Configuration.
+      // Treat the editor Save as an explicit preference change: persist it when the
+      // host supports map preferences, then apply the complete configuration so every
+      // layer that inherits from Default symbology is recomputed consistently.
+      const settings = normalizeMapConfigurationSettings(
+        clonePlain(this.config.persistedSettings || {})
+      );
+      settings.config.defaults.symbology = clonePlain(baseSymbol || {});
+      if (this.host.getCapabilities?.().mapPreferences === true) {
+        await this.host.saveMapPreferences(settings);
       }
-      return this.setLayerStyle(layerId, baseSymbol || {});
+      return this.applyConfiguration(settings);
     }
 
-    // Ordinary symbology can be redrawn in place. Thematic edits may add/remove
-    // field paths, so reload the layer to refresh its thematic attribute payload.
+    // Ordinary symbology can be redrawn in place. For thematic edits update the
+    // local style first so the newly added renderer indices exist immediately in
+    // MapControlPanel, then reload to refresh the thematic attribute payload.
+    // This removes the short stale-style window that previously caused
+    // activateThematicMap() to reject a newly selected renderer index.
     if (thematic === true) {
+      await this.setLayerStyle(layerId, value);
       return this.reloadLayer(layerId);
     }
     return this.setLayerStyle(layerId, value);
@@ -2513,16 +2539,27 @@ function resolveConfiguredBaseMaps(settings = {}, preventContinuousWorldBasemap 
   return result;
 }
 
+const VECTOR_SYMBOL_KEYS = new Set([
+  'iconType', 'iconUrl', 'iconFont', 'iconSize', 'iconAnchor', 'popupAnchor',
+  'color', 'fillColor', 'weight', 'opacity', 'fillOpacity', 'fill', 'stroke',
+  'dashArray', 'radius'
+]);
+
 function canonicalVectorSymbology(style) {
   const value = style && typeof style === 'object' && !Array.isArray(style) ? style : {};
   const rawSymbol = value.symbol && typeof value.symbol === 'object' && !Array.isArray(value.symbol)
     ? value.symbol
     : value;
-  const symbol = clonePlain(rawSymbol || {});
-  delete symbol.selectSymbol;
-  delete symbol.selectSymbology;
-  delete symbol.thematic;
-  delete symbol.type;
+  const symbol = {};
+  for (const [key, raw] of Object.entries(rawSymbol || {})) {
+    if (!VECTOR_SYMBOL_KEYS.has(key) || raw === undefined || raw === null) continue;
+    let item = clonePlain(raw);
+    // iconSize is the canonical marker diameter. Runtime normalization uses a
+    // square [w,h] pair for engines, but the main-Heurist editor/storage contract
+    // uses one scalar size.
+    if (key === 'iconSize' && Array.isArray(item)) item = item[0];
+    symbol[key] = item;
+  }
 
   const thematic = Array.isArray(value.thematic)
     ? clonePlain(value.thematic)

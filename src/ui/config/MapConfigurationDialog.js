@@ -746,7 +746,11 @@ export class MapConfigurationDialog {
         try { symbol = raw.value.trim() ? JSON.parse(raw.value) : null; } catch { return; }
       }
       if (symbol?.symbol && Array.isArray(symbol?.thematic)) symbol = symbol.symbol;
-      previewHost.replaceChildren(createSymbolPreview(symbol || {}));
+      // Configuration stores sparse overrides. Preview the effective symbol so
+      // inherited built-in values (including fillOpacity) are visible exactly as
+      // they will be rendered on the map.
+      const effectiveSymbol = normalizeMapSymbol(symbol || {}, DEFAULT_MAP_SYMBOL);
+      previewHost.replaceChildren(createSymbolPreview(effectiveSymbol));
       previewHost.classList.toggle('is-default', !symbol);
     };
     this.fields.get(path).onPopulate = refreshPreview;

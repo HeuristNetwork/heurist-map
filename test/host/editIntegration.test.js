@@ -99,11 +99,24 @@ test('persisted layer ordinary symbology edit passes canonical value and redraws
     id: 'map-layer-122',
     recordId: 122,
     source: { type: 'heurist-query', query: 't:10' },
+    // Runtime style is deliberately normalized/polluted with engine-only fields.
     style: {
-      symbol: { iconType: 'circle', color: '#111111' },
+      symbol: { iconType: 'circle', color: '#111111', iconSize: [18, 18], radius: 9, blur: null },
       selectSymbol: { color: '#ffffff' },
       thematic: [{ title: 'Population', fields: [{ code: '10:1109', ranges: [] }] }]
     }
+  }]]);
+  app.activeMapDocumentId = 132;
+  app.mapDocuments = new Map([[132, {
+    layerDefinitions: [{
+      reference: { id: 'map-layer-122' },
+      mapLayer: {
+        _sourceStyle: {
+          symbol: { iconType: 'circle', color: '#111111' },
+          thematic: [{ title: 'Population', fields: [{ code: '10:1109', ranges: [] }] }]
+        }
+      }
+    }]
   }]]);
   app.host = {
     supportsSymbologyEditing: () => true,
@@ -167,10 +180,14 @@ test('persisted layer thematic edit reloads layer so thematic attributes are ref
   assert.equal(calls[0][2].thematic, true);
   assert.equal(calls[0][2].parentSymbol.color, '#ff0000');
   assert.deepEqual(calls.at(-1), ['reload', 'map-layer-122']);
-  assert.equal(calls.some((call) => call[0] === 'style'), false);
+  assert.equal(calls.some((call) => call[0] === 'style'), true);
+  assert.deepEqual(calls.find((call) => call[0] === 'style').slice(1), [
+    'map-layer-122',
+    {symbol:{iconType:'circle'}, thematic:[{title:'Type', fields:[{code:'10:12', ranges:[]}]}]}
+  ]);
 });
 
-test('current-results default symbology edit is non-persistent and updates runtime defaults', async () => {
+test('current-results default symbology edit persists map preferences and reapplies inherited defaults', async () => {
   const calls = [];
   const app = Object.create(MapApplication.prototype);
   app.config = {
@@ -186,14 +203,21 @@ test('current-results default symbology edit is non-persistent and updates runti
   }]]);
   app.host = {
     supportsSymbologyEditing: () => true,
+    getCapabilities: () => ({ mapPreferences: true }),
     async editSymbology(value, options) {
       calls.push(['edit', value, options]);
       return { iconType: 'iconfont', iconFont: 'location' };
+    },
+    async saveMapPreferences(settings) {
+      calls.push(['savePreferences', settings]);
+      return settings;
     }
   };
-  app.setLayerStyle = async (layerId, value) => {
-    calls.push(['style', layerId, value]);
-    return value;
+  app.applyConfiguration = async (settings) => {
+    calls.push(['applyConfiguration', settings]);
+    app.config.persistedSettings = settings;
+    app.config.defaults = settings.config.defaults;
+    return settings;
   };
 
   await app.requestEditLayerSymbology('current-results');
@@ -202,5 +226,6 @@ test('current-results default symbology edit is non-persistent and updates runti
   assert.equal(calls[0][2].parentSymbol.color, '#ff0000');
   assert.equal(calls[0][2].parentSymbol.fillOpacity, 0.2);
   assert.deepEqual(app.config.defaults.symbology, { iconType: 'iconfont', iconFont: 'location' });
-  assert.deepEqual(calls.at(-1), ['style', 'current-results', { iconType: 'iconfont', iconFont: 'location' }]);
+  assert.equal(calls.some((call) => call[0] === 'savePreferences'), true);
+  assert.equal(calls.at(-1)[0], 'applyConfiguration');
 });
