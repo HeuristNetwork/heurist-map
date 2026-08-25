@@ -51,6 +51,8 @@ export function canonicalizeMapSymbol(value = {}) {
     if (radius != null) result.iconSize = radius * 2;
   }
 
+  if (hasOwn(symbol, 'legendLabel')) result.legendLabel = stringOrNull(symbol.legendLabel);
+
   if (hasOwn(symbol, 'iconAnchor')) result.iconAnchor = normalizePair(symbol.iconAnchor, null);
   if (hasOwn(symbol, 'popupAnchor')) result.popupAnchor = normalizePair(symbol.popupAnchor, null);
   if (hasOwn(symbol, 'color')) result.color = nonEmptyStringOrNull(symbol.color);
@@ -78,6 +80,9 @@ export function canonicalizeMapSymbol(value = {}) {
  */
 export function normalizeMapSymbol(value = {}, parentSymbol = DEFAULT_MAP_SYMBOL) {
   const parent = canonicalizeMapSymbol(parentSymbol);
+
+  delete parent.legendLabel; // legendLabel is never inherited, only local
+
   const local = canonicalizeMapSymbol(value);
   const merged = { ...canonicalizeMapSymbol(DEFAULT_MAP_SYMBOL), ...definedValues(parent), ...definedValues(local) };
 
@@ -105,7 +110,8 @@ export function normalizeMapSymbol(value = {}, parentSymbol = DEFAULT_MAP_SYMBOL
     invert: nonEmptyStringOrNull(merged.invert),
     saturate: nonEmptyStringOrNull(merged.saturate),
     sepia: nonEmptyStringOrNull(merged.sepia),
-    transparentColor: nonEmptyStringOrNull(merged.transparentColor)
+    transparentColor: nonEmptyStringOrNull(merged.transparentColor),
+    legendLabel: nonEmptyStringOrNull(merged.legendLabel)
   };
 
   // radius is runtime/Leaflet compatibility, never an independent inherited property.

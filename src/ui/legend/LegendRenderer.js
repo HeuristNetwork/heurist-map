@@ -221,7 +221,7 @@ function dashStyle(value) {
 }
 
 function getRangeLabel(range) {
-  const label = range?.title ?? range?.label;
+  const label = range?.symbol?.legendLabel;//range?.title ?? range?.label;
   if (label != null && String(label).trim()) return String(label);
   if (range?.min != null || range?.max != null) {
     return `${range.min ?? ''} – ${range.max ?? ''}`.trim();

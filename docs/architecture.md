@@ -183,9 +183,40 @@ A layer that is initially hidden or currently outside its effective dynamic rang
 
 When a deferred static layer first becomes visible it is loaded through the normal loader registry. Once loaded, ordinary visibility toggles reuse the native layer.
 
-## 13. Dynamic viewport layers
+## 13. Query loading: bounded results and dynamic viewport
 
-Query layers may set `dynamicRequests: true` to load data for the current map extent rather than loading the complete result immediately.
+Heurist query layers are deliberately bounded so that large result sets cannot create an uncontrolled number of client-side geographic features. The same paging mechanism is used for ordinary Current results / MapLayer queries and for dynamic viewport queries.
+
+### 13.1 Bounded query loading
+
+`QueryGeoDataProvider` requests GeoJSON in pages. The normal page size is 1,000 records/features, and each request advances the API offset using the number of records processed by the previous response. Pages are merged into one client-side `FeatureCollection` until the query is exhausted or the configured feature limit is reached.
+
+The user-configurable **Maximum allowed features** values are:
+
+- 500
+- 1,000 (default)
+- 2,000
+- 5,000
+
+The provider never accepts a configured feature limit above 5,000. Reaching the configured limit does not make the layer fail: the loaded subset is rendered and its result metadata is marked as partial.
+
+The MapControlPanel reports the result as follows:
+
+- for **Current results**, the layer row itself shows `Result: <features> features`;
+- for an ordinary named MapLayer, the layer name remains the row label and the same `Result: <features> features` text is available as its title/hint;
+- if the feature limit truncates the result and record totals are available, the title becomes  
+  `Result: <features> features — first <processed> of <total> records processed`;
+- for a named MapLayer a second warning line is also shown:  
+  `Partial load: first <processed> of <total> records processed.`;
+- for Current results the partial information remains in the main result label and the separate warning line is suppressed.
+
+If the server does not provide enough metadata to state the processed/total record counts, the fallback text is `only part of the result set was loaded`.
+
+The distinction between **records processed** and **features returned** is intentional. A record may have no geographic object, or may contribute more than one geographic feature, so these counts are not necessarily equal.
+
+### 13.2 Dynamic viewport loading
+
+Query layers may set `dynamicRequests: true` to load data only for the current map extent rather than loading the complete query result immediately.
 
 Current rules are:
 
@@ -193,9 +224,17 @@ Current rules are:
 - the current extent is appended as a temporary Heurist geo predicate without modifying the stored query;
 - newer viewport requests cancel older requests with `AbortController`;
 - identical extent/zoom requests are not repeated;
-- if multiple dynamic layers are simultaneously visible and in range, one effective layer is selected by layer order and a warning is emitted for overlap;
-- out-of-range, hidden, or deferred dynamic layers do not request the server;
-- data is loaded in pages and the configured feature limit is enforced (currently up to 5000 features per layer in configuration).
+- hidden, deferred, or out-of-range dynamic layers do not request the server;
+- if multiple dynamic layers are simultaneously visible and eligible at the same zoom, one effective layer is selected by layer order; the application emits a `dynamic-layer-overlap` warning and loads only the highest-priority layer;
+- replacing viewport data preserves the layer definition and replaces only the heavy runtime feature payload;
+- a selection is reapplied after a viewport refresh when the selected records are still present in the new extent;
+- viewport results use the same paged loading and configured feature limit described above.
+
+For an overlap, the emitted warning text is:
+
+`Dynamic layer zoom ranges overlap at zoom <zoom>: <layer names>. Only "<selected layer>" is loaded.`
+
+MapControlPanel uses the same result-count presentation for a dynamic layer as for any other query layer. Therefore the displayed or hinted feature count always describes the **currently loaded viewport**, not the total number of geographic features that may exist for the complete underlying query. If the current viewport itself reaches the configured feature limit, the same partial-load message described in section 13.1 is shown.
 
 ## 14. Symbology, thematic mapping, and legend
 

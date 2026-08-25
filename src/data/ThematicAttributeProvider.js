@@ -44,7 +44,7 @@ export class ThematicAttributeProvider {
       body: { ids, fields },
       signal
     });
-
+console.log('ThematicAttributeProvider.load() response:', response);    
     return validateResponse(response);
   }
 }
