@@ -114,7 +114,9 @@ test('QueryGeoDataProvider sends raw geo field paths as a POST array', async () 
 
   await provider.search({
     query: 't:10',
-    geoFields: ['10:lt134:12:28', '10:lt240:48:lt134:12:28']
+    geoFields: ['10:lt134:12:28', '10:lt240:48:lt134:12:28'],
+    geoOutputMode: 'features',
+    extent: { west: -10, south: 30, east: 40, north: 70 }
   });
 
   assert.equal(request.path, '/map');
@@ -122,6 +124,9 @@ test('QueryGeoDataProvider sends raw geo field paths as a POST array', async () 
     '10:lt134:12:28',
     '10:lt240:48:lt134:12:28'
   ]);
+  assert.equal(request.options.body.geoOutputMode, 'features');
+  assert.deepEqual(request.options.body.extent, { west: -10, south: 30, east: 40, north: 70 });
+  assert.equal(request.options.body.query, 't:10');
 });
 
 test('QueryGeoDataProvider caps merged GeoJSON at maxAllowedFeatures', async () => {

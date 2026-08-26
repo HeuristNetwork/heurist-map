@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { MapApplication } from '../../src/core/MapApplication.js';
-import { addViewportToQuery } from '../../src/engine/loaders/GeoJsonLayerLoader.js';
+import { normalizeExtent } from '../../src/data/QueryGeoDataProvider.js';
 
 const VIEW = {
   zoom: 6,
@@ -9,40 +9,18 @@ const VIEW = {
   center: { latitude: 52, longitude: 12 }
 };
 
-test('dynamic viewport is appended to JSON and plain Heurist queries without mutating originals', () => {
-  const json = [{ t: 12 }];
-  const jsonResult = addViewportToQuery(json, VIEW.bounds);
-  assert.deepEqual(json, [{ t: 12 }]);
-  assert.deepEqual(jsonResult, [
-    { t: 12 },
-    { geo: { west: -16, south: 32, east: 40, north: 72 } }
-  ]);
-
-  assert.equal(
-    addViewportToQuery('t:12', VIEW.bounds),
-    't:12 geo:"-16,32,40,72"'
-  );
-
-  assert.equal(
-    addViewportToQuery('[{"t":12}]', VIEW.bounds),
-    '[{"t":12},{"geo":{"west":-16,"south":32,"east":40,"north":72}}]'
-  );
+test('dynamic viewport is normalized independently without changing the stored query', () => {
+  const query = [{ t: 12 }];
+  assert.deepEqual(normalizeExtent(VIEW.bounds), VIEW.bounds);
+  assert.deepEqual(query, [{ t: 12 }]);
 });
 
 test('dynamic viewport coordinates are clamped to valid longitude and latitude ranges', () => {
   const bounds = { west: -240, south: -120, east: 220, north: 105 };
 
   assert.deepEqual(
-    addViewportToQuery([{ t: 12 }], bounds),
-    [
-      { t: 12 },
-      { geo: { west: -180, south: -90, east: 180, north: 90 } }
-    ]
-  );
-
-  assert.equal(
-    addViewportToQuery('t:12', bounds),
-    't:12 geo:"-180,-90,180,90"'
+    normalizeExtent(bounds),
+    { west: -180, south: -90, east: 180, north: 90 }
   );
 });
 
@@ -79,7 +57,6 @@ function createDynamicApplication({ layers, view = VIEW, loaderDelay = 0 } = {})
           }, { once: true });
         });
       }
-      const query = context.viewport ? addViewportToQuery(mapLayer.source.query, context.viewport) : mapLayer.source.query;
       return {
         id: context.reference.id,
         recordId: mapLayer.id,
@@ -88,7 +65,11 @@ function createDynamicApplication({ layers, view = VIEW, loaderDelay = 0 } = {})
         visible: true,
         selectable: true,
         data: { type: 'FeatureCollection', features: [] },
-        source: { ...mapLayer.source, requestedQuery: query },
+        source: {
+          ...mapLayer.source,
+          requestedQuery: mapLayer.source.query,
+          requestedExtent: context.viewport || null
+        },
         style: {}, popup: { enabled: true }, options: mapLayer.options,
         order: context.reference.order,
         resultMeta: { returnedFeatures: 0, returnedRecords: 0, totalRecords: 0, isPartial: false }
@@ -132,7 +113,8 @@ test('only one visible dynamic layer is loaded for the current zoom', async () =
 
   assert.equal(ctx.requests.length, 1);
   assert.equal(ctx.requests[0].id, 'overview');
-  assert.deepEqual(ctx.requests[0].source.requestedQuery.at(-1), { geo: VIEW.bounds });
+  assert.deepEqual(ctx.requests[0].source.requestedQuery, [{ t: 12 }]);
+  assert.deepEqual(ctx.requests[0].source.requestedExtent, VIEW.bounds);
   assert.equal(ctx.application.getLayer('detail').loadState, 'deferred');
 });
 

@@ -7,7 +7,8 @@ import {
   applyThematicAttributes,
   collectThematicRecordIds,
   getActiveThematicMap,
-  getThematicFieldCodes
+  getThematicFieldCodes,
+  pathOccurrencesMatch
 } from '../../src/thematic/thematicAttributes.js';
 
 const thematicStyle = {
@@ -89,14 +90,14 @@ test('ThematicAttributeProvider posts deduplicated IDs and exact field-path code
     fieldCodes: ['10:133', '10:133', '10:lt240:48:237', '']
   });
 
-  assert.equal(call.path, '/records/details');
+  assert.equal(call.path, '/records');
   assert.deepEqual(call.options.body, {
     ids: [101, 102],
     fields: ['10:133', '10:lt240:48:237']
   });
 });
 
-test('thematic API details are attached by source record ID and preserve dtl_ID multivalues', () => {
+test('thematic API details are attached by source record ID and preserve value arrays', () => {
   const data = geoJson();
   for (const feature of data.features) {
     feature.properties.heurist = { recordId: Number(feature.properties.rec_ID) };
@@ -107,19 +108,78 @@ test('thematic API details are attached by source record ID and preserve dtl_ID 
       {
         rec_ID: '101',
         details: {
-          '10:133': { '7001': 'A' },
-          '10:lt240:48:237': { '8001': '10443', '8002': '10444' }
+          '10:133': [{ value: 'A' }],
+          '10:lt240:48:237': [
+            { value: '10443', path: { id: '1', recordIDs: ['101', '501'] } },
+            { value: '10444', path: { id: '1', recordIDs: ['101', '502'] } }
+          ]
         }
       }
-    ]
+    ],
+    meta: { paths: { '1': '10:lt240:48' } }
   });
 
   assert.deepEqual(data.features[0].properties.thematic, {
-    '10:133': { '7001': 'A' },
-    '10:lt240:48:237': { '8001': '10443', '8002': '10444' }
+    '10:133': [{ value: 'A' }],
+    '10:lt240:48:237': [
+      { value: '10443', path: { id: '1', recordIDs: ['101', '501'] } },
+      { value: '10444', path: { id: '1', recordIDs: ['101', '502'] } }
+    ]
   });
   assert.deepEqual(data.features[1].properties.thematic, data.features[0].properties.thematic);
   assert.deepEqual(data.features[2].properties.thematic, {});
+});
+
+test('linked thematic values match only features sharing the configured record-chain prefix', () => {
+  const data = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: {
+          rec_ID: 101,
+          _path: { id: '7', recordIDs: ['101', '501', '701'] }
+        },
+        geometry: null
+      },
+      {
+        type: 'Feature',
+        properties: {
+          rec_ID: 101,
+          _path: { id: '7', recordIDs: ['101', '502', '702'] }
+        },
+        geometry: null
+      }
+    ],
+    meta: { paths: { '7': '10:lt240:48:lt134:12' } }
+  };
+  applyThematicAttributes(data, {
+    records: [{
+      rec_ID: '101',
+      details: {
+        '10:133': [{ value: 'top' }],
+        '10:lt240:48:237': [
+          { value: 'event-a', path: { id: '1', recordIDs: ['101', '501'] } },
+          { value: 'event-b', path: { id: '1', recordIDs: ['101', '502'] } }
+        ]
+      }
+    }],
+    meta: { paths: { '1': '10:lt240:48' } }
+  });
+
+  assert.deepEqual(
+    data.features[0].properties.thematic['10:lt240:48:237'].map((item) => item.value),
+    ['event-a']
+  );
+  assert.deepEqual(
+    data.features[1].properties.thematic['10:lt240:48:237'].map((item) => item.value),
+    ['event-b']
+  );
+  assert.equal(data.features[0].properties.thematic['10:133'][0].value, 'top');
+  assert.equal(pathOccurrencesMatch(
+    '10:lt240:48:lt134:12', ['101','501','701'],
+    '10:lt240:48', ['101','502']
+  ), false);
 });
 
 test('GeoJsonLayerLoader enriches a thematic query layer before creating the runtime layer', async () => {

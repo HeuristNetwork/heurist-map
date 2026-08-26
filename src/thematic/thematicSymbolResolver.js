@@ -81,6 +81,7 @@ export function getFeatureThematicValues(feature, code) {
   if (fieldCode === GEO_FIELD_CODE) {
     return flattenValues(
       properties.rec_GeoField
+      ?? properties._geoFieldID
       ?? properties.heurist?.geoField
       ?? properties.heurist?.detailTypeId
       ?? properties.geoField
@@ -88,12 +89,12 @@ export function getFeatureThematicValues(feature, code) {
   }
 
   const details = properties.thematic?.[fieldCode];
-  if (isObject(details)) return Object.values(details).flatMap(flattenValues);
-  if (details != null) return flattenValues(details);
+  if (isObject(details)) return Object.values(details).flatMap(flattenThematicValues);
+  if (details != null) return flattenThematicValues(details);
 
   // Compatibility with GeoJSON that already exposes thematic values directly
   // under the persisted field-path code.
-  return flattenValues(properties[fieldCode]);
+  return flattenThematicValues(properties[fieldCode]);
 }
 
 /**
@@ -168,6 +169,16 @@ function flattenValues(value) {
   if (value == null) return [];
   if (Array.isArray(value)) return value.flatMap(flattenValues);
   return [value];
+}
+
+/** Extract the actual value while retaining compatibility with legacy scalars. */
+function flattenThematicValues(value) {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.flatMap(flattenThematicValues);
+  if (isObject(value) && Object.prototype.hasOwnProperty.call(value, 'value')) {
+    return flattenValues(value.value);
+  }
+  return flattenValues(value);
 }
 
 function isObject(value) {

@@ -30,10 +30,22 @@ export class QueryGeoDataProvider {
    * Load GeoJSON for one Heurist record.
    * @returns {Promise<*>} Resolves when the operation completes.
    */
-  async getRecord(recordId, { simplify = false, signal } = {}) {
+  async getRecord(recordId, {
+    simplify = false,
+    geoFields = null,
+    geoOutputMode = 'records',
+    extent = null,
+    signal
+  } = {}) {
     const id = requireRecordId(recordId);
+    const normalizedExtent = normalizeExtent(extent);
     const response = await this.apiClient.get(`/map/${id}`, {
-      query: { simplify },
+      query: {
+        simplify,
+        geoOutputMode: normalizeOutputMode(geoOutputMode),
+        ...(Array.isArray(geoFields) && geoFields.length ? { geofields: geoFields.join(',') } : {}),
+        ...(normalizedExtent ? { extent: normalizedExtent } : {})
+      },
       signal
     });
     return validateGeoJsonResponse(response);
@@ -49,6 +61,8 @@ export class QueryGeoDataProvider {
     offset = 0,
     simplify = false,
     geoFields = null,
+    geoOutputMode = 'records',
+    extent = null,
     method = 'auto',
     signal
   }) {
@@ -58,6 +72,8 @@ export class QueryGeoDataProvider {
 
     const normalizedLimit = normalizeLimit(limit);
     const normalizedOffset = normalizeOffset(offset);
+    const normalizedExtent = normalizeExtent(extent);
+    const normalizedOutputMode = normalizeOutputMode(geoOutputMode);
     const hasGeoFields = Array.isArray(geoFields) && geoFields.length > 0;
     const usePost = method === 'post'
       || (method === 'auto' && (hasGeoFields || shouldUsePost(query)));
@@ -70,6 +86,8 @@ export class QueryGeoDataProvider {
             limit: normalizedLimit,
             offset: normalizedOffset,
             simplify: Boolean(simplify),
+            geoOutputMode: normalizedOutputMode,
+            ...(normalizedExtent ? { extent: normalizedExtent } : {}),
             ...(hasGeoFields ? { geofields: geoFields } : {})
           },
           signal
@@ -80,6 +98,8 @@ export class QueryGeoDataProvider {
             limit: normalizedLimit,
             offset: normalizedOffset,
             simplify: Boolean(simplify),
+            geoOutputMode: normalizedOutputMode,
+            ...(normalizedExtent ? { extent: normalizedExtent } : {}),
             ...(hasGeoFields ? { geofields: geoFields } : {})
           },
           signal
@@ -96,6 +116,8 @@ export class QueryGeoDataProvider {
     limit = DEFAULT_LIMIT,
     simplify = false,
     geoFields = null,
+    geoOutputMode = 'records',
+    extent = null,
     method = 'auto',
     signal,
     maxPages = 100,
@@ -107,6 +129,8 @@ export class QueryGeoDataProvider {
     let offset = 0;
     let page = 0;
     let latestMeta = {};
+    const linkedRecords = new Map();
+    const paths = {};
     let complete = false;
     let truncatedByFeatureLimit = false;
 
@@ -124,6 +148,8 @@ export class QueryGeoDataProvider {
         offset,
         simplify,
         geoFields,
+        geoOutputMode,
+        extent,
         method,
         signal
       });
@@ -139,6 +165,11 @@ export class QueryGeoDataProvider {
       }
       features.push(...accepted);
       latestMeta = response.meta || {};
+      for (const record of response.meta?.records || []) {
+        const id = Number(record?.rec_ID);
+        if (Number.isInteger(id) && id > 0) linkedRecords.set(id, record);
+      }
+      Object.assign(paths, response.meta?.paths || {});
       page += 1;
 
       const total = Number(latestMeta.totalRecords ?? latestMeta.total);
@@ -169,6 +200,8 @@ export class QueryGeoDataProvider {
       features,
       meta: {
         ...latestMeta,
+        ...(linkedRecords.size ? { records: [...linkedRecords.values()] } : {}),
+        ...(Object.keys(paths).length ? { paths } : {}),
         offset: 0,
         limit: pageSize,
         returnedFeatures: features.length,
@@ -214,6 +247,30 @@ function normalizeFeatureLimit(value) {
 function normalizeOffset(value) {
   const number = Number(value);
   return Number.isInteger(number) && number >= 0 ? number : 0;
+}
+
+function normalizeOutputMode(value) {
+  return String(value || '').toLowerCase() === 'features' ? 'features' : 'records';
+}
+
+/** Normalize engine-neutral viewport bounds without changing the stored query. */
+export function normalizeExtent(value) {
+  if (!value || typeof value !== 'object') return null;
+  const west = Number(value.west);
+  const south = Number(value.south);
+  const east = Number(value.east);
+  const north = Number(value.north);
+  if (![west, south, east, north].every(Number.isFinite)) return null;
+  return {
+    west: clamp(west, -180, 180),
+    south: clamp(south, -90, 90),
+    east: clamp(east, -180, 180),
+    north: clamp(north, -90, 90)
+  };
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function requireRecordId(value) {

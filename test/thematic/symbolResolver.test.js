@@ -69,6 +69,20 @@ test('any thematic multivalue may match and first configured matching range wins
   assert.deepEqual(resolveThematicFieldSymbol(feature, field), { color: 'first' });
 });
 
+test('enriched path-aware values resolve their actual value property', () => {
+  const feature = { properties: { thematic: {
+    '10:lt240:48:237': [
+      {
+        value: '10443',
+        code: 'commercial',
+        label: 'Commercial',
+        path: { id: '1', recordIDs: ['101', '501'] }
+      }
+    ]
+  } } };
+  assert.deepEqual(getFeatureThematicValues(feature, '10:lt240:48:237'), ['10443']);
+});
+
 test('numeric interval matching is inclusive and accepts numeric strings', () => {
   const range = { value: '400000<>7800000' };
   assert.equal(thematicRangeMatches('400000', range), true);
@@ -85,6 +99,11 @@ test('rec_GeoField is read locally and does not require thematic API details', (
   const feature = { properties: { rec_GeoField: '999' } };
   const field = { code: 'rec_GeoField', ranges: [{ value: '999', symbol: { weight: 7 } }] };
   assert.deepEqual(resolveThematicFieldSymbol(feature, field), { weight: 7 });
+});
+
+test('rec_GeoField accepts the modern linked-geometry field property', () => {
+  const feature = { properties: { _geoFieldID: '134' } };
+  assert.deepEqual(getFeatureThematicValues(feature, 'rec_GeoField'), ['134']);
 });
 
 

@@ -1,7 +1,7 @@
 /**
  * ThematicAttributeProvider.js - Thematic record attribute provider
  *
- * @fileOverview Loads selected direct or linked Heurist record details through the public records/details API.
+ * @fileOverview Loads selected direct or linked Heurist record details through the public records API.
  * @project     Heurist mapping application
  *
  * @link        https://HeuristNetwork.org
@@ -30,7 +30,7 @@ export class ThematicAttributeProvider {
    * @param {Array<number|string>} options.recordIds Heurist record IDs.
    * @param {Array<string>} options.fieldCodes Full Heurist field-path codes.
    * @param {AbortSignal} [options.signal] Optional request cancellation signal.
-   * @returns {Promise<Object>} Public records/details API response.
+   * @returns {Promise<Object>} Public records API response.
    */
   async load({ recordIds, fieldCodes, signal } = {}) {
     const ids = normalizeRecordIds(recordIds);
@@ -40,11 +40,10 @@ export class ThematicAttributeProvider {
       return { records: [], meta: null };
     }
 
-    const response = await this.apiClient.post('/records/details', {
-      body: { ids, fields },
+    const response = await this.apiClient.post('/records', {
+      body: { ids, fields, resolveDetails: true },
       signal
     });
-console.log('ThematicAttributeProvider.load() response:', response);    
     return validateResponse(response);
   }
 }
@@ -66,7 +65,7 @@ function normalizeFieldCodes(values) {
 function validateResponse(value) {
   if (!value || typeof value !== 'object' || !Array.isArray(value.records)) {
     throw new HeuristApiError(
-      'The records/details API returned an invalid response'
+      'The records API returned an invalid response'
     );
   }
   return value;

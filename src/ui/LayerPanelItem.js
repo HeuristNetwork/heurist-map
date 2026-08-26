@@ -200,7 +200,7 @@ function supportsSymbologyLegend(layer) {
 
 function supportsThematicSelection(layer) {
   const sourceType = String(layer?.source?.type || '');
-  // Thematic attributes are retrieved through the Heurist records/details API.
+  // Thematic attributes are retrieved through the Heurist records API.
   // Do not expose thematic controls for external/vector-file or raster sources.
   return sourceType === 'heurist-query' || sourceType === 'record';
 }
