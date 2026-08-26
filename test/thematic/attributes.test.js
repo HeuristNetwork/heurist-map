@@ -93,7 +93,8 @@ test('ThematicAttributeProvider posts deduplicated IDs and exact field-path code
   assert.equal(call.path, '/records');
   assert.deepEqual(call.options.body, {
     ids: [101, 102],
-    fields: ['10:133', '10:lt240:48:237']
+    fields: ['10:133', '10:lt240:48:237'],
+    resolveDetails: true
   });
 });
 

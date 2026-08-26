@@ -26,7 +26,7 @@ export class MapConfigurationDialog {
   } = {}) {
     this.mode = normalizeMapConfigurationMode(mode);
     this.value = normalizeMapConfigurationSettings(value || {});
-    if (this.mode === 'publish') this.value = preparePublishConfiguration(this.value);
+    this.value = prepareModeConfiguration(this.value, this.mode);
     this.parent = parent;
     this.title = title || defaultTitle(this.mode);
     this.onSave = typeof onSave === 'function' ? onSave : null;
@@ -49,7 +49,11 @@ export class MapConfigurationDialog {
 
   setValue(value) {
     this.value = normalizeMapConfigurationSettings(value || {});
-    if (this.form) this.populate();
+    this.value = prepareModeConfiguration(this.value, this.mode);
+    if (this.form) {
+      this.populate();
+      this.applyModeControlState();
+    }
     return this;
   }
 
@@ -104,6 +108,7 @@ export class MapConfigurationDialog {
     (this.parent || document.body).append(this.element);
     this.populate();
     this.updateAdvancedVisibility();
+    this.applyModeControlState();
     this.initialFormState = this.formStateSignature();
     firstFocusable(this.dialog)?.focus();
     return this;
@@ -464,7 +469,19 @@ export class MapConfigurationDialog {
       'options.ui.showPublish'
     ]) {
       const control = this.fields.get(path)?.control;
-      if (control) control.disabled = disabled;
+      if (control) control.disabled = disabled
+        || (this.mode === 'website' && ['options.ui.showOptions', 'options.ui.showPublish'].includes(path));
+    }
+  }
+
+  applyModeControlState() {
+    if (this.mode !== 'website') return;
+    for (const path of ['options.ui.showOptions', 'options.ui.showPublish']) {
+      const control = this.fields.get(path)?.control;
+      if (control) {
+        control.checked = false;
+        control.disabled = true;
+      }
     }
   }
 
@@ -957,6 +974,25 @@ function linkButton(text, title, handler) {
   return item;
 }
 function submitButton(text) { const item = document.createElement('button'); item.type = 'submit'; item.className = 'primary'; item.textContent = text; return item; }
+function prepareModeConfiguration(value, mode) {
+  if (mode === 'publish') return preparePublishConfiguration(value);
+  if (mode !== 'website') return value;
+  const result = clone(value);
+  result.options = result.options || {};
+  result.options.ui = {
+    ...(result.options.ui || {}),
+    showBaseMaps: false,
+    showOptions: false,
+    showPublish: false
+  };
+  result.options.nativeControls = {
+    ...(result.options.nativeControls || {}),
+    bookmark: false,
+    print: false
+  };
+  return result;
+}
+
 function preparePublishConfiguration(value) {
   const result = clone(value);
   result.options = result.options || {};
