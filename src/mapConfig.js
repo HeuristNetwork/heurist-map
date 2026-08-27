@@ -36,7 +36,7 @@ export function getHeuristMapConfig() {
   const preventContinuousWorldBasemap = settings.config.defaults.preventContinuousWorldBasemap;
 
   return {
-    viewerMode: runtime.viewerMode === 'configuration' ? 'configuration' : 'map',
+    viewerMode: ['configuration', 'draw'].includes(runtime.viewerMode) ? runtime.viewerMode : 'map',
     configurationMode: runtime.configurationMode || 'website',
 
     // Application mechanics are internal constants rather than bootstrap options.

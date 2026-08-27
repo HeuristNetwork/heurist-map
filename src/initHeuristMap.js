@@ -26,6 +26,8 @@ import { ReportTemplateProvider } from './data/ReportTemplateProvider.js';
 import { MapControlPanel } from './ui/MapControlPanel.js';
 import { MapConfigurationDialog } from './ui/config/MapConfigurationDialog.js';
 import { createLayerLoaderRegistry } from './engine/loaders/createLayerLoaderRegistry.js';
+import { DrawController } from './draw/DrawController.js';
+import { DrawPanel } from './ui/DrawPanel.js';
 
 /**
  * Initialize the standalone map and expose its stable same-origin public API.
@@ -74,7 +76,11 @@ export async function initHeuristMap(config) {
     layerLoaders
   });
 
-  const publicApi = new HeuristMapPublicApi(application);
+  const drawController = new DrawController({
+    mapEngine,
+    dispatch: (name, detail) => application.dispatch(name, detail)
+  });
+  const publicApi = new HeuristMapPublicApi(application, drawController);
   publicApi.setConfigurationDialogFactory((options = {}) => {
     const dialog = new MapConfigurationDialog({
       ...options,
@@ -85,6 +91,7 @@ export async function initHeuristMap(config) {
     return dialog;
   });
   let controlPanel = null;
+  let drawPanel = null;
   const readyPromise = application.initialize().then(async () => {
     controlPanel = new MapControlPanel({
       api: publicApi,
@@ -93,12 +100,16 @@ export async function initHeuristMap(config) {
     });
     controlPanel.mount();
     application.controlPanel = controlPanel;
+    if (config.viewerMode === 'draw') {
+      drawPanel = new DrawPanel({ api: publicApi, container }).mount();
+      application.drawPanel = drawPanel;
+    }
 
     if (apiClient.isConfigured()) {
       // Published state owns startup activation when it names a document. Do not
       // first activate mapDocuments.initiallyActive and then switch documents again.
       await publicApi.loadMapDocuments(config.documents.query, {
-        activateFirst: config.initialState?.activeDocumentId == null
+        activateFirst: config.viewerMode !== 'draw' && config.initialState?.activeDocumentId == null
       });
     }
     if (config.initialState) {

@@ -409,3 +409,82 @@ html.heurist-map-configuration-mode .heurist-map-config-backdrop {
   visibility:visible;
   pointer-events:auto;
 }
+#heurist-map .heurist-map-draw-panel {
+  position: absolute;
+  z-index: 900;
+  bottom: 8px;
+  right: 8px;
+  width: 180px;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+
+#heurist-map .leaflet-editing-icon,
+#heurist-map .leaflet-div-icon.leaflet-editing-icon {
+  width: 7px !important;
+  height: 7px !important;
+  margin-left: -4px !important;
+  margin-top: -4px !important;
+  border-radius: 50%;
+}
+
+#heurist-map .heurist-map-draw-format-options {
+  display: flex;
+  gap: 18px;
+  margin: 8px 0;
+}
+
+#heurist-map .heurist-map-draw-panel label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+#heurist-map .heurist-map-draw-panel [hidden] {
+  display: none !important;
+}
+
+#heurist-map .heurist-map-draw-panel button {
+  min-height: 30px;
+}
+
+#heurist-map .heurist-map-draw-panel button.primary {
+  font-weight: bold;
+}
+
+#heurist-map .heurist-map-draw-geometry-backdrop {
+  position: absolute;
+  z-index: 1200;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+#heurist-map .heurist-map-draw-geometry-dialog {
+  width: min(650px, calc(100% - 40px));
+  padding: 16px;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.3);
+}
+
+#heurist-map .heurist-map-draw-geometry-dialog h3 { margin: 0 0 10px; }
+#heurist-map .heurist-map-draw-geometry-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 8px;
+  resize: vertical;
+}
+#heurist-map .heurist-map-draw-geometry-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+#heurist-map .heurist-map-draw-geometry-error { color: #b00020; }

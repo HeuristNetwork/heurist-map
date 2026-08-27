@@ -20,8 +20,9 @@ export class HeuristMapPublicApi {
   /**
    * Create and initialize the class instance.
    */
-  constructor(application) {
+  constructor(application, drawController = null) {
     this.application = application;
+    this.drawController = drawController;
     this.readyPromise = null;
     this.configurationDialogFactory = null;
     this.configurationDialog = null;
@@ -80,6 +81,56 @@ export class HeuristMapPublicApi {
   /** Restore a captured map state. */
   restoreState(state) {
     return this.application.restoreMapState(state);
+  }
+
+  /** Start or replace the isolated editable drawing session. */
+  beginDrawing(options = {}) {
+    if (!this.drawController) throw new Error('Drawing is not available');
+    return this.drawController.begin(options);
+  }
+
+  /** Replace drawing geometry from WKT or GeoJSON. */
+  setDrawing(value, options = {}) { return this.drawController?.set(value, options); }
+
+  /** Return `{type,wkt,geojson}` for the current drawing, or null when empty. */
+  getDrawing() { return this.drawController?.get() ?? null; }
+
+  /** Remove all editable geometry. */
+  clearDrawing() { return this.drawController?.clear(); }
+
+  /** Change drawing-session options while retaining the current geometry. */
+  setDrawingOptions(options = {}) { return this.drawController?.updateOptions(options); }
+
+  /** Edit and apply drawing style through the host's existing symbology editor. */
+  async editDrawingStyle() {
+    if (!this.drawController) throw new Error('Drawing is not available');
+    if (!this.application.host.supportsSymbologyEditing()) {
+      throw new Error('Symbology editor is not available from this host');
+    }
+    const current = this.drawController.getOptions().style || {};
+    const result = await this.application.host.editSymbology(current, {
+      persist: false,
+      editorMode: 2
+    });
+    if (result) await this.drawController.updateOptions({ style: result });
+    return result;
+  }
+
+  /** Fit the viewport to editable geometry. */
+  zoomToDrawing() { return this.drawController?.zoom(); }
+
+  /** Validate and return the current drawing. */
+  async finishDrawing() {
+    const result = await this.drawController?.finish();
+    this.application.dispatch('heurist-map-drawing-finished', { result });
+    return result;
+  }
+
+  /** Cancel without returning geometry. */
+  async cancelDrawing() {
+    const result = await this.drawController?.cancel() ?? null;
+    this.application.dispatch('heurist-map-drawing-cancelled', {});
+    return result;
   }
 
   /** Publish settings plus the selected amount of current map state through the host. */
@@ -418,6 +469,8 @@ export class HeuristMapPublicApi {
     this.configurationDialog = null;
     this.publishedMapDialog?.close?.();
     this.publishedMapDialog = null;
-    return this.application.destroy();
+    this.application.drawPanel?.destroy?.();
+    this.application.drawPanel = null;
+    return Promise.resolve(this.drawController?.destroy()).then(() => this.application.destroy());
   }
 }

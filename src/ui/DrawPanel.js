@@ -1,0 +1,160 @@
+/**
+ * DrawPanel.js - Compact controls for an active map drawing session
+ *
+ * @project     Heurist mapping application
+ * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
+ */
+
+export class DrawPanel {
+  constructor({ api, container }) {
+    this.api = api;
+    this.container = container;
+    this.element = null;
+  }
+
+  mount() {
+    const panel = document.createElement('aside');
+    panel.className = 'heurist-map-draw-panel';
+    const multiple = checkbox('Allow multiple objects');
+    this.multipleControl = multiple.control;
+    multiple.control.addEventListener('change', () => {
+      void this.api.setDrawingOptions({ allowMultiple: multiple.control.checked });
+    });
+    this.standardControls = [
+      multiple.row,
+      action('Set style', () => this.api.editDrawingStyle()),
+      action('Add Geometry', () => this.openGeometryEditor('add')),
+      action('Get Geometry', () => this.openGeometryEditor('get')),
+      action('Zoom to drawing', () => this.api.zoomToDrawing()),
+      action('Clear all', () => this.api.clearDrawing())
+    ];
+    this.cancelButton = action('Cancel', () => this.api.cancelDrawing());
+    this.finishButton = action('Save', () => this.api.finishDrawing(), 'primary');
+    panel.append(...this.standardControls, this.cancelButton, this.finishButton);
+    this.container.append(panel);
+    this.sessionHandler = (event) => {
+      this.multipleControl.checked = event.detail?.options?.allowMultiple === true;
+      this.applySessionOptions(event.detail?.options || {});
+    };
+    this.container.addEventListener('heurist-map-drawing-session-started', this.sessionHandler);
+    this.element = panel;
+    return this;
+  }
+
+  applySessionOptions(options) {
+    const mode = options.mode || 'full';
+    const bboxExtent = mode === 'image' || mode === 'rectangle' || mode === 'filter';
+    for (const control of this.standardControls) control.hidden = bboxExtent;
+    this.finishButton.textContent = mode === 'image' ? 'Apply image extent'
+      : mode === 'rectangle' ? 'Save extent'
+        : mode === 'filter' ? 'Apply Extent' : 'Save';
+  }
+
+  openGeometryEditor(mode) {
+    this.geometryDialog?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'heurist-map-draw-geometry-backdrop';
+    const dialog = document.createElement('section');
+    dialog.className = 'heurist-map-draw-geometry-dialog';
+    const heading = document.createElement('h3');
+    heading.textContent = mode === 'add' ? 'Add Geometry' : 'Get Geometry';
+    const textarea = document.createElement('textarea');
+    textarea.rows = 12;
+    textarea.placeholder = mode === 'add' ? 'Paste WKT or GeoJSON' : '';
+    const error = document.createElement('div');
+    error.className = 'heurist-map-draw-geometry-error';
+    const controls = document.createElement('div');
+    controls.className = 'heurist-map-draw-geometry-actions';
+    let formatControl = null;
+    const close = () => { overlay.remove(); if (this.geometryDialog === overlay) this.geometryDialog = null; };
+    stopMapInteraction(overlay);
+
+    if (mode === 'add') {
+      controls.append(
+        action('Cancel', close),
+        action('Apply', async () => {
+          try {
+            await this.api.setDrawing(textarea.value, { clear: false, zoom: true });
+            close();
+          } catch (exception) {
+            error.textContent = exception?.message || String(exception);
+          }
+        }, 'primary')
+      );
+    } else {
+      const format = radioGroup('drawing-output-format', [
+        ['wkt', 'WKT'], ['geojson', 'GeoJSON']
+      ]);
+      const refresh = () => {
+        const result = this.api.getDrawing();
+        textarea.value = !result ? '' : format.value() === 'geojson'
+          ? JSON.stringify(result.geojson, null, 2) : result.wkt;
+      };
+      format.element.addEventListener('change', refresh);
+      textarea.readOnly = true;
+      formatControl = format.element;
+      controls.append(action('Close', close));
+      setTimeout(refresh, 0);
+    }
+
+    dialog.append(heading);
+    if (formatControl) dialog.append(formatControl);
+    dialog.append(textarea, error, controls);
+    overlay.append(dialog);
+    this.container.append(overlay);
+    this.geometryDialog = overlay;
+    textarea.focus();
+  }
+
+  destroy() {
+    if (this.sessionHandler) {
+      this.container.removeEventListener('heurist-map-drawing-session-started', this.sessionHandler);
+    }
+    this.element?.remove();
+    this.geometryDialog?.remove();
+    this.element = this.multipleControl = this.sessionHandler = this.geometryDialog = null;
+  }
+}
+
+function radioGroup(name, values) {
+  const element = document.createElement('div');
+  element.className = 'heurist-map-draw-format-options';
+  const controls = values.map(([value, label], index) => {
+    const row = document.createElement('label');
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = name;
+    input.value = value;
+    input.checked = index === 0;
+    row.append(input, document.createTextNode(label));
+    element.append(row);
+    return input;
+  });
+  return { element, value: () => controls.find((item) => item.checked)?.value || values[0][0] };
+}
+
+function stopMapInteraction(element) {
+  for (const eventName of ['mousedown', 'mouseup', 'mousemove', 'click', 'dblclick', 'wheel',
+    'touchstart', 'touchmove', 'touchend']) {
+    element.addEventListener(eventName, (event) => event.stopPropagation());
+  }
+}
+
+function action(label, handler, className = '') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = label;
+  if (className) button.className = className;
+  button.addEventListener('click', async () => {
+    try { await handler(); } catch (error) { globalThis.console?.error(error); }
+  });
+  return button;
+}
+
+function checkbox(label) {
+  const row = document.createElement('label');
+  const control = document.createElement('input');
+  control.type = 'checkbox';
+  row.append(control, document.createTextNode(label));
+  return { row, control };
+}

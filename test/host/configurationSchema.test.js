@@ -133,6 +133,37 @@ test('configuration dialog can be used as a persistence-neutral value object bef
   assert.equal(dialog.serialize().format, 'heurist-map-settings');
 });
 
+test('website configuration starts with unsuitable controls switched off', () => {
+  const dialog = new MapConfigurationDialog({
+    mode: 'website',
+    value: {
+      options: {
+        ui: { showBaseMaps: true, showOptions: true, showPublish: true },
+        nativeControls: { bookmark: true, print: true }
+      }
+    }
+  });
+  const value = dialog.getValue();
+  assert.equal(value.options.ui.showBaseMaps, false);
+  assert.equal(value.options.ui.showOptions, false);
+  assert.equal(value.options.ui.showPublish, false);
+  assert.equal(value.options.nativeControls.bookmark, false);
+  assert.equal(value.options.nativeControls.print, false);
+
+  dialog.setValue({
+    options: {
+      ui: { showBaseMaps: true, showOptions: true, showPublish: true },
+      nativeControls: { bookmark: true, print: true }
+    }
+  });
+  const reset = dialog.getValue();
+  assert.equal(reset.options.ui.showBaseMaps, false);
+  assert.equal(reset.options.ui.showOptions, false);
+  assert.equal(reset.options.ui.showPublish, false);
+  assert.equal(reset.options.nativeControls.bookmark, false);
+  assert.equal(reset.options.nativeControls.print, false);
+});
+
 test('configuration zoom limits are restricted to Leaflet 0-22 range', () => {
   const value = normalizeMapConfigurationSettings({
     config: { dynamicDocument: { minZoom: -1, maxZoom: 23 } }

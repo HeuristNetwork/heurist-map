@@ -11,6 +11,9 @@
  */
 
 import L from 'leaflet';
+import markerIconUrl from 'leaflet/dist/images/marker-icon.png';
+import markerIconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
+import markerShadowUrl from 'leaflet/dist/images/marker-shadow.png';
 import { normalizeBounds as normalizeGeographicBounds } from '../utils/normalizeBounds.js';
 import { MapEngineAdapter } from './MapEngineAdapter.js';
 import { createImageFilterCss, transparentColorToRgb } from '../utils/normalizeImageFilter.js';
@@ -19,6 +22,18 @@ import { resolveFeatureSymbol } from '../thematic/thematicSymbolResolver.js';
 import { hexToCssFilter } from '../utils/hexToCssFilter.js';
 import { createLeafletBaseMapLayer, getLeafletBaseMapCatalog } from './leaflet/LeafletBasemapCatalog.js';
 import { ensureLeafletPixelFilter } from './leaflet/LeafletPixelFilter.js';
+
+// Leaflet's default URL guessing cannot work reliably after Vite has split and
+// renamed assets. Importing the images makes them part of the application build
+// and also covers markers created by plugins such as leaflet-control-geocoder.
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIconUrl,
+  iconRetinaUrl: markerIconRetinaUrl,
+  shadowUrl: markerShadowUrl
+});
+// Do not prepend Leaflet's CSS-derived imagePath to the URLs above. In the
+// Heurist bundle that guessed path becomes ".../heurist-mapmarker-icon...".
+L.Icon.Default.imagePath = '';
 
 /**
  * Leaflet implementation hidden behind the engine-neutral adapter contract.
@@ -35,6 +50,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     this.baseMapProviderOptions = {};
     this.nativeControls = new Map();
     this.operationalLayersPane = null;
+    this.drawSession = null;
   }
 
   /**
@@ -175,6 +191,184 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       this.nativeControls.set(name, control);
     }
     return control || null;
+  }
+
+  /** Start an isolated Leaflet.draw session without exposing Leaflet objects. */
+  async beginDrawing(options = {}, onChange = null) {
+    this.assertInitialized();
+    await this.endDrawing();
+    await import('leaflet-draw');
+    await import('leaflet-draw/dist/leaflet.draw.css');
+    if (typeof L.Control?.Draw !== 'function') {
+      throw new Error('Leaflet.draw plugin did not register correctly');
+    }
+
+    const group = L.featureGroup().addTo(this.map);
+    const style = { color: '#3388ff', weight: 4, ...options.style };
+    const mode = options.mode || 'full';
+    const control = new L.Control.Draw({
+      position: 'topleft',
+      edit: { featureGroup: group, poly: { allowIntersection: false } },
+      draw: {
+        polygon: mode === 'full'
+          ? { allowIntersection: false, showArea: false, showLength: false, shapeOptions: style } : false,
+        rectangle: { showArea: false, shapeOptions: style },
+        polyline: mode === 'full' ? { shapeOptions: { ...style, fill: false } } : false,
+        circle: mode === 'full' ? { shapeOptions: style } : false,
+        circlemarker: false,
+        marker: mode === 'full'
+      }
+    });
+    control.addTo(this.map);
+
+    const changed = (reason) => {
+      this.refreshDrawingImageOverlay();
+      onChange?.({ reason, drawing: this.getDrawingGeoJson() });
+    };
+    const liveEdited = () => {
+      // Leaflet.draw emits L.Draw.Event.EDITED only after the edit toolbar is
+      // saved. Path layers emit `edit` while their handles are being moved, so
+      // image extents must follow that event to remain aligned during editing.
+      this.refreshDrawingImageOverlay();
+    };
+    const bindLiveEdit = (layer) => layer?.on?.('edit', liveEdited);
+    const handlers = {
+      created: (event) => {
+        if (options.allowMultiple !== true) group.clearLayers();
+        group.addLayer(event.layer);
+        changed('created');
+      },
+      edited: () => changed('edited'),
+      deleted: () => changed('deleted'),
+      editmove: liveEdited,
+      editresize: liveEdited,
+      editvertex: liveEdited,
+      layeradd: (event) => bindLiveEdit(event.layer)
+    };
+    group.on('layeradd', handlers.layeradd);
+    this.map.on(L.Draw.Event.CREATED, handlers.created);
+    this.map.on(L.Draw.Event.EDITED, handlers.edited);
+    this.map.on(L.Draw.Event.DELETED, handlers.deleted);
+    this.map.on(L.Draw.Event.EDITMOVE, handlers.editmove);
+    this.map.on(L.Draw.Event.EDITRESIZE, handlers.editresize);
+    this.map.on(L.Draw.Event.EDITVERTEX, handlers.editvertex);
+    this.drawSession = {
+      group, control, handlers, onChange,
+      imageUrl: options.imageUrl || null,
+      mode,
+      style,
+      imageOverlay: null
+    };
+    return true;
+  }
+
+  async endDrawing() {
+    const session = this.drawSession;
+    if (!session) return false;
+    this.map.off(L.Draw.Event.CREATED, session.handlers.created);
+    this.map.off(L.Draw.Event.EDITED, session.handlers.edited);
+    this.map.off(L.Draw.Event.DELETED, session.handlers.deleted);
+    this.map.off(L.Draw.Event.EDITMOVE, session.handlers.editmove);
+    this.map.off(L.Draw.Event.EDITRESIZE, session.handlers.editresize);
+    this.map.off(L.Draw.Event.EDITVERTEX, session.handlers.editvertex);
+    session.group.off('layeradd', session.handlers.layeradd);
+    session.control.remove?.();
+    session.imageOverlay?.removeFrom?.(this.map);
+    session.group.removeFrom?.(this.map);
+    this.drawSession = null;
+    return true;
+  }
+
+  async setDrawingGeoJson(geojson, { clear = true } = {}) {
+    const session = this.requireDrawSession();
+    if (clear) session.group.clearLayers();
+    const rectangleBounds = ['rectangle', 'image', 'filter'].includes(session.mode)
+      ? getAxisAlignedRectangleBounds(geojson) : null;
+    if (rectangleBounds) {
+      session.group.addLayer(L.rectangle(rectangleBounds, session.style));
+    } else {
+      L.geoJSON(geojson, {
+        style: session.style,
+        onEachFeature: (_feature, layer) => session.group.addLayer(layer)
+      });
+    }
+    this.refreshDrawingImageOverlay();
+    session.onChange?.({ reason: 'loaded', drawing: this.getDrawingGeoJson() });
+    return this.getDrawingGeoJson();
+  }
+
+  /** Enter Leaflet.draw edit mode for geometry loaded at session startup. */
+  async startDrawingEdit() {
+    const session = this.requireDrawSession();
+    if (!session.group.getLayers().length) return false;
+    const handler = session.control?._toolbars?.edit?._modes?.edit?.handler;
+    if (!handler?.enable) return false;
+    handler.enable();
+    return true;
+  }
+
+  getDrawingGeoJson() {
+    const session = this.requireDrawSession();
+    const features = [];
+    session.group.eachLayer((layer) => {
+      const feature = layer instanceof L.Circle
+        ? circleToPolygonFeature(layer, this.map)
+        : layer.toGeoJSON(8);
+      if (feature) features.push(feature);
+    });
+    if (!features.length) return null;
+    return features.length === 1 ? features[0] : { type: 'FeatureCollection', features };
+  }
+
+  async clearDrawing() {
+    const session = this.requireDrawSession();
+    session.group.clearLayers();
+    session.imageOverlay?.removeFrom?.(this.map);
+    session.imageOverlay = null;
+    session.onChange?.({ reason: 'cleared', drawing: null });
+  }
+
+  async zoomToDrawing() {
+    const bounds = this.requireDrawSession().group.getBounds();
+    if (!bounds?.isValid?.()) return false;
+    this.map.fitBounds(bounds, { padding: [20, 20] });
+    return true;
+  }
+
+  async captureDrawingImage() {
+    await this.zoomToDrawing();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const module = await import('dom-to-image');
+    const domToImage = module.default || module;
+    if (typeof domToImage.toPng !== 'function') throw new Error('Map screenshot renderer is unavailable');
+    return domToImage.toPng(this.map.getContainer(), {
+      filter: (node) => !(node?.classList?.contains('heurist-map-draw-panel')
+        || node?.classList?.contains('leaflet-draw'))
+    });
+  }
+
+  refreshDrawingImageOverlay() {
+    const session = this.drawSession;
+    if (!session?.imageUrl) return;
+    const bounds = session.group.getBounds();
+    if (!bounds?.isValid?.()) {
+      session.imageOverlay?.removeFrom?.(this.map);
+      session.imageOverlay = null;
+      return;
+    }
+    if (!session.imageOverlay) {
+      session.imageOverlay = L.imageOverlay(session.imageUrl, bounds, {
+        opacity: 0.5,
+        pane: 'tilePane'
+      }).addTo(this.map);
+    } else {
+      session.imageOverlay.setBounds(bounds);
+    }
+  }
+
+  requireDrawSession() {
+    if (!this.drawSession) throw new Error('No Leaflet drawing session is active');
+    return this.drawSession;
   }
 
   /**
@@ -551,7 +745,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       tileLayers: true,
       imageOverlays: true,
       customCrs: false,
-      drawing: false,
+      drawing: true,
       markerClustering: typeof L.markerClusterGroup === 'function',
       featureSelection: true,
       multiSelection: true
@@ -566,6 +760,8 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     if (!this.map) {
       return;
     }
+
+    await this.endDrawing();
 
     const map = this.map;
     this.map = null;
@@ -819,6 +1015,23 @@ export class LeafletMapAdapter extends MapEngineAdapter {
       throw new Error('Leaflet map is not initialized');
     }
   }
+}
+
+function getAxisAlignedRectangleBounds(value) {
+  const geometry = value?.type === 'Feature' ? value.geometry : value;
+  if (geometry?.type !== 'Polygon' || geometry.coordinates?.length !== 1) return null;
+  const ring = geometry.coordinates[0] || [];
+  if (ring.length !== 5) return null;
+  const points = ring.slice(0, -1);
+  if (ring[0]?.[0] !== ring[4]?.[0] || ring[0]?.[1] !== ring[4]?.[1]) return null;
+  const xs = [...new Set(points.map((point) => Number(point?.[0])))];
+  const ys = [...new Set(points.map((point) => Number(point?.[1])))];
+  if (xs.length !== 2 || ys.length !== 2 || xs.some(Number.isNaN) || ys.some(Number.isNaN)) return null;
+  if (points.some(([x, y], index) => {
+    const next = points[(index + 1) % points.length];
+    return x !== next[0] && y !== next[1];
+  })) return null;
+  return L.latLngBounds([ys[0], xs[0]], [ys[1], xs[1]]);
 }
 
 
@@ -1313,6 +1526,34 @@ function applyChildOpacity(layer, multiplier, baseOpacity) {
 function finiteOpacity(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+/** Convert Leaflet's non-GeoJSON Circle into the polygon used by the legacy editor. */
+function circleToPolygonFeature(circle, map, segments = 40) {
+  const center = circle.getLatLng();
+  const radius = circle.getRadius();
+  const latitudeRadians = center.lat * Math.PI / 180;
+  const earthRadius = 6378137;
+  const angular = radius / earthRadius;
+  const coordinates = [];
+  for (let index = 0; index < segments; index += 1) {
+    const bearing = index * 2 * Math.PI / segments;
+    const latitude = Math.asin(
+      Math.sin(latitudeRadians) * Math.cos(angular)
+      + Math.cos(latitudeRadians) * Math.sin(angular) * Math.cos(bearing)
+    );
+    const longitude = center.lng * Math.PI / 180 + Math.atan2(
+      Math.sin(bearing) * Math.sin(angular) * Math.cos(latitudeRadians),
+      Math.cos(angular) - Math.sin(latitudeRadians) * Math.sin(latitude)
+    );
+    coordinates.push([longitude * 180 / Math.PI, latitude * 180 / Math.PI]);
+  }
+  coordinates.push([...coordinates[0]]);
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'Polygon', coordinates: [coordinates] }
+  };
 }
 
 function clonePlainValue(value) {
