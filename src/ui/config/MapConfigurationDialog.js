@@ -78,12 +78,13 @@ export class MapConfigurationDialog {
     this.dialog.className = 'heurist-map-config-dialog';
     this.dialog.setAttribute('role', 'dialog');
     this.dialog.setAttribute('aria-modal', 'true');
-    this.dialog.setAttribute('aria-label', this.title);
+    const displayTitle = configurationDialogTitle(this.title);
+    this.dialog.setAttribute('aria-label', displayTitle);
 
     const header = document.createElement('header');
     header.className = 'heurist-map-config-header';
     const heading = document.createElement('h2');
-    heading.textContent = this.title;
+    heading.textContent = displayTitle;
     const closeButton = button('×', 'Close', () => this.cancel());
     closeButton.classList.add('heurist-map-config-close');
     header.append(heading, closeButton);
@@ -963,6 +964,11 @@ function labelledControl(tag, labelText) {
 
 function legend(text) { const item = document.createElement('legend'); item.textContent = text; return item; }
 function sectionTitle(text) { const item = document.createElement('div'); item.className = 'heurist-map-config-control-section-title'; item.textContent = text; return item; }
+function configurationDialogTitle(title) {
+  const version = typeof HEURIST_MODULE_VERSION !== 'undefined'
+    ? String(HEURIST_MODULE_VERSION).trim() : '';
+  return version ? `${title} (v${version})` : title;
+}
 function button(text, title, handler) {
   const item = document.createElement('button');
   item.type = 'button'; item.textContent = text; item.title = title; item.addEventListener('click', handler); return item;

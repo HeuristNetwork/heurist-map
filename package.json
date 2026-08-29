@@ -1,6 +1,6 @@
 {
   "name": "heurist-map",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Standalone and embeddable mapping application for Heurist",
   "type": "module",
@@ -9,7 +9,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test",
-    "deploy:heurist": "npm run build && node scripts/deploy-heurist-map.mjs"
+    "deploy:heurist": "npm run build && node scripts/deploy-heurist-map.mjs",
+    "release:patch": "npm version patch --no-git-tag-version && npm run build",
+    "release:minor": "npm version minor --no-git-tag-version && npm run build",
+    "release:major": "npm version major --no-git-tag-version && npm run build"    
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.3.1",

@@ -11,9 +11,14 @@
  */
 
 import { defineConfig } from 'vite';
+import packageJson from './package.json' with { type: 'json' };
 
 export default defineConfig({
   base: './',
+
+  define: {
+    HEURIST_MODULE_VERSION: JSON.stringify(packageJson.version)
+  },
 
   build: {
     outDir: 'dist',
