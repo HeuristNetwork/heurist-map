@@ -10,7 +10,7 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { HeuristApiError } from './HeuristApiError.js';
+import { HeuristApiError } from '@heurist/client-core/api';
 
 /**
  * Loads thematic attribute values for Heurist record IDs.

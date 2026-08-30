@@ -10,7 +10,7 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { StandaloneHostAdapter } from './StandaloneHostAdapter.js';
+import { StandaloneHostAdapter } from '@heurist/client-core/host';
 import { HeuristHostAdapter } from './HeuristHostAdapter.js';
 
 /**

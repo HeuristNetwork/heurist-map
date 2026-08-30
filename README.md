@@ -10,7 +10,7 @@ Phase 2 adds read-only Heurist public API integration while retaining the Phase 
 
 Implemented in this phase:
 
-- `HeuristApiClient` based on `fetch`;
+- shared `@heurist/client-core` API, host and bootstrap infrastructure;
 - MapDocument and MapLayer response validation;
 - `MapDocumentProvider`;
 - `MapLayerProvider`;
@@ -49,8 +49,6 @@ src/
     createMapEnvironment.js
 
   data/
-    HeuristApiClient.js
-    HeuristApiError.js
     MapDocumentListProvider.js
     MapDocumentProvider.js
     MapLayerProvider.js
@@ -70,9 +68,8 @@ src/
       TileLayerLoader.js
 
   host/
-    HostAdapter.js
-    StandaloneHostAdapter.js
     createHostAdapter.js
+    HeuristHostAdapter.js
     HeuristMapPublicApi.js
 
   utils/
@@ -92,6 +89,20 @@ src/
     MapControlPanel.js
     MapDocumentSelector.js
 
+```
+
+The generic `HeuristApiClient`, `HeuristApiError`, `HostAdapter`,
+`StandaloneHostAdapter`, iframe bridge discovery and bootstrap normalization are
+provided by the sibling `@heurist/client-core` package. Map-specific providers,
+host persistence and UI remain in this project.
+
+For the local sibling checkout used during development:
+
+```bash
+cd heurist-map
+npm install
+npm test
+npm run build
 ```
 
 ## 4. Runtime configuration

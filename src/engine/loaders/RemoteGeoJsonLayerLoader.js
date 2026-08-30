@@ -10,7 +10,7 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { HeuristApiError } from '../../data/HeuristApiError.js';
+import { HeuristApiError } from '@heurist/client-core/api';
 import { createGeoJsonRuntimeLayer } from './GeoJsonLayerLoader.js';
 
 function defaultFetch(...args) {

@@ -15,6 +15,11 @@
 import { normalizeMapDocument } from './core/MapDocument.js';
 import { normalizeMapConfigurationSettings } from './ui/config/mapConfigurationSchema.js';
 import { getDefaultBaseMaps } from './basemaps/defaultBasemaps.js';
+import {
+  getFrameHostBridge,
+  getGlobalBootstrap
+} from '@heurist/client-core/host';
+import { resolveModuleBootstrap } from '@heurist/client-core/config';
 
 /**
  * Return normalized application configuration from the single bootstrap object.
@@ -22,10 +27,13 @@ import { getDefaultBaseMaps } from './basemaps/defaultBasemaps.js';
  */
 export function getHeuristMapConfig() {
   const url = new URL(globalThis.location?.href || 'http://localhost/');
-  const bridge = getHostBridge();
+  const bridge = getFrameHostBridge('heuristMapHost');
   // Both mapViewer and standalone published pages provide the canonical
   // { runtime, settings, state } bootstrap contract.
-  const bootstrap = bridge?.getConfiguration?.() || getStandaloneBootstrap();
+  const bootstrap = resolveModuleBootstrap({
+    bridge,
+    standalone: getGlobalBootstrap('heuristMapBootstrap')
+  });
   const runtime = bootstrap.runtime && typeof bootstrap.runtime === 'object' ? bootstrap.runtime : {};
   const settings = normalizeMapConfigurationSettings(bootstrap.settings || {});
   const state = bootstrap.state ?? null;
@@ -94,26 +102,6 @@ export function getHeuristMapConfig() {
     // It is intentionally not part of heuristMapBootstrap.
     mapDocument: normalizeMapDocument({})
   };
-}
-
-function getHostBridge() {
-  try {
-    if (globalThis.frameElement?.heuristMapHost) {
-      return globalThis.frameElement.heuristMapHost;
-    }
-  } catch {
-    // Cross-origin embedding cannot use the direct bridge.
-  }
-  return null;
-}
-
-/**
- * Standalone bootstrap. Standalone callers define window.heuristMapBootstrap
- * using the same { runtime, settings, state } contract as mapViewer.
- */
-function getStandaloneBootstrap() {
-  const bootstrap = globalThis.heuristMapBootstrap;
-  return bootstrap && typeof bootstrap === 'object' ? bootstrap : {};
 }
 
 /** Build Heurist internal host persistence only when a Heurist base URL exists. */

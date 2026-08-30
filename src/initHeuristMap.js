@@ -14,7 +14,7 @@ import { MapApplication } from './core/MapApplication.js';
 import { createMapEngine } from './engine/createMapEngine.js';
 import { createHostAdapter } from './host/createHostAdapter.js';
 import { HeuristMapPublicApi } from './host/HeuristMapPublicApi.js';
-import { HeuristApiClient } from './data/HeuristApiClient.js';
+import { HeuristApiClient } from '@heurist/client-core/api';
 import { MapDocumentProvider } from './data/MapDocumentProvider.js';
 import { MapLayerProvider } from './data/MapLayerProvider.js';
 import { QueryGeoDataProvider } from './data/QueryGeoDataProvider.js';

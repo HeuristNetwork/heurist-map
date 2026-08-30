@@ -10,7 +10,7 @@
  * @author      Artem Osmakov <osmakov@gmail.com>
  */
 
-import { HeuristApiError } from './HeuristApiError.js';
+import { HeuristApiError } from '@heurist/client-core/api';
 
 const DEFAULT_LIMIT = 1000;
 const MAX_LIMIT = 5000;

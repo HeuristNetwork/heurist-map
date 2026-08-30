@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HostAdapter } from '../../src/host/HostAdapter.js';
+import { HostAdapter } from '@heurist/client-core/host';
 import { HeuristHostAdapter } from '../../src/host/HeuristHostAdapter.js';
 import { MapApplication } from '../../src/core/MapApplication.js';
 

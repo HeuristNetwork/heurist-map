@@ -40,9 +40,9 @@ Initialization and document changes use cancellation guards. If another document
 HeuristMapPublicApi
     delegates to
 MapApplication
-    ├── HostAdapter
-    │     ├── StandaloneHostAdapter
-    │     └── HeuristHostAdapter
+    ├── @heurist/client-core HostAdapter
+    │     ├── StandaloneHostAdapter (shared)
+    │     └── HeuristHostAdapter (map-specific)
     ├── MapEngineAdapter
     │     └── LeafletMapAdapter
     ├── MapDocumentProvider
@@ -96,7 +96,10 @@ A failure in one MapLayer is isolated to that layer. The failed layer remains vi
 
 ## 6. Data layer
 
-`HeuristApiClient` performs public Heurist API requests. Providers validate endpoint-specific responses and return domain objects or GeoJSON. No provider returns `HRecordSet` or relies on `window.hWin`.
+`HeuristApiClient` and `HeuristApiError` come from `@heurist/client-core/api`.
+The shared client performs public Heurist API requests; map providers validate
+endpoint-specific responses and return domain objects or GeoJSON. No provider
+returns `HRecordSet` or relies on `window.hWin`.
 
 Important providers include:
 
@@ -136,9 +139,11 @@ No Leaflet object is returned through `HeuristMapPublicApi`.
 
 ## 9. Host layer
 
-`HostAdapter` defines operations that belong to the embedding host rather than the public map-data API.
+The generic `HostAdapter` from `@heurist/client-core/host` defines operations
+that belong to the embedding host rather than the public map-data API.
 
-`StandaloneHostAdapter` is effectively a no-op host for standalone pages that do not expose Heurist-specific services.
+The shared `StandaloneHostAdapter` is effectively a no-op host for standalone
+pages that do not expose Heurist-specific services.
 
 `HeuristHostAdapter` is selected when the bootstrap has a Heurist `baseUrl`. It provides:
 

@@ -8,7 +8,7 @@
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
 import { HeuristMapConfigurationApi } from './host/HeuristMapConfigurationApi.js';
-import { HeuristApiClient } from './data/HeuristApiClient.js';
+import { HeuristApiClient } from '@heurist/client-core/api';
 import { RecordTypeProvider } from './data/RecordTypeProvider.js';
 import { MapDocumentListProvider } from './data/MapDocumentListProvider.js';
 import { getLeafletBaseMapCatalog } from './engine/leaflet/LeafletBasemapCatalog.js';

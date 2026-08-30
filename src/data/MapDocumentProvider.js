@@ -15,7 +15,7 @@ import {
   MAP_DOCUMENT_VERSION,
   normalizeMapDocument
 } from '../core/MapDocument.js';
-import { HeuristApiError } from './HeuristApiError.js';
+import { HeuristApiError } from '@heurist/client-core/api';
 
 /**
  * Loads and validates MapDocument records through the public Heurist API.

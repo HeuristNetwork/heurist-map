@@ -15,7 +15,7 @@ import {
   MAP_LAYER_VERSION,
   normalizeMapLayer
 } from '../core/MapLayer.js';
-import { HeuristApiError } from './HeuristApiError.js';
+import { HeuristApiError } from '@heurist/client-core/api';
 
 /**
  * Loads and validates MapLayer records through the public Heurist API.
