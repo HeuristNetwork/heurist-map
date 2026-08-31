@@ -78,6 +78,15 @@ export class HeuristHostAdapter extends HostAdapter {
     return this.bridge.editRecord(id);
   }
 
+  async addRecord(recordTypeId) {
+    const id = Number(recordTypeId);
+    if (!(id > 0)) throw new Error('A valid Heurist record type ID is required for creation');
+    if (!this.supportsEditing() || typeof this.bridge?.addRecord !== 'function') {
+      throw new Error('Record creation is not available from the Heurist host');
+    }
+    return this.bridge.addRecord(id);
+  }
+
   async loadMapPreferences() {
     let response = await this.request('UserController', 'get_prefs', { key: 'heurist-map' });
 

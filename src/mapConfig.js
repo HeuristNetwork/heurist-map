@@ -50,7 +50,7 @@ export function getHeuristMapConfig() {
     // Application mechanics are internal constants rather than bootstrap options.
     containerId: 'heurist-map',
     engine: 'leaflet',
-    readonly: runtime.readonly === true,
+    readonly: runtime.readonly === true || settings.options.interaction.readonly === true,
 
     apiBaseUrl: runtime.apiBaseUrl || null,
     database: runtime.database || null,
@@ -94,7 +94,7 @@ export function getHeuristMapConfig() {
     ui: {
       ...settings.options.ui,
       // Internal Map Control defaults that are not persisted configuration.
-      baseMapsInitiallyExpanded: true,
+      baseMapsInitiallyExpanded: false,
       maxHeight: '70vh'
     },
 

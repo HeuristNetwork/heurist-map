@@ -18,10 +18,13 @@ import { getDefaultBaseMaps } from '../../basemaps/defaultBasemaps.js';
 import { createSymbolPreview } from '../legend/LegendRenderer.js';
 import { DEFAULT_MAP_SYMBOL, normalizeMapSymbol } from '../../utils/normalizeMapSymbol.js';
 
+const ZOOM_LEVEL_TOOLTIP = 'Level 1 = ~10,000km (15 deg.) to ~65,000 km (equator). Level 18 = ~50m (15 deg.) to ~250m (equator)';
+const advancedStateByMode = new Map();
+
 export class MapConfigurationDialog {
   constructor({
     mode = 'preferences', value = null, parent = null, title = null,
-    onSave = null, onCancel = null, onEditSymbology = null, reportTemplateProvider = null,
+    onSave = null, onCancel = null, onEditSymbology = null, onEditExtent = null, reportTemplateProvider = null,
     mapDocumentListProvider = null, baseMapCatalog = [], publishContext = null
   } = {}) {
     this.mode = normalizeMapConfigurationMode(mode);
@@ -32,6 +35,7 @@ export class MapConfigurationDialog {
     this.onSave = typeof onSave === 'function' ? onSave : null;
     this.onCancel = typeof onCancel === 'function' ? onCancel : null;
     this.onEditSymbology = typeof onEditSymbology === 'function' ? onEditSymbology : null;
+    this.onEditExtent = typeof onEditExtent === 'function' ? onEditExtent : null;
     this.reportTemplateProvider = reportTemplateProvider || null;
     this.mapDocumentListProvider = mapDocumentListProvider || null;
     this.baseMapCatalog = Array.isArray(baseMapCatalog) ? baseMapCatalog : [];
@@ -43,7 +47,7 @@ export class MapConfigurationDialog {
     this.form = null;
     this.fields = new Map();
     this.previousFocus = null;
-    this.advanced = false;
+    this.advanced = advancedStateByMode.get(this.mode) === true;
     this.initialFormState = null;
   }
 
@@ -125,6 +129,7 @@ export class MapConfigurationDialog {
     input.checked = this.advanced;
     input.addEventListener('change', () => {
       this.advanced = input.checked;
+      advancedStateByMode.set(this.mode, this.advanced);
       this.updateAdvancedVisibility();
     });
     label.append(input, document.createTextNode('Advanced settings'));
@@ -134,6 +139,7 @@ export class MapConfigurationDialog {
 
   cancel() {
     if (this.initialFormState !== null && this.formStateSignature() !== this.initialFormState) {
+      // @todo Replace with the internal Heurist Confirm dialog.
       const confirmDiscard = globalThis.confirm;
       if (typeof confirmDiscard === 'function' && !confirmDiscard('Discard changes to map configuration?')) return false;
     }
@@ -257,10 +263,12 @@ export class MapConfigurationDialog {
     this.symbology(body, 'config.defaults.selectSymbology', 'Select symbology', { advanced: true, selection: true });
     this.checkbox(body, 'config.defaults.preventContinuousWorldBasemap', 'Prevent continuous world basemap', { advanced: true });
     const clustering = document.createElement('div');
-    clustering.className = 'heurist-map-config-inline-checks';
+    clustering.className = 'heurist-map-config-clustering';
     this.checkbox(clustering, 'config.defaults.markerClustering', 'Marker clustering');
     const clusterGrid = this.number(clustering, 'config.defaults.markerClusterGridPixels', 'Grid pixels', { min: 0, max: 100 });
     clusterGrid.classList.add('heurist-map-config-inline-number', 'heurist-map-config-narrow-number');
+    const clusterLevel = this.select(clustering, 'config.defaults.markerClusterMaxLevel', 'Stop at', zoomLevelChoices(false), { kind: 'number-null' });
+    clusterLevel.title = `The maximum zoom level that a marker can be part of a cluster. ${ZOOM_LEVEL_TOOLTIP}`;
     body.append(clustering);
     this.select(body, 'config.defaults.maxAllowedFeatures', 'Maximum allowed features', [
       ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
@@ -445,7 +453,8 @@ export class MapConfigurationDialog {
       ['top-left', 'Top left'], ['top-right', 'Top right'],
       ['bottom-left', 'Bottom left'], ['bottom-right', 'Bottom right']
     ], { hidden: true });
-    this.textarea(controls, 'options.ui.controlCss', 'CSS for Map Control', { advanced: true });
+    // Remove hidden:true to enable direct Map Control style definitions.
+    this.textarea(controls, 'options.ui.controlCss', 'CSS for Map Control', { hidden: true });
 
     controls.append(heuristSection, nativeSection);
     body.append(controls);
@@ -487,6 +496,7 @@ export class MapConfigurationDialog {
   }
 
   buildInteraction(body) {
+    this.checkbox(body, 'options.interaction.readonly', 'Readonly');
     this.checkbox(body, 'options.interaction.selectionEnabled', 'Enable selection');
     this.checkbox(body, 'options.interaction.popupEnabled', 'Enable popups');
     this.checkbox(body, 'options.interaction.zoomOnSelection', 'Zoom on selection');
@@ -494,21 +504,60 @@ export class MapConfigurationDialog {
 
   zoomFields(body, prefix, options = {}) {
     const row = document.createElement('div');
-    row.className = 'heurist-map-config-grid';
-    this.number(row, `${prefix}.minZoom`, 'Min zoom level', { min: 0, max: 22, step: 1, compact: true, advanced: options.allAdvanced === true });
-    this.number(row, `${prefix}.maxZoom`, 'Max zoom level', { min: 0, max: 22, step: 1, compact: true, advanced: options.allAdvanced === true });
-    this.number(row, `${prefix}.minimumZoomKm`, 'Zoom-in limit (km)', { min: 0, compact: true, advanced: options.allAdvanced === true || options.kmAdvanced === true });
-    this.number(row, `${prefix}.maximumZoomKm`, 'Zoom-out limit (km)', { min: 0, compact: true, advanced: options.allAdvanced === true || options.kmAdvanced === true });
+    row.className = 'heurist-map-config-zoom-row';
+    if (options.allAdvanced === true) this.markAdvanced(row);
+    const levelIn = this.select(row, `${prefix}.maxZoom`, 'Zoom In', zoomLevelChoices(true), { kind: 'number-null' });
+    const levelOut = this.select(row, `${prefix}.minZoom`, 'Zoom Out', zoomLevelChoices(true), { kind: 'number-null' });
+    levelIn.title = levelOut.title = ZOOM_LEVEL_TOOLTIP;
+    const kmIn = this.number(row, `${prefix}.minimumZoomKm`, 'Zoom In', { min: 0, compact: true });
+    const kmOut = this.number(row, `${prefix}.maximumZoomKm`, 'Zoom Out', { min: 0, compact: true });
+    const modes = radioChoice(`${prefix}-zoom-mode`, [['level', 'Level'], ['km', 'Km']]);
+    row.append(modes.element);
+    const update = (clearInactive = false) => {
+      const useLevels = modes.value() === 'level';
+      levelIn.hidden = levelOut.hidden = !useLevels;
+      kmIn.hidden = kmOut.hidden = useLevels;
+      if (clearInactive) {
+        for (const fieldRow of (useLevels ? [kmIn, kmOut] : [levelIn, levelOut])) {
+          fieldRow.querySelector('input,select').value = '';
+        }
+      }
+    };
+    modes.element.addEventListener('change', () => update(true));
+    const hasKm = getPath(this.value, `${prefix}.minimumZoomKm`) != null
+      || getPath(this.value, `${prefix}.maximumZoomKm`) != null;
+    modes.set(hasKm ? 'km' : 'level');
+    update();
     body.append(row);
   }
 
   boundsFields(body, prefix, options = {}) {
     const row = document.createElement('div');
-    row.className = 'heurist-map-config-grid heurist-map-config-bounds';
+    row.className = 'heurist-map-config-field heurist-map-config-bounds';
     if (options.advanced) this.markAdvanced(row);
-    for (const [key, labelText] of [['west', 'West'], ['south', 'South'], ['east', 'East'], ['north', 'North']]) {
-      this.number(row, `${prefix}.${key}`, labelText, { compact: true });
+    const caption = document.createElement('span');
+    caption.textContent = 'Extent';
+    const display = document.createElement('input');
+    display.type = 'text';
+    display.readOnly = true;
+    display.placeholder = 'south,west - north,east';
+    for (const key of ['west', 'south', 'east', 'north']) {
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      this.register(`${prefix}.${key}`, hidden, 'number-null');
+      this.fields.get(`${prefix}.${key}`).onPopulate = () => refreshExtentDisplay(display, this.fields, prefix);
     }
+    const define = button('Define', 'Define map extent', async () => {
+      if (!this.onEditExtent) return;
+      try {
+        const result = await this.onEditExtent(readBoundsFields(this.fields, prefix), { path: prefix, mode: this.mode });
+        if (result) writeBoundsFields(this.fields, prefix, result, display);
+      } catch (error) {
+        this.showError(error?.message || String(error));
+      }
+    });
+    define.disabled = !this.onEditExtent;
+    row.append(caption, display, define);
     body.append(row);
   }
 
@@ -1023,6 +1072,58 @@ function plainCheckbox(labelText, checked = false) {
   control.checked = checked;
   row.append(control, document.createTextNode(labelText));
   return { row, control };
+}
+
+function zoomLevelChoices(includeEmpty) {
+  const result = includeEmpty ? [['', '']] : [];
+  for (let level = 1; level <= 18; level += 1) {
+    const suffix = level === 1 ? ' (Worldwide)'
+      : level === 10 ? ' (City scale)'
+        : level === 18 ? ' (Zoomed right in)' : '';
+    result.push([String(level), `level ${level}${suffix}`]);
+  }
+  return result;
+}
+
+function radioChoice(name, choices) {
+  const element = document.createElement('span');
+  element.className = 'heurist-map-config-radio-choice';
+  const controls = new Map();
+  for (const [value, labelText] of choices) {
+    const label = document.createElement('label');
+    const control = document.createElement('input');
+    control.type = 'radio';
+    control.name = name;
+    control.value = value;
+    controls.set(value, control);
+    label.append(control, document.createTextNode(labelText));
+    element.append(label);
+  }
+  return {
+    element,
+    value: () => [...controls].find(([, control]) => control.checked)?.[0] || choices[0][0],
+    set: (value) => { (controls.get(value) || controls.values().next().value).checked = true; }
+  };
+}
+
+function refreshExtentDisplay(display, fields, prefix) {
+  const bounds = readBoundsFields(fields, prefix);
+  display.value = bounds ? `${bounds.south},${bounds.west} - ${bounds.north},${bounds.east}` : '';
+}
+
+function readBoundsFields(fields, prefix) {
+  const values = Object.fromEntries(['west', 'south', 'east', 'north'].map((key) => {
+    const text = fields.get(`${prefix}.${key}`)?.control?.value;
+    return [key, text === '' || text == null ? null : Number(text)];
+  }));
+  return Object.values(values).every(Number.isFinite) ? values : null;
+}
+
+function writeBoundsFields(fields, prefix, bounds, display) {
+  for (const key of ['west', 'south', 'east', 'north']) {
+    fields.get(`${prefix}.${key}`).control.value = String(bounds[key]);
+  }
+  refreshExtentDisplay(display, fields, prefix);
 }
 
 function submitLabel(mode) { return mode === 'publish' ? 'Publish' : mode === 'website' ? 'Save' : 'Apply'; }

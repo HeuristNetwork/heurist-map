@@ -10,13 +10,13 @@ export class MapDocumentSelector {
     this.container = container;
   }
 
-  render(documents, activeId, createActiveContent, { editingEnabled = false, onEditDocument = null } = {}) {
+  render(documents, activeId, createActiveContent, { editingEnabled = false, onEditDocument = null, onActivateDocument = null } = {}) {
     this.container.replaceChildren();
     for (const item of documents) {
       const active = String(item.id) === String(activeId);
       const block = document.createElement('div');
       block.className = `heurist-map-document-block${active ? ' active' : ''}`;
-      block.append(createRow(item, active, this.api, { editingEnabled, onEditDocument }));
+      block.append(createRow(item, active, this.api, { editingEnabled, onEditDocument, onActivateDocument }));
       if (active && createActiveContent) {
         const content = createActiveContent(item);
         if (content) block.append(content);
@@ -27,7 +27,7 @@ export class MapDocumentSelector {
   }
 }
 
-function createRow(item, active, api, { editingEnabled = false, onEditDocument = null } = {}) {
+function createRow(item, active, api, { editingEnabled = false, onEditDocument = null, onActivateDocument = null } = {}) {
   const row = document.createElement('div');
   row.className = 'heurist-map-document-row';
 
@@ -48,7 +48,10 @@ function createRow(item, active, api, { editingEnabled = false, onEditDocument =
     selector.checked = active;
     selector.setAttribute('aria-label', `Activate ${item.title}`);
     selector.addEventListener('change', () => {
-      if (selector.checked) api.activateMapDocument(item.id).catch(() => {});
+      if (selector.checked) {
+        onActivateDocument?.(item.id);
+        api.activateMapDocument(item.id).catch(() => {});
+      }
     });
   }
 

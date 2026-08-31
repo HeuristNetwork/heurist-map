@@ -26,6 +26,7 @@ export function normalizeMapLayer(value = {}, { defaults = {} } = {}) {
     selectSymbology: !hasExplicitSelectSymbol(source.style),
     markerClustering: !Object.hasOwn(sourceOptions, 'markerClustering'),
     markerClusterGridPixels: !Object.hasOwn(sourceOptions, 'markerClusterGridPixels'),
+    markerClusterMaxLevel: !Object.hasOwn(sourceOptions, 'markerClusterMaxLevel'),
     maxAllowedFeatures: !Object.hasOwn(sourceOptions, 'maxAllowedFeatures'),
     dynamicRequests: !Object.hasOwn(sourceOptions, 'dynamicRequests'),
     popupTemplate: !Object.hasOwn(sourceOptions, 'popupTemplate'),
@@ -107,11 +108,12 @@ export function reapplyMapLayerDefaults(mapLayer, defaults = {}) {
   const optionDefaults = {
     markerClustering: defaults.markerClustering === true,
     markerClusterGridPixels: boundedNumber(defaults.markerClusterGridPixels, 20, 0, 100),
+    markerClusterMaxLevel: boundedNumber(defaults.markerClusterMaxLevel, 12, 1, 18),
     maxAllowedFeatures: positiveIntegerOrNull(defaults.maxAllowedFeatures) ?? 1000,
     dynamicRequests: defaults.dynamicRequests === true,
     popupTemplate: nullableString(defaults.popupTemplate)
   };
-  for (const key of ['markerClustering', 'markerClusterGridPixels', 'maxAllowedFeatures', 'dynamicRequests', 'popupTemplate']) {
+  for (const key of ['markerClustering', 'markerClusterGridPixels', 'markerClusterMaxLevel', 'maxAllowedFeatures', 'dynamicRequests', 'popupTemplate']) {
     if (!inherited[key]) continue;
     if (!sameJson(mapLayer.options?.[key], optionDefaults[key])) {
       mapLayer.options = { ...(mapLayer.options || {}), [key]: optionDefaults[key] };
@@ -176,6 +178,7 @@ function normalizeOptions(value, defaults = {}) {
     markerClustering: typeof options.markerClustering === 'boolean'
       ? options.markerClustering : defaults.markerClustering === true,
     markerClusterGridPixels: boundedNumber(options.markerClusterGridPixels, boundedNumber(defaults.markerClusterGridPixels, 20, 0, 100), 0, 100),
+    markerClusterMaxLevel: boundedNumber(options.markerClusterMaxLevel, boundedNumber(defaults.markerClusterMaxLevel, 12, 1, 18), 1, 18),
     maxAllowedFeatures: positiveIntegerOrNull(options.maxAllowedFeatures)
       ?? positiveIntegerOrNull(defaults.maxAllowedFeatures)
       ?? 1000,

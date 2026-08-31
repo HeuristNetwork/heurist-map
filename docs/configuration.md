@@ -17,8 +17,9 @@ Keeping these concepts separate avoids mixing database/API connection details wi
 ```javascript
 {
   runtime: {
-    viewerMode: "map",                // "map" | "configuration"
+    viewerMode: "map",                // "map" | "configuration" | "draw"
     configurationMode: "preferences", // "preferences" | "website" | "publish"
+    runtimeMode: "main",              // "main" | "website" | "standalone"
     readonly: false,
     database: "my_database",
     apiBaseUrl: "/heurist/api",
@@ -51,6 +52,28 @@ Keeping these concepts separate avoids mixing database/API connection details wi
 - provider-specific basemap credentials/options.
 
 Runtime values are environment-specific. For example, a user preference should not permanently store the database URL or an authentication token.
+
+### 1.1 `viewerMode`, `configurationMode`, and `runtimeMode`
+
+These properties describe different axes and must not be used interchangeably.
+
+| Property | Values | Meaning |
+| --- | --- | --- |
+| `viewerMode` | `map`, `configuration`, `draw` | What this application instance does. `map` starts the viewer; `configuration` starts only the configuration API/dialog without Leaflet or `MapApplication`; `draw` starts an isolated drawing workspace. |
+| `configurationMode` | `preferences`, `website`, `publish` | Configuration-dialog policy: title, available controls, forced restrictions, save semantics, and publishing options. It does not identify the deployment environment. |
+| `runtimeMode` | `main`, `website`, `standalone` | Host context. `main` is the authenticated Heurist client; `website` is a Heurist website page; `standalone` is a published or independent map. It is runtime-only and is never persisted in `heurist-map-settings`. |
+
+If `runtimeMode` is omitted, `HeuristModuleMap` infers `website` from `configurationMode: "website"`, `standalone` from `configurationMode: "publish"`, and `main` otherwise.
+
+| Use | `viewerMode` | `configurationMode` | `runtimeMode` |
+| --- | --- | --- | --- |
+| Main-client map | `map` | `preferences` | `main` |
+| User preferences | `configuration` | `preferences` | `main` |
+| Website editor | `configuration` | `website` | `website` |
+| Website map | `map` | `website` | `website` |
+| Publish dialog | `configuration` | `publish` | `main` |
+| Published map | `map` | `publish` | `standalone` |
+| Geometry/BBOX editor | `draw` | normally `preferences` | normally `main` |
 
 ### `settings`
 
@@ -142,6 +165,7 @@ The portable configuration stored in preferences or a website is a versioned set
       preventContinuousWorldBasemap: false,
       markerClustering: false,
       markerClusterGridPixels: 20,
+      markerClusterMaxLevel: 12,
       maxAllowedFeatures: 1000,
       popupTemplate: null
     },
@@ -197,6 +221,22 @@ The remaining `options` properties control available/default MapDocuments, avail
 ### `config`
 
 `config.defaults` contains defaults shared by map content where the individual MapDocument/MapLayer does not provide a value, including symbology, selection symbology, marker clustering, feature limits, popup template, and continuous-world behaviour.
+
+`markerClusterMaxLevel` is the highest Leaflet zoom level at which a marker may belong to a cluster. Its default is `12`; above it, markers are displayed individually. `markerClusterGridPixels` remains the clustering radius in screen pixels.
+
+### Where defaults are defined
+
+| Defaults | Authoritative location |
+| --- | --- |
+| Persisted `options` and `config` defaults | `heurist-map/src/ui/config/mapConfigurationDefaults.js` (`HEURIST_MAP_OPTIONS_DEFAULTS`, `HEURIST_MAP_CONFIG_DEFAULTS`) |
+| Persisted allowlist, validation, migration and serialization | `heurist-map/src/ui/config/mapConfigurationSchema.js` |
+| Built-in basemaps | `heurist-map/src/basemaps/defaultBasemaps.js` |
+| Complete built-in marker symbol | `heurist-map/src/utils/normalizeMapSymbol.js` (`DEFAULT_MAP_SYMBOL`) |
+| Runtime-only mechanics and bootstrap fallbacks | `heurist-map/src/mapConfig.js` |
+| Main-Heurist wrapper defaults | `heurist/hclient/modules/map/HeuristModuleMap.js` (`HEURIST_MODULE_MAP_DEFAULTS`) |
+| Website/draw overrides | `HeuristModuleMap._websiteMapDefaults()` and `_drawMapDefaults()` |
+
+Only values defined by the map defaults and accepted by `mapConfigurationSchema.js` are persisted. Runtime connection values and host callbacks never belong in the settings envelope.
 
 Vector symbology uses sparse inheritance: built-in `DEFAULT_MAP_SYMBOL` → configured default symbology → MapLayer symbol → thematic renderer symbol → thematic range/facet symbol. Missing properties are resolved from the effective parent at runtime. Opacity values are canonical fractions in the range `0..1`; legacy percentages are accepted only when normalizing incoming data. `iconSize` is the semantic marker diameter and Leaflet circle `radius` is derived as `iconSize / 2`.
 
@@ -270,7 +310,7 @@ window.heuristMapBootstrap = {
 };
 </script>
 
-<script type="module" src="/heurist/external/heurist-map/heurist-map.js"></script>
+<script type="module" src="/heurist/hclient/bundles/heurist-map/heurist-map.js"></script>
 ```
 
 The map container ID is currently the internal constant `heurist-map`.

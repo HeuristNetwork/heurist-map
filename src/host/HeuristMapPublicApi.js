@@ -327,6 +327,9 @@ export class HeuristMapPublicApi {
   /** Request host editing of a persisted MapDocument record. */
   requestEditMapDocument(documentId) { return this.application.requestEditMapDocument(documentId); }
 
+  /** Request host creation of a new MapDocument record. */
+  requestAddMapDocument() { return this.application.requestAddMapDocument(); }
+
   /** Request host editing of a persisted MapLayer record. */
   requestEditLayer(layerId) { return this.application.requestEditLayer(layerId); }
 

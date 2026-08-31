@@ -39,6 +39,7 @@ export const HEURIST_MAP_OPTIONS_DEFAULTS = Object.freeze({
     initial: null
   }),
   interaction: Object.freeze({
+    readonly: false,
     selectionEnabled: true,
     popupEnabled: true,
     zoomOnSelection: false
@@ -54,6 +55,7 @@ export const HEURIST_MAP_CONFIG_DEFAULTS = Object.freeze({
     preventContinuousWorldBasemap: false,
     markerClustering: false,
     markerClusterGridPixels: 20,
+    markerClusterMaxLevel: 12,
     maxAllowedFeatures: 1000,
     popupTemplate: null
   }),

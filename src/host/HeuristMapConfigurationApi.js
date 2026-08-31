@@ -30,6 +30,9 @@ export class HeuristMapConfigurationApi {
       baseMapCatalog: options.baseMapCatalog || this.baseMapCatalog,
       onEditSymbology: options.onEditSymbology || (typeof this.hostBridge?.editSymbology === 'function'
         ? ((value, editorOptions) => this.hostBridge.editSymbology(value, { ...editorOptions, persist: false }))
+        : null),
+      onEditExtent: options.onEditExtent || (typeof this.hostBridge?.editExtent === 'function'
+        ? ((bounds, editorOptions) => this.hostBridge.editExtent(bounds, editorOptions))
         : null)
     });
     this.configurationDialog.open();

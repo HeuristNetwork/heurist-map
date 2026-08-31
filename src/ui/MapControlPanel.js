@@ -14,7 +14,7 @@ export class MapControlPanel {
     this.mapContainer = mapContainer;
     this.options = options;
     this.listeners = [];
-    this.baseMapsExpanded = options.baseMapsInitiallyExpanded !== false;
+    this.baseMapsExpanded = options.baseMapsInitiallyExpanded === true;
   }
 
   mount() {
@@ -50,6 +50,9 @@ export class MapControlPanel {
       title.title = 'Show or hide map controls';
       title.addEventListener('click', togglePanel);
       header.append(toggle, title);
+    }
+    if (this.api.getCapabilities?.().editing === true) {
+      header.append(iconButton('fa-solid fa-circle-plus', 'Create new map document', () => this.api.requestAddMapDocument()));
     }
     if (this.options.showHomeControl !== false) {
       header.append(iconButton('fa-solid fa-house', 'Zoom to active map document', () => this.api.zoomHome()));
@@ -157,7 +160,11 @@ export class MapControlPanel {
       return container;
     }, {
       editingEnabled,
-      onEditDocument: (documentId) => this.editMapDocument(documentId)
+      onEditDocument: (documentId) => this.editMapDocument(documentId),
+      onActivateDocument: () => {
+        this.baseMapsExpanded = false;
+        this.updateBaseMapsExpansion();
+      }
     });
     this.baseMapSelector?.render(this.api.getBaseMaps(), this.api.getActiveBaseMap()?.id);
     this.updateBaseMapsExpansion();
@@ -207,7 +214,7 @@ export class MapControlPanel {
     this.destroy();
     this.options = next;
     this.listeners = [];
-    this.baseMapsExpanded = next.baseMapsInitiallyExpanded !== false;
+    this.baseMapsExpanded = next.baseMapsInitiallyExpanded === true;
     this.mount();
     if (this.element && wasExpanded !== (next.initiallyExpanded !== false)) {
       this.element.classList.toggle('collapsed', !wasExpanded);

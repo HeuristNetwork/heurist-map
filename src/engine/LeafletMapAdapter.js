@@ -788,6 +788,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     const resolveSymbol = (feature) => resolveFeatureSymbol(feature, definition.style);
     const markerClustering = definition.options?.markerClustering === true;
     const markerClusterGridPixels = finiteNonNegativeNumber(definition.options?.markerClusterGridPixels, 20);
+    const markerClusterMaxLevel = boundedInteger(definition.options?.markerClusterMaxLevel, 12, 1, 18);
     const pointToLayer = createPointLayerFactory(resolveSymbol, {
       markerClustering,
       iconContext: definition.iconContext,
@@ -835,7 +836,7 @@ export class LeafletMapAdapter extends MapEngineAdapter {
     });
 
     const layer = markerClustering
-      ? createMarkerClusterLayer(geoJsonLayer, markerClusterGridPixels, paneName)
+      ? createMarkerClusterLayer(geoJsonLayer, markerClusterGridPixels, markerClusterMaxLevel, paneName)
       : geoJsonLayer;
 
     const result = this.registerLayer(definition, layer);
@@ -1139,7 +1140,7 @@ function createPathStyle(symbol = {}, paneName = null) {
   });
 }
 
-function createMarkerClusterLayer(geoJsonLayer, gridPixels = 20, paneName = null) {
+function createMarkerClusterLayer(geoJsonLayer, gridPixels = 20, maxLevel = 12, paneName = null) {
   if (typeof L.markerClusterGroup !== 'function') {
     throw new Error('Marker clustering is enabled but Leaflet.markercluster is not available');
   }
@@ -1147,7 +1148,8 @@ function createMarkerClusterLayer(geoJsonLayer, gridPixels = 20, paneName = null
   const clusterLayer = L.markerClusterGroup({
     chunkedLoading: true,
     clusterPane: paneName || 'markerPane',
-    maxClusterRadius: finiteNonNegativeNumber(gridPixels, 20)
+    maxClusterRadius: finiteNonNegativeNumber(gridPixels, 20),
+    disableClusteringAtZoom: boundedInteger(maxLevel, 12, 1, 18) + 1
   });
   clusterLayer.addLayers(geoJsonLayer.getLayers());
   return clusterLayer;
@@ -1218,6 +1220,11 @@ function escapeAttribute(value) {
 function finiteNonNegativeNumber(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : fallback;
+}
+
+function boundedInteger(value, fallback, min, max) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, Math.round(number))) : fallback;
 }
 
 function createClusterPointIcon(symbol = {}) {

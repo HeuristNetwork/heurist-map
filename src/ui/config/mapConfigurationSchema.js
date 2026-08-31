@@ -99,6 +99,7 @@ function normalizeOptions(source, defaults) {
       initial: nullableIdentifier(baseMaps.initial)
     },
     interaction: {
+      readonly: boolean(interaction.readonly, defaults.interaction.readonly),
       selectionEnabled: boolean(interaction.selectionEnabled, defaults.interaction.selectionEnabled),
       popupEnabled: boolean(interaction.popupEnabled, defaults.interaction.popupEnabled),
       zoomOnSelection: boolean(interaction.zoomOnSelection, defaults.interaction.zoomOnSelection)
@@ -121,6 +122,7 @@ function normalizeConfig(source, defaults) {
       ),
       markerClustering: boolean(configuredDefaults.markerClustering, defaults.defaults.markerClustering),
       markerClusterGridPixels: boundedNumber(configuredDefaults.markerClusterGridPixels, defaults.defaults.markerClusterGridPixels, 0, 100),
+      markerClusterMaxLevel: boundedNumber(configuredDefaults.markerClusterMaxLevel, defaults.defaults.markerClusterMaxLevel, 1, 18),
       maxAllowedFeatures: allowedFeatureLimit(
         configuredDefaults.maxAllowedFeatures,
         defaults.defaults.maxAllowedFeatures

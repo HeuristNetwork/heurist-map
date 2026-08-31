@@ -85,7 +85,10 @@ export async function initHeuristMap(config) {
     const dialog = new MapConfigurationDialog({
       ...options,
       reportTemplateProvider: providers.reportTemplates,
-      onEditSymbology: options.onEditSymbology || ((value, editorOptions) => publicApi.editSymbology(value, editorOptions))
+      onEditSymbology: options.onEditSymbology || ((value, editorOptions) => publicApi.editSymbology(value, editorOptions)),
+      onEditExtent: options.onEditExtent || (typeof config.host?.bridge?.editExtent === 'function'
+        ? ((bounds, editorOptions) => config.host.bridge.editExtent(bounds, editorOptions))
+        : null)
     });
     dialog.open();
     return dialog;

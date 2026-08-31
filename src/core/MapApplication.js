@@ -889,6 +889,26 @@ export class MapApplication {
     return null;
   }
 
+  async requestAddMapDocument() {
+    if (!this.config.readonly && this.host.supportsEditing()) {
+      const typeResult = await this.providers.mapDocumentList?.search(false);
+      const recordTypeId = Number(typeResult?.recordTypeId);
+      if (!(recordTypeId > 0)) throw new Error('MapDocument record type is not available');
+      const created = await this.host.addRecord(recordTypeId);
+      const recordId = Number(created?.recordId ?? created?.rec_ID ?? created?.id);
+      if (recordId > 0) {
+        const ids = this.getMapDocuments().filter((item) => item.persistent !== false)
+          .map((item) => Number(item.id)).filter((id) => id > 0);
+        ids.push(recordId);
+        await this.loadMapDocuments([...new Set(ids)], { activateFirst: false });
+        await this.activateMapDocument(recordId);
+      }
+      return created ?? null;
+    }
+    this.dispatch('heurist-map-add-document-requested', {});
+    return null;
+  }
+
   async requestEditLayer(layerId) {
     const layer = this.layers.get(layerId);
     const recordId = Number(layer?.recordId);

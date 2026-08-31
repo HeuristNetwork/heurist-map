@@ -1,5 +1,11 @@
 # Heurist Map architecture
 
+## Shared client foundation
+
+`heurist-map` depends on the sibling `@heurist/client-core` package for API transport, bootstrap normalization, generic host contracts, and shared module contracts. This infrastructure is shared with `heurist-data` and later independent Vite modules; map-specific providers, settings, UI, and engine behavior remain in `heurist-map`.
+
+Main-Heurist integration belongs under `hclient/modules`: common iframe behavior in `HeuristModuleViewer`, recordset behavior in `HeuristModuleRecordset`, and map behavior in `map/HeuristModuleMap`. The jQuery `mapViewer` is a thin facade only.
+
 This document describes the internal client architecture of `heurist-map`. The application is engine-neutral above the map-adapter boundary and currently uses Leaflet as its rendering engine.
 
 For configuration contracts see [`configuration.md`](configuration.md). For the relationship between this repository and the main Heurist application, run modes, maintenance, and distribution see [`integration.md`](integration.md).
