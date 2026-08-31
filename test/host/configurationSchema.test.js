@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  MAP_CONFIGURATION_FORMAT,
-  MAP_CONFIGURATION_VERSION,
   normalizeMapConfigurationSettings,
   serializeMapConfigurationSettings
 } from '../../src/ui/config/mapConfigurationSchema.js';
+import {
+  CONFIGURATION_FORMAT,
+  CONFIGURATION_VERSION
+} from '../../src/ui/config/configurationUtils.js';
 import { createMapConfigurationDefaults } from '../../src/ui/config/mapConfigurationDefaults.js';
 import { MapConfigurationDialog } from '../../src/ui/config/MapConfigurationDialog.js';
 import { normalizeMapLayer } from '../../src/core/MapLayer.js';
@@ -112,8 +114,8 @@ test('configuration serializer creates versioned settings envelope', () => {
   const value = serializeMapConfigurationSettings({
     options: { baseMaps: { allowed: ['OpenStreetMap', 'None'], initial: 'None' } }
   });
-  assert.equal(value.format, MAP_CONFIGURATION_FORMAT);
-  assert.equal(value.version, MAP_CONFIGURATION_VERSION);
+  assert.equal(value.format, CONFIGURATION_FORMAT);
+  assert.equal(value.version, CONFIGURATION_VERSION);
   assert.deepEqual(value.options.baseMaps.allowed, ['OpenStreetMap', 'None']);
   assert.equal(value.options.baseMaps.initial, 'None');
 });

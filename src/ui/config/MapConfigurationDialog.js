@@ -190,7 +190,7 @@ export class MapConfigurationDialog {
     if (this.mode === 'publish') {
       this.form.append(
         this.section('Interface', (body) => this.buildInterface(body), { open: true }),
-        this.section('Published map', (body) => this.buildPublish(body), { open: true })
+        this.section('Publication', (body) => this.buildPublish(body), { open: true })
       );
       return;
     }
@@ -935,7 +935,7 @@ export class MapConfigurationDialog {
 
   readForm() {
     // Start from the current normalized value so publish mode can render only
-    // Interface/Published map without discarding settings from hidden sections.
+    // Interface/Publication without discarding settings from hidden sections.
     const result = clone(this.value);
     for (const [path, field] of this.fields) setPath(result, path, readControl(field, path));
     return result;

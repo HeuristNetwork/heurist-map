@@ -11,7 +11,7 @@
  */
 
 import { serializeMapConfigurationSettings } from '../ui/config/mapConfigurationSchema.js';
-import { PublishedMapDialog } from '../ui/PublishedMapDialog.js';
+import { PublishedDialog } from '../ui/PublishedDialog.js';
 
 /**
  * Stable public facade for direct and same-origin iframe integrations.
@@ -26,7 +26,7 @@ export class HeuristMapPublicApi {
     this.readyPromise = null;
     this.configurationDialogFactory = null;
     this.configurationDialog = null;
-    this.publishedMapDialog = null;
+    this.publishedDialog = null;
   }
 
   /** Register the reusable host-facing map configuration dialog factory. */
@@ -202,8 +202,8 @@ export class HeuristMapPublicApi {
         // MapConfigurationDialog closes after this callback resolves. Defer the
         // published-link dialog so it opens after the configuration overlay is gone.
         setTimeout(() => {
-          this.publishedMapDialog?.close?.();
-          this.publishedMapDialog = new PublishedMapDialog({ publication: result }).open();
+          this.publishedDialog?.close?.();
+          this.publishedDialog = new PublishedDialog({ publication: result }).open();
         }, 0);
         return result;
       }
@@ -470,8 +470,8 @@ export class HeuristMapPublicApi {
   destroy() {
     this.configurationDialog?.close?.();
     this.configurationDialog = null;
-    this.publishedMapDialog?.close?.();
-    this.publishedMapDialog = null;
+    this.publishedDialog?.close?.();
+    this.publishedDialog = null;
     this.application.drawPanel?.destroy?.();
     this.application.drawPanel = null;
     return Promise.resolve(this.drawController?.destroy()).then(() => this.application.destroy());

@@ -10,10 +10,23 @@
  */
 
 import { createMapConfigurationDefaults } from './mapConfigurationDefaults.js';
-
-export const MAP_CONFIGURATION_FORMAT = 'heurist-map-settings';
-export const MAP_CONFIGURATION_VERSION = 1;
-export const MAP_CONFIGURATION_MODES = Object.freeze(['preferences', 'website', 'publish']);
+import {
+  CONFIGURATION_MODES,
+  allowedFeatureLimit,
+  boolean,
+  boundedNumber,
+  enumValue,
+  normalizeBounds,
+  nullableIdentifier,
+  nullableJsonObject,
+  nullableList,
+  nullablePositiveNumber,
+  nullableString,
+  nullableZoom,
+  serializeConfigurationSettings,
+  stringValue,
+  unwrapSettings
+} from './configurationUtils.js';
 
 /**
  * Normalize and allowlist a pair of persisted map configuration objects.
@@ -33,27 +46,13 @@ export function normalizeMapConfigurationSettings(value = {}) {
 
 /** Produce the versioned JSON-safe settings envelope. */
 export function serializeMapConfigurationSettings(value = {}) {
-  const normalized = normalizeMapConfigurationSettings(value);
-  return {
-    format: MAP_CONFIGURATION_FORMAT,
-    version: MAP_CONFIGURATION_VERSION,
-    options: normalized.options,
-    config: normalized.config
-  };
+  return serializeConfigurationSettings(value, normalizeMapConfigurationSettings);
 }
 
 /** Validate/normalize a dialog mode. */
 export function normalizeMapConfigurationMode(value) {
   const mode = String(value || 'preferences').toLowerCase();
-  return MAP_CONFIGURATION_MODES.includes(mode) ? mode : 'preferences';
-}
-
-function unwrapSettings(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  if (value.format === MAP_CONFIGURATION_FORMAT && Number(value.version) === MAP_CONFIGURATION_VERSION) {
-    return value;
-  }
-  return value;
+  return CONFIGURATION_MODES.includes(mode) ? mode : 'preferences';
 }
 
 function normalizeOptions(source, defaults) {
@@ -144,102 +143,4 @@ function normalizeConfig(source, defaults) {
       )
     }
   };
-}
-
-function boundedNumber(value, fallback, min, max) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.min(max, Math.max(min, number));
-}
-
-function boolean(value, fallback) {
-  if (typeof value === 'boolean') return value;
-
-  // Preferences saved through older/form-style host code can return checkbox
-  // values as 1/0 or their string equivalents. Accept those representations so
-  // an existing heurist-map preference is not silently replaced by defaults
-  // when MapConfigurationDialog is reopened.
-  if (value === 1 || value === '1' || value === 'true') return true;
-  if (value === 0 || value === '0' || value === 'false') return false;
-
-  return fallback;
-}
-
-function enumValue(value, allowed, fallback) {
-  return allowed.includes(value) ? value : fallback;
-}
-
-function stringValue(value, fallback) {
-  return typeof value === 'string' ? value : fallback;
-}
-
-function nullableString(value) {
-  if (value === null || value === undefined || value === '') return null;
-  return typeof value === 'string' ? value : String(value);
-}
-
-function nullableNumber(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function nullablePositiveNumber(value) {
-  const number = nullableNumber(value);
-  return number !== null && number > 0 ? number : null;
-}
-
-function nullableZoom(value) {
-  const number = nullableNumber(value);
-  return number !== null && number >= 0 && number <= 22 ? number : null;
-}
-
-function allowedFeatureLimit(value, fallback) {
-  const number = Number(value);
-  return [500, 1000, 2000, 5000].includes(number) ? number : fallback;
-}
-
-function nullableIdentifier(value, { numeric = false, allowDynamic = false } = {}) {
-  if (value === null || value === undefined || value === '') return null;
-  if (allowDynamic && String(value) === 'dynamic') return 'dynamic';
-  if (!numeric) return String(value);
-  const number = Number(value);
-  return Number.isInteger(number) && number > 0 ? number : null;
-}
-
-function nullableList(value, { numeric = false } = {}) {
-  if (value === null || value === undefined || value === '') return null;
-  if (!Array.isArray(value)) return null;
-  const result = [];
-  for (const item of value) {
-    const normalized = nullableIdentifier(item, { numeric });
-    if (normalized !== null && !result.includes(normalized)) result.push(normalized);
-  }
-  return result;
-}
-
-function normalizeBounds(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const west = nullableNumber(value.west);
-  const south = nullableNumber(value.south);
-  const east = nullableNumber(value.east);
-  const north = nullableNumber(value.north);
-  if ([west, south, east, north].some((item) => item === null)) return null;
-  return { west, south, east, north };
-}
-
-function nullableJsonObject(value) {
-  if (value === null || value === undefined || value === '') return null;
-  if (typeof value === 'object') return clone(value);
-  if (typeof value !== 'string') return null;
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
 }
