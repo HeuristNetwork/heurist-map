@@ -40,6 +40,9 @@ export class GeoJsonLayerLoader {
 
     switch (source.type) {
       case 'heurist-query':
+        // The host wrapper has already reduced old/new search responses to an
+        // effective query. This loader owns only map execution: /map paging,
+        // the configured feature ceiling, and optional viewport extent.
         geoJson = await this.queryGeoData.searchAll({
           query: source.query,
           extent: context.viewport,
