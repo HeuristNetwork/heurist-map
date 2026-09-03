@@ -2306,7 +2306,7 @@ export class MapApplication {
     }
     if (!this.config.apiBaseUrl || !this.config.database) {
       throw new Error(
-        'MapDocument loading requires heuristMapBootstrap.runtime.apiBaseUrl and database'
+        'MapDocument loading requires heuristModuleBootstrap.runtime.apiBaseUrl and database'
       );
     }
   }

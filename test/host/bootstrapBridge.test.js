@@ -61,11 +61,11 @@ test('direct iframe bridge supplies the reduced bootstrap contract', () => {
 
 test('minimal standalone bootstrap uses canonical settings and built-in basemaps', () => {
   const previousFrameElement = globalThis.frameElement;
-  const previousBootstrap = globalThis.heuristMapBootstrap;
+  const previousBootstrap = globalThis.heuristModuleBootstrap;
   const previousLocation = globalThis.location;
   globalThis.frameElement = null;
   globalThis.location = { href: 'http://localhost/heurist-map/' };
-  globalThis.heuristMapBootstrap = {
+  globalThis.heuristModuleBootstrap = {
     runtime: {
       database: 'demo',
       apiBaseUrl: '/heurist/api',
@@ -89,18 +89,18 @@ test('minimal standalone bootstrap uses canonical settings and built-in basemaps
     assert.equal(config.mapDocument.id, null);
   } finally {
     globalThis.frameElement = previousFrameElement;
-    globalThis.heuristMapBootstrap = previousBootstrap;
+    globalThis.heuristModuleBootstrap = previousBootstrap;
     globalThis.location = previousLocation;
   }
 });
 
 test('runtime cannot inject custom basemap catalog or UI settings', () => {
   const previousFrameElement = globalThis.frameElement;
-  const previousBootstrap = globalThis.heuristMapBootstrap;
+  const previousBootstrap = globalThis.heuristModuleBootstrap;
   const previousLocation = globalThis.location;
   globalThis.frameElement = null;
   globalThis.location = { href: 'http://localhost/heurist-map/' };
-  globalThis.heuristMapBootstrap = {
+  globalThis.heuristModuleBootstrap = {
     runtime: {
       database: 'demo',
       apiBaseUrl: '/heurist/api',
@@ -121,7 +121,7 @@ test('runtime cannot inject custom basemap catalog or UI settings', () => {
     assert.deepEqual(config.baseMaps.map((item) => item.id), ['None']);
   } finally {
     globalThis.frameElement = previousFrameElement;
-    globalThis.heuristMapBootstrap = previousBootstrap;
+    globalThis.heuristModuleBootstrap = previousBootstrap;
     globalThis.location = previousLocation;
   }
 });
@@ -130,8 +130,8 @@ test('standalone bootstrap resolves the canonical {runtime, settings, state} con
   // Published pages now convert their stored payload into this canonical shape
   // server-side (see docs/integration.md §4.3) before loading heurist-map, so
   // the client only needs to support {runtime, settings, state} directly.
-  const previousBootstrap = globalThis.heuristMapBootstrap;
-  globalThis.heuristMapBootstrap = {
+  const previousBootstrap = globalThis.heuristModuleBootstrap;
+  globalThis.heuristModuleBootstrap = {
     runtime: { database: 'my_database', apiBaseUrl: '/heurist/api' },
     settings: { options: { ui: { initiallyExpanded: false } } },
     state: { activeDocumentId: 14 }
@@ -144,13 +144,13 @@ test('standalone bootstrap resolves the canonical {runtime, settings, state} con
     assert.equal(config.ui.initiallyExpanded, false);
     assert.deepEqual(config.initialState, { activeDocumentId: 14 });
   } finally {
-    globalThis.heuristMapBootstrap = previousBootstrap;
+    globalThis.heuristModuleBootstrap = previousBootstrap;
   }
 });
 
-test('standalone bootstrap does not crash when window.heuristMapBootstrap is unset', () => {
-  const previousBootstrap = globalThis.heuristMapBootstrap;
-  delete globalThis.heuristMapBootstrap;
+test('standalone bootstrap does not crash when window.heuristModuleBootstrap is unset', () => {
+  const previousBootstrap = globalThis.heuristModuleBootstrap;
+  delete globalThis.heuristModuleBootstrap;
 
   try {
     assert.doesNotThrow(() => getHeuristMapConfig());
@@ -158,7 +158,7 @@ test('standalone bootstrap does not crash when window.heuristMapBootstrap is uns
     assert.equal(config.viewerMode, 'map');
     assert.equal(config.apiBaseUrl, null);
   } finally {
-    globalThis.heuristMapBootstrap = previousBootstrap;
+    globalThis.heuristModuleBootstrap = previousBootstrap;
   }
 });
 

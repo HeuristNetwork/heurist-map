@@ -8,11 +8,11 @@ The configuration model deliberately separates three concepts:
 2. **Configuration/settings** — portable user-editable map behaviour and presentation settings.
 3. **State** — the reproducible current map state, such as active document, extent, query, and selection.
 
-Keeping these concepts separate avoids mixing database/API connection details with settings that may be saved in user preferences, a website page, or a published-map JSON file.
+Keeping these concepts separate avoids mixing database/API connection details with settings that may be saved in user preferences, a website page, or a published-module JSON file.
 
-## 1. `heuristMapBootstrap`
+## 1. `heuristModuleBootstrap`
 
-`heuristMapBootstrap` is the complete input used to initialise one `heurist-map` instance.
+`heuristModuleBootstrap` is the complete input used to initialise one `heurist-map` instance.
 
 ```javascript
 {
@@ -72,7 +72,7 @@ If `runtimeMode` is omitted, `HeuristModuleMap` infers `website` from `configura
 | Website editor | `configuration` | `website` | `website` |
 | Website map | `map` | `website` | `website` |
 | Publish dialog | `configuration` | `publish` | `main` |
-| Published map | `map` | `publish` | `standalone` |
+| Publication | `map` | `publish` | `standalone` |
 | Geometry/BBOX editor | `draw` | normally `preferences` | normally `main` |
 
 ### `settings`
@@ -104,7 +104,7 @@ If `runtimeMode` is omitted, `HeuristModuleMap` infers `website` from `configura
 }
 ```
 
-User preferences normally do not require state. Published maps include state so that the published link can reproduce the map as it appeared when it was published.
+User preferences normally do not require state. Publications include state so that the published link can reproduce the map as it appeared when it was published.
 
 ## 2. Persisted Heurist map configuration
 
@@ -259,7 +259,7 @@ The structures differ intentionally.
 
 A persisted configuration must be portable and safe. It can be copied between user preferences, website settings, and publishing without carrying authentication or server-specific details.
 
-`heuristMapBootstrap`, on the other hand, represents one concrete application launch. It therefore combines:
+`heuristModuleBootstrap`, on the other hand, represents one concrete application launch. It therefore combines:
 
 ```text
 runtime environment
@@ -273,7 +273,7 @@ This also prevents configuration precedence from being evaluated in multiple pla
 
 ## 4. Standalone `heurist-map` initialisation
 
-A standalone application defines `window.heuristMapBootstrap` before loading the `heurist-map` bundle.
+A standalone application defines `window.heuristModuleBootstrap` before loading the `heurist-map` bundle.
 
 Example:
 
@@ -281,7 +281,7 @@ Example:
 <div id="heurist-map"></div>
 
 <script>
-window.heuristMapBootstrap = {
+window.heuristModuleBootstrap = {
   runtime: {
     viewerMode: "map",
     database: "my_database",
@@ -424,7 +424,7 @@ When **Publish** is pressed, `heurist-map` stores a publish envelope containing 
 
 ```javascript
 {
-  format: "heurist-map-publish",
+  format: "heurist-publication",
   version: 1,
   options: { /* serialized settings.options */ },
   config: { /* serialized settings.config */ },
@@ -434,14 +434,14 @@ When **Publish** is pressed, `heurist-map` stores a publish envelope containing 
 
 The published JSON deliberately includes `state` when **Preserve current state** is enabled, because the published map must reproduce the selected document, visible layers, opacity, active thematic symbology, basemap, extent, query, and selection.
 
-After a successful publish, the configuration dialog closes and a small **Published map** dialog displays the public link with **Copy link**, **Open**, and **Close** actions.
+After a successful publish, the configuration dialog closes and a small **Publication** dialog displays the public link with **Copy link**, **Open**, and **Close** actions.
 
 The server-side publish allowlist must preserve the complete current `options.ui` and `options.nativeControls` sections. Dropping one of these fields changes the published map because missing fields are interpreted as canonical defaults.
 
 The generated standalone page converts the stored publish document directly to the canonical bootstrap contract:
 
 ```javascript
-window.heuristMapBootstrap = {
+window.heuristModuleBootstrap = {
   runtime: {
     database: "my_database",
     baseUrl: "/heurist/",
@@ -457,7 +457,7 @@ window.heuristMapBootstrap = {
 };
 ```
 
-There is no secondary published-map bootstrap format to normalize inside `heurist-map`.
+There is no secondary published-module bootstrap format to normalize inside `heurist-map`.
 
 ## 9. Configuration ownership summary
 
@@ -465,7 +465,7 @@ There is no secondary published-map bootstrap format to normalize inside `heuris
 |---|---|---|---|
 | Main Heurist preferences | `heurist-map-settings` | User preferences (`heurist-map` key) | Main Heurist map viewer |
 | Website | `heurist-map-settings` | Website/page/widget definition | Map embedded in the user's website |
-| Publish | `heurist-map-publish` = settings + optional state | Published-map JSON | Standalone published map |
+| Publish | `heurist-publication` = settings + optional state | Published-map JSON | Standalone published map |
 | Bootstrap | `{runtime, settings, state}` | Current host/application instance | One concrete `heurist-map` startup |
 
 ## 10. Design rules

@@ -127,9 +127,9 @@ Publishing and user preferences are **host services**, not map-data OpenAPI endp
 `HeuristHostAdapter` calls the main Heurist FrontController for:
 
 - `UserController.get_prefs` / `save_prefs`;
-- `MapPublishedController.save` / `get` / `delete`.
+- `PublicationController.save` / `get` / `delete`.
 
-`MapPublishedService` validates and stores the published configuration/state JSON and builds the bootstrap used by the generated standalone page.
+`PublicationService` validates and stores the published configuration/state JSON and builds the bootstrap used by the generated standalone page.
 
 These internal host operations are intentionally separated from `HeuristApiClient`. They do not need to become part of the public OpenAPI contract merely because `heurist-map` uses them when embedded in Heurist.
 
@@ -166,7 +166,7 @@ When the public webpage is rendered, it creates `mapViewer` with the stored sett
 
 ### 4.3 Standalone / published map
 
-A standalone HTML page can define `window.heuristMapBootstrap` manually and load the distribution bundle directly.
+A standalone HTML page can define `window.heuristModuleBootstrap` manually and load the distribution bundle directly.
 
 More commonly, the user creates a standalone map through the Publish dialog. The publish service stores a generated-map JSON document containing portable settings and optional captured state, and exposes a public generated-map URL. The generated page converts that document into the standard `{runtime, settings, state}` bootstrap before loading `heurist-map`.
 

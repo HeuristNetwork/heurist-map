@@ -26,7 +26,7 @@ The main rules are:
 ## 2. Initialization workflow
 
 1. `src/main.js` calls `getHeuristMapConfig()` in `mapConfig.js`.
-2. `mapConfig.js` reads the canonical launch envelope `{ runtime, settings, state }` from either `window.heuristMapBootstrap` or the same-origin iframe bridge `window.frameElement.heuristMapHost.getConfiguration()`.
+2. `mapConfig.js` reads the canonical launch envelope `{ runtime, settings, state }` from either `window.heuristModuleBootstrap` or the same-origin iframe bridge `window.frameElement.heuristMapHost.getConfiguration()`.
 3. Persisted settings are normalized through `mapConfigurationSchema.js` and canonical defaults.
 4. `main.js` branches on `viewerMode`:
    - `configuration` starts `HeuristMapConfigurationApi` without a map engine;
@@ -74,7 +74,7 @@ MapConfigurationDialog
     uses
 mapConfigurationSchema.js / mapConfigurationDefaults.js
 
-PublishedMapDialog                      (shown after successful publishing)
+PublishedDialog                      (shown after successful publishing)
 ```
 
 ## 4. Public API layer
@@ -155,7 +155,7 @@ pages that do not expose Heurist-specific services.
 
 - user map-preference load/save;
 - temporary legacy `map_default_style` / `map_select_style` compatibility defaults;
-- published-map save/load/delete;
+- published-module save/load/delete;
 - record editing through the parent iframe bridge when available.
 
 These host operations do not leak into the engine/data-provider layers.

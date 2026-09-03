@@ -32,7 +32,7 @@ export function getHeuristMapConfig() {
   // { runtime, settings, state } bootstrap contract.
   const bootstrap = resolveModuleBootstrap({
     bridge,
-    standalone: getGlobalBootstrap('heuristMapBootstrap')
+    standalone: getGlobalBootstrap('heuristModuleBootstrap')
   });
   const runtime = bootstrap.runtime && typeof bootstrap.runtime === 'object' ? bootstrap.runtime : {};
   const settings = normalizeMapConfigurationSettings(bootstrap.settings || {});
@@ -99,7 +99,7 @@ export function getHeuristMapConfig() {
     },
 
     // Internal mutable representation of the currently rendered MapDocument.
-    // It is intentionally not part of heuristMapBootstrap.
+    // It is intentionally not part of heuristModuleBootstrap.
     mapDocument: normalizeMapDocument({})
   };
 }

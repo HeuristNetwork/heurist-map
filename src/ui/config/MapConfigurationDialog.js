@@ -1128,7 +1128,7 @@ function writeBoundsFields(fields, prefix, bounds, display) {
 
 function submitLabel(mode) { return mode === 'publish' ? 'Publish' : mode === 'website' ? 'Save' : 'Apply'; }
 function firstFocusable(root) { return root.querySelector('button, input, select, textarea, summary'); }
-function defaultTitle(mode) { return mode === 'website' ? 'Website map configuration' : mode === 'publish' ? 'Publish map configuration' : 'Map preferences'; }
+function defaultTitle(mode) { return mode === 'website' ? 'Website map configuration' : mode === 'publish' ? 'Publication configuration' : 'Map preferences'; }
 function getPath(object, path) { return path.split('.').reduce((current, key) => current?.[key], object); }
 function setPath(object, path, value) {
   const parts = path.split('.'); let current = object;

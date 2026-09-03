@@ -104,7 +104,7 @@ test('Heurist host adapter accepts string ok status for publish save', async () 
     database: 'demo',
     fetchImpl: async () => ({ ok: true, json: async () => ({ status: 'ok', data: { id: 'abc123' } }) })
   });
-  assert.deepEqual(await host.publishMap({ format: 'heurist-map-publish' }), { id: 'abc123' });
+  assert.deepEqual(await host.publishMap({ format: 'heurist-publication' }), { id: 'abc123' });
 });
 
 test('Heurist host adapter uses legacy map symbol preferences as runtime defaults', async () => {

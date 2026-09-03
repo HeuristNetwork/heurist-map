@@ -116,15 +116,15 @@ export class HeuristHostAdapter extends HostAdapter {
   }
 
   async publishMap(payload) {
-    return this.request('MapPublishedController', 'save', {}, { data: JSON.stringify(payload) });
+    return this.request('PublicationController', 'save', { type: 'map' }, { data: JSON.stringify(payload) });
   }
 
   async loadPublishedMap(id) {
-    return this.request('MapPublishedController', 'get', { id });
+    return this.request('PublicationController', 'get', { id, type: 'map' });
   }
 
   async deletePublishedMap(id) {
-    return this.request('MapPublishedController', 'delete', { id }, {});
+    return this.request('PublicationController', 'delete', { id, type: 'map' }, {});
   }
 
   async request(controller, action, query = {}, post = null) {

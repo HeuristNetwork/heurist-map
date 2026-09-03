@@ -160,7 +160,7 @@ export class HeuristMapPublicApi {
       : captured;
 
     return this.application.host.publishMap({
-      format: 'heurist-map-publish',
+      format: 'heurist-publication',
       version: 1,
       options: serialized.options,
       config: serialized.config,
