@@ -7,6 +7,7 @@
 import { MapDocumentSelector } from './MapDocumentSelector.js';
 import { LayerPanel } from './LayerPanel.js';
 import { BaseMapSelector } from './BaseMapSelector.js';
+import { $HR, applyI18n } from './i18n/HResource.js';
 
 export class MapControlPanel {
   constructor({ api, mapContainer, options }) {
@@ -22,7 +23,7 @@ export class MapControlPanel {
 
     this.element = document.createElement('aside');
     this.element.className = 'heurist-map-control-panel';
-    this.element.setAttribute('aria-label', 'Map controls');
+    this.element.setAttribute('aria-label', $HR('Map controls'));
     if (this.options.position) this.element.classList.add(`position-${this.options.position}`);
     if (this.options.maxHeight) this.element.style.maxHeight = String(this.options.maxHeight);
     this.applyControlCss();
@@ -46,8 +47,9 @@ export class MapControlPanel {
       toggle.classList.add('heurist-map-panel-toggle');
       toggle.setAttribute('aria-expanded', String(this.options.initiallyExpanded !== false));
       const title = document.createElement('strong');
+      title.className = 'h-i18n';
       title.textContent = 'Map controls';
-      title.title = 'Show or hide map controls';
+      title.title = $HR('Show or hide map controls');
       title.addEventListener('click', togglePanel);
       header.append(toggle, title);
     }
@@ -100,6 +102,7 @@ export class MapControlPanel {
       : this.mapContainer.parentElement;
     if (target && globalThis.getComputedStyle?.(target).position === 'static') target.style.position = 'relative';
     target?.append(this.element);
+    applyI18n(this.element);
 
     this.documentSelector = this.documentsContainer
       ? new MapDocumentSelector({ api: this.api, container: this.documentsContainer })
@@ -183,7 +186,7 @@ export class MapControlPanel {
 
   updateBaseMapsExpansion() {
     if (!this.baseMapsToggle || !this.baseMapsContainer) return;
-    this.baseMapsToggle.textContent = `Base maps ${this.baseMapsExpanded ? '▾' : '▸'}`;
+    this.baseMapsToggle.textContent = `${$HR('Base maps')} ${this.baseMapsExpanded ? '▾' : '▸'}`;
     this.baseMapsToggle.setAttribute('aria-expanded', String(this.baseMapsExpanded));
     this.baseMapsContainer.hidden = !this.baseMapsExpanded;
   }
@@ -234,8 +237,8 @@ function iconButton(icon, title, handler) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'heurist-map-icon-button';
-  button.title = title;
-  button.setAttribute('aria-label', title);
+  button.title = $HR(title);
+  button.setAttribute('aria-label', $HR(title));
   button.innerHTML = `<span class="${icon}" aria-hidden="true"></span>`;
   button.addEventListener('click', (event) => { event.stopPropagation(); Promise.resolve(handler(event)).catch(() => {}); });
   return button;

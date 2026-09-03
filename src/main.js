@@ -31,6 +31,7 @@ import '@fortawesome/fontawesome-free/css/solid.min.css';
 import { getHeuristMapConfig } from './mapConfig.js';
 import { initHeuristMap } from './initHeuristMap.js';
 import { initHeuristMapConfiguration } from './initHeuristMapConfiguration.js';
+import { initLocale, $HR } from './ui/i18n/HResource.js';
 
 // Leaflet.markercluster 1.x is distributed as a UMD plugin and expects a
 // browser-global `L` while it is being evaluated. A static plugin import runs
@@ -43,6 +44,7 @@ if (typeof window !== 'undefined') {
 }
 
 const bootstrap = Promise.all([
+  initLocale(config.language, config.localeBaseUrl || moduleBaseUrl()),
   import('leaflet.markercluster'),
   import('leaflet-providers')
 ]).then(() => {
@@ -64,10 +66,14 @@ bootstrap.catch(async (error) => {
 
   const container = document.getElementById(config.containerId);
   if (container) {
-    container.textContent = 'Unable to initialize the map.';
+    container.textContent = $HR('Unable to initialize the map.');
     container.classList.add('heurist-map-error');
   }
 });
+
+function moduleBaseUrl() {
+  return new URL('./', import.meta.url).href;
+}
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {

@@ -54,6 +54,8 @@ export function getHeuristMapConfig() {
 
     apiBaseUrl: runtime.apiBaseUrl || null,
     database: runtime.database || null,
+    language: normalizeLanguage(runtime.language),
+    localeBaseUrl: runtime.localeBaseUrl || runtime.moduleBaseUrl || null,
     accessToken: runtime.accessToken || null,
     requestHeaders: runtime.requestHeaders || {},
     baseMapProviderOptions: runtime.baseMapProviderOptions || {},
@@ -102,6 +104,11 @@ export function getHeuristMapConfig() {
     // It is intentionally not part of heuristModuleBootstrap.
     mapDocument: normalizeMapDocument({})
   };
+}
+
+function normalizeLanguage(value) {
+  const language = String(value || 'eng').trim().toLowerCase().slice(0, 3);
+  return /^[a-z]{3}$/.test(language) && language !== 'aut' ? language : 'eng';
 }
 
 /** Build Heurist internal host persistence only when a Heurist base URL exists. */

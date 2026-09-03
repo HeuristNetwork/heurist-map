@@ -17,6 +17,7 @@ import {
 import { getDefaultBaseMaps } from '../../basemaps/defaultBasemaps.js';
 import { createSymbolPreview } from '../legend/LegendRenderer.js';
 import { DEFAULT_MAP_SYMBOL, normalizeMapSymbol } from '../../utils/normalizeMapSymbol.js';
+import { $HR, applyI18n } from '../i18n/HResource.js';
 
 const ZOOM_LEVEL_TOOLTIP = 'Level 1 = ~10,000km (15 deg.) to ~65,000 km (equator). Level 18 = ~50m (15 deg.) to ~250m (equator)';
 const advancedStateByMode = new Map();
@@ -88,6 +89,7 @@ export class MapConfigurationDialog {
     const header = document.createElement('header');
     header.className = 'heurist-map-config-header';
     const heading = document.createElement('h2');
+    heading.className = 'h-i18n';
     heading.textContent = displayTitle;
     const closeButton = button('×', 'Close', () => this.cancel());
     closeButton.classList.add('heurist-map-config-close');
@@ -114,6 +116,7 @@ export class MapConfigurationDialog {
     this.populate();
     this.updateAdvancedVisibility();
     this.applyModeControlState();
+    applyI18n(this.dialog);
     this.initialFormState = this.formStateSignature();
     firstFocusable(this.dialog)?.focus();
     return this;
@@ -132,7 +135,7 @@ export class MapConfigurationDialog {
       advancedStateByMode.set(this.mode, this.advanced);
       this.updateAdvancedVisibility();
     });
-    label.append(input, document.createTextNode('Advanced settings'));
+    label.append(input, i18nText('Advanced settings'));
     panel.append(label);
     return panel;
   }
@@ -141,7 +144,7 @@ export class MapConfigurationDialog {
     if (this.initialFormState !== null && this.formStateSignature() !== this.initialFormState) {
       // @todo Replace with the internal Heurist Confirm dialog.
       const confirmDiscard = globalThis.confirm;
-      if (typeof confirmDiscard === 'function' && !confirmDiscard('Discard changes to map configuration?')) return false;
+      if (typeof confirmDiscard === 'function' && !confirmDiscard($HR('Discard changes to map configuration?'))) return false;
     }
     let value;
     try { value = this.getValue(); } catch { value = clone(this.value); }
@@ -206,7 +209,7 @@ export class MapConfigurationDialog {
 
   buildPublish(body) {
     const preserve = plainCheckbox('Preserve current state', true);
-    preserve.row.title = 'Preserve current extent, zoom, basemap, visible layers, opacity, thematic map and selection.';
+    preserve.row.title = $HR('Preserve current extent, zoom, basemap, visible layers, opacity, thematic map and selection.');
     const onlyActive = plainCheckbox('Show only active document', false);
     body.append(preserve.row, onlyActive.row);
 
@@ -251,7 +254,7 @@ export class MapConfigurationDialog {
     this.checkbox(body, 'config.dynamicDocument.enabled', 'Enable current-results document', { hidden: true });
     this.text(body, 'config.dynamicDocument.title', 'Title');
     const dynamicLoading = this.checkbox(body, 'config.dynamicDocument.dynamicRequests', 'Load by map extent');
-    dynamicLoading.title = 'Loads only records within the current map view and refreshes the layer when the map is moved or zoomed. Recommended for large result sets.';
+    dynamicLoading.title = $HR('Loads only records within the current map view and refreshes the layer when the map is moved or zoomed. Recommended for large result sets.');
     this.zoomFields(body, 'config.dynamicDocument', { allAdvanced: true });
     this.boundsFields(body, 'config.dynamicDocument.bounds', { advanced: true });
   }
@@ -268,7 +271,7 @@ export class MapConfigurationDialog {
     const clusterGrid = this.number(clustering, 'config.defaults.markerClusterGridPixels', 'Grid pixels', { min: 0, max: 100 });
     clusterGrid.classList.add('heurist-map-config-inline-number', 'heurist-map-config-narrow-number');
     const clusterLevel = this.select(clustering, 'config.defaults.markerClusterMaxLevel', 'Stop at', zoomLevelChoices(false), { kind: 'number-null' });
-    clusterLevel.title = `The maximum zoom level that a marker can be part of a cluster. ${ZOOM_LEVEL_TOOLTIP}`;
+    clusterLevel.title = `${$HR('The maximum zoom level that a marker can be part of a cluster.')} ${$HR(ZOOM_LEVEL_TOOLTIP)}`;
     body.append(clustering);
     this.select(body, 'config.defaults.maxAllowedFeatures', 'Maximum allowed features', [
       ['500', '500'], ['1000', '1,000'], ['2000', '2,000'], ['5000', '5,000']
@@ -293,6 +296,7 @@ export class MapConfigurationDialog {
       for (const [value, label] of [['standard', 'Standard'], ['minimal', 'Minimal'], ['none', 'None']]) {
         const option = document.createElement('option');
         option.value = value;
+        option.className = 'h-i18n';
         option.textContent = label;
         control.append(option);
       }
@@ -310,6 +314,7 @@ export class MapConfigurationDialog {
         control.append(option);
       }
       control.value = current == null || current === '' ? 'standard' : String(current);
+      applyI18n(control);
     } catch (error) {
       // Template discovery is configuration assistance only; keep the current
       // value usable even if the legacy ReportController is unavailable.
@@ -367,8 +372,9 @@ export class MapConfigurationDialog {
       this.populateField('options.mapDocuments.allowed');
       this.refreshMapDocumentDefaultChoices();
       this.populateField('options.mapDocuments.initiallyActive');
+      applyI18n(this.form);
     } catch (error) {
-      this.showError(`Cannot load MapDocument list: ${error?.message || String(error)}`);
+      this.showError(`${$HR('Cannot load MapDocument list:')} ${error?.message || String(error)}`);
     }
   }
 
@@ -439,7 +445,7 @@ export class MapConfigurationDialog {
     const selectorControl = this.fields.get('options.nativeControls.selector')?.control;
     if (selectorControl) {
       selectorControl.disabled = true;
-      selectorRow.title = 'Feature area selector will be implemented with Leaflet.draw in a later step.';
+      selectorRow.title = $HR('Feature area selector will be implemented with Leaflet.draw in a later step.');
     }
     nativeSection.append(native);
 
@@ -508,7 +514,7 @@ export class MapConfigurationDialog {
     if (options.allAdvanced === true) this.markAdvanced(row);
     const levelIn = this.select(row, `${prefix}.maxZoom`, 'Zoom In', zoomLevelChoices(true), { kind: 'number-null' });
     const levelOut = this.select(row, `${prefix}.minZoom`, 'Zoom Out', zoomLevelChoices(true), { kind: 'number-null' });
-    levelIn.title = levelOut.title = ZOOM_LEVEL_TOOLTIP;
+    levelIn.title = levelOut.title = $HR(ZOOM_LEVEL_TOOLTIP);
     const kmIn = this.number(row, `${prefix}.minimumZoomKm`, 'Zoom In', { min: 0, compact: true });
     const kmOut = this.number(row, `${prefix}.maximumZoomKm`, 'Zoom Out', { min: 0, compact: true });
     const modes = radioChoice(`${prefix}-zoom-mode`, [['level', 'Level'], ['km', 'Km']]);
@@ -536,11 +542,12 @@ export class MapConfigurationDialog {
     row.className = 'heurist-map-config-field heurist-map-config-bounds';
     if (options.advanced) this.markAdvanced(row);
     const caption = document.createElement('span');
+    caption.className = 'h-i18n';
     caption.textContent = 'Extent';
     const display = document.createElement('input');
     display.type = 'text';
     display.readOnly = true;
-    display.placeholder = 'south,west - north,east';
+    display.placeholder = $HR('south,west - north,east');
     for (const key of ['west', 'south', 'east', 'north']) {
       const hidden = document.createElement('input');
       hidden.type = 'hidden';
@@ -567,6 +574,7 @@ export class MapConfigurationDialog {
     details.open = options.open === true;
     if (options.advanced) this.markAdvanced(details);
     const summary = document.createElement('summary');
+    summary.className = 'h-i18n';
     summary.textContent = title;
     const body = document.createElement('div');
     body.className = 'heurist-map-config-section-body';
@@ -581,7 +589,7 @@ export class MapConfigurationDialog {
     const input = document.createElement('input');
     input.type = 'checkbox';
     this.register(path, input, 'boolean');
-    row.append(input, document.createTextNode(labelText));
+    row.append(input, i18nText(labelText));
     this.decorate(row, options);
     body.append(row);
     return row;
@@ -592,6 +600,7 @@ export class MapConfigurationDialog {
     for (const [value, text] of choices) {
       const option = document.createElement('option');
       option.value = value;
+      option.className = 'h-i18n';
       option.textContent = text;
       control.append(option);
     }
@@ -605,6 +614,7 @@ export class MapConfigurationDialog {
     const row = document.createElement('div');
     row.className = 'heurist-map-config-field heurist-map-config-transfer-field';
     const caption = document.createElement('span');
+    caption.className = 'h-i18n';
     caption.textContent = labelText;
 
     const content = document.createElement('div');
@@ -614,7 +624,7 @@ export class MapConfigurationDialog {
     toggle.className = 'heurist-map-config-check heurist-map-config-list-default';
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';
-    toggle.append(checkbox, document.createTextNode(options.defaultLabel || 'Use default list'));
+    toggle.append(checkbox, i18nText(options.defaultLabel || 'Use default list'));
 
     const lists = document.createElement('div');
     lists.className = 'heurist-map-config-transfer-lists';
@@ -625,6 +635,7 @@ export class MapConfigurationDialog {
     if (options.availableNotice?.text && options.availableNotice?.href) {
       const notice = document.createElement('a');
       notice.className = 'heurist-map-config-list-notice';
+      notice.classList.add('h-i18n');
       notice.textContent = options.availableNotice.text;
       notice.href = options.availableNotice.href;
       notice.target = '_blank';
@@ -704,10 +715,11 @@ export class MapConfigurationDialog {
       const value = String(rawValue);
       const option = document.createElement('option');
       option.value = value;
-      option.textContent = label;
+      option.className = 'h-i18n';
+      option.textContent = $HR(label);
       if (selected.has(value) && field.fixedSelectedValues?.has(value)) {
         option.disabled = true;
-        option.title = 'Always available';
+        option.title = $HR('Always available');
       }
       (selected.has(value) ? field.selectedControl : field.availableControl).append(option);
     }
@@ -751,7 +763,8 @@ export class MapConfigurationDialog {
     for (const [value, text] of choices) {
       const option = document.createElement('option');
       option.value = value;
-      option.textContent = text;
+      option.className = 'h-i18n';
+      option.textContent = $HR(text);
       field.control.append(option);
     }
   }
@@ -759,7 +772,7 @@ export class MapConfigurationDialog {
   text(body, path, labelText, options = {}) {
     const { row, control } = labelledControl('input', labelText);
     control.type = 'text';
-    if (options.placeholder) control.placeholder = options.placeholder;
+    if (options.placeholder) control.placeholder = $HR(options.placeholder);
     this.register(path, control, options.kind || 'string-null');
     this.decorate(row, options);
     body.append(row);
@@ -778,7 +791,7 @@ export class MapConfigurationDialog {
   json(body, path, labelText, options = {}) {
     const { row, control } = labelledControl('textarea', labelText);
     control.rows = 3;
-    control.placeholder = 'JSON (optional)';
+    control.placeholder = $HR('JSON (optional)');
     this.register(path, control, 'json');
     this.decorate(row, options);
     body.append(row);
@@ -790,6 +803,7 @@ export class MapConfigurationDialog {
     row.className = 'heurist-map-config-field heurist-map-config-symbology-field';
 
     const label = document.createElement('span');
+    label.className = 'h-i18n';
     label.textContent = labelText;
 
     const content = document.createElement('div');
@@ -802,7 +816,7 @@ export class MapConfigurationDialog {
 
     const raw = document.createElement('textarea');
     raw.rows = 3;
-    raw.placeholder = 'Default';
+    raw.placeholder = $HR('Default');
     raw.className = 'heurist-map-config-symbology-raw';
     raw.hidden = true;
     this.register(path, raw, 'json');
@@ -822,7 +836,7 @@ export class MapConfigurationDialog {
     };
     this.fields.get(path).onPopulate = refreshPreview;
 
-    const edit = linkButton('Edit', `Edit ${labelText.toLowerCase()}`, async () => {
+    const edit = linkButton('Edit', `${$HR('Edit')} ${$HR(labelText).toLowerCase()}`, async () => {
       if (!this.onEditSymbology) return;
       try {
         const current = getPath(this.readForm(), path);
@@ -843,12 +857,12 @@ export class MapConfigurationDialog {
     });
     edit.disabled = !this.onEditSymbology;
 
-    const toggleRaw = linkButton('Show raw', `Show or hide raw ${labelText.toLowerCase()}`, () => {
+    const toggleRaw = linkButton('Show raw', `${$HR('Show or hide raw')} ${$HR(labelText).toLowerCase()}`, () => {
       raw.hidden = !raw.hidden;
-      toggleRaw.textContent = raw.hidden ? 'Show raw' : 'Hide raw';
+      toggleRaw.textContent = $HR(raw.hidden ? 'Show raw' : 'Hide raw');
     });
 
-    const clear = linkButton('×', `Clear ${labelText.toLowerCase()}`, () => {
+    const clear = linkButton('×', `${$HR('Clear')} ${$HR(labelText).toLowerCase()}`, () => {
       setPath(this.value, path, null);
       raw.value = '';
       refreshPreview(null);
@@ -989,7 +1003,7 @@ function transferColumn(title) {
   const column = document.createElement('div');
   column.className = 'heurist-map-config-transfer-column';
   const heading = document.createElement('div');
-  heading.className = 'heurist-map-config-transfer-title';
+  heading.className = 'heurist-map-config-transfer-title h-i18n';
   heading.textContent = title;
   const select = document.createElement('select');
   select.size = 8;
@@ -1005,22 +1019,24 @@ function labelledControl(tag, labelText) {
   const row = document.createElement('label');
   row.className = 'heurist-map-config-field';
   const caption = document.createElement('span');
+  caption.className = 'h-i18n';
   caption.textContent = labelText;
   const control = document.createElement(tag);
   row.append(caption, control);
   return { row, control };
 }
 
-function legend(text) { const item = document.createElement('legend'); item.textContent = text; return item; }
-function sectionTitle(text) { const item = document.createElement('div'); item.className = 'heurist-map-config-control-section-title'; item.textContent = text; return item; }
+function legend(text) { const item = document.createElement('legend'); item.className = 'h-i18n'; item.textContent = text; return item; }
+function sectionTitle(text) { const item = document.createElement('div'); item.className = 'heurist-map-config-control-section-title h-i18n'; item.textContent = text; return item; }
 function configurationDialogTitle(title) {
   const version = typeof HEURIST_MODULE_VERSION !== 'undefined'
     ? String(HEURIST_MODULE_VERSION).trim() : '';
-  return version ? `${title} (v${version})` : title;
+  const localizedTitle = $HR(title);
+  return version ? `${localizedTitle} (v${version})` : localizedTitle;
 }
 function button(text, title, handler) {
   const item = document.createElement('button');
-  item.type = 'button'; item.textContent = text; item.title = title; item.addEventListener('click', handler); return item;
+  item.type = 'button'; item.className = 'h-i18n'; item.textContent = $HR(text); item.title = $HR(title); item.addEventListener('click', handler); return item;
 }
 
 function linkButton(text, title, handler) {
@@ -1028,7 +1044,7 @@ function linkButton(text, title, handler) {
   item.classList.add('heurist-map-config-link');
   return item;
 }
-function submitButton(text) { const item = document.createElement('button'); item.type = 'submit'; item.className = 'primary'; item.textContent = text; return item; }
+function submitButton(text) { const item = document.createElement('button'); item.type = 'submit'; item.className = 'primary h-i18n'; item.textContent = $HR(text); return item; }
 function prepareModeConfiguration(value, mode) {
   if (mode === 'publish') return preparePublishConfiguration(value);
   if (mode !== 'website') return value;
@@ -1070,17 +1086,17 @@ function plainCheckbox(labelText, checked = false) {
   const control = document.createElement('input');
   control.type = 'checkbox';
   control.checked = checked;
-  row.append(control, document.createTextNode(labelText));
+  row.append(control, i18nText(labelText));
   return { row, control };
 }
 
 function zoomLevelChoices(includeEmpty) {
   const result = includeEmpty ? [['', '']] : [];
   for (let level = 1; level <= 18; level += 1) {
-    const suffix = level === 1 ? ' (Worldwide)'
-      : level === 10 ? ' (City scale)'
-        : level === 18 ? ' (Zoomed right in)' : '';
-    result.push([String(level), `level ${level}${suffix}`]);
+    const suffix = level === 1 ? ` (${$HR('Worldwide')})`
+      : level === 10 ? ` (${$HR('City scale')})`
+        : level === 18 ? ` (${$HR('Zoomed right in')})` : '';
+    result.push([String(level), `${$HR('level')} ${level}${suffix}`]);
   }
   return result;
 }
@@ -1096,7 +1112,7 @@ function radioChoice(name, choices) {
     control.name = name;
     control.value = value;
     controls.set(value, control);
-    label.append(control, document.createTextNode(labelText));
+    label.append(control, i18nText(labelText));
     element.append(label);
   }
   return {
@@ -1104,6 +1120,13 @@ function radioChoice(name, choices) {
     value: () => [...controls].find(([, control]) => control.checked)?.[0] || choices[0][0],
     set: (value) => { (controls.get(value) || controls.values().next().value).checked = true; }
   };
+}
+
+function i18nText(text) {
+  const item = document.createElement('span');
+  item.className = 'h-i18n';
+  item.textContent = text;
+  return item;
 }
 
 function refreshExtentDisplay(display, fields, prefix) {

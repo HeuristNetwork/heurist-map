@@ -4,6 +4,7 @@
  * @project     Heurist mapping application
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
+import { $HR } from './i18n/HResource.js';
 export class MapDocumentSelector {
   constructor({ api, container }) {
     this.api = api;
@@ -39,14 +40,14 @@ function createRow(item, active, api, { editingEnabled = false, onEditDocument =
     selector = document.createElement('span');
     selector.className = 'heurist-map-document-selector-spinner';
     selector.innerHTML = '<span class="heurist-map-spinner" aria-hidden="true"></span>';
-    selector.title = 'Loading map document';
-    selector.setAttribute('aria-label', 'Loading map document');
+    selector.title = $HR('Loading map document');
+    selector.setAttribute('aria-label', $HR('Loading map document'));
   } else {
     selector = document.createElement('input');
     selector.type = 'radio';
     selector.name = 'heurist-map-document';
     selector.checked = active;
-    selector.setAttribute('aria-label', `Activate ${item.title}`);
+    selector.setAttribute('aria-label', `${$HR('Activate')} ${item.title}`);
     selector.addEventListener('change', () => {
       if (selector.checked) {
         onActivateDocument?.(item.id);
@@ -79,7 +80,7 @@ function createDocumentStatus(item) {
   if (item.loadState === 'error') {
     status.innerHTML = '<span class="fa-solid fa-triangle-exclamation" aria-hidden="true"></span>';
     status.classList.add('state-error');
-    status.title = item.error?.message || 'Map document loading failed';
+    status.title = item.error?.message || $HR('Map document loading failed');
   }
   return status;
 }
@@ -88,8 +89,8 @@ function iconButton(icon, title, handler) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'heurist-map-icon-button';
-  button.title = title;
-  button.setAttribute('aria-label', title);
+  button.title = $HR(title);
+  button.setAttribute('aria-label', $HR(title));
   button.innerHTML = `<span class="${icon}" aria-hidden="true"></span>`;
   button.addEventListener('click', (event) => { event.stopPropagation(); handler(event); });
   return button;
@@ -97,7 +98,7 @@ function iconButton(icon, title, handler) {
 
 function createEmpty(text) {
   const element = document.createElement('div');
-  element.className = 'heurist-map-empty';
-  element.textContent = text;
+  element.className = 'heurist-map-empty h-i18n';
+  element.textContent = $HR(text);
   return element;
 }

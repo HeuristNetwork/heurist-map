@@ -4,6 +4,7 @@
  * @project     Heurist mapping application
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
+import { $HR } from '../i18n/HResource.js';
 
 import { mergeThematicSymbol } from '../../thematic/thematicSymbolResolver.js';
 import { hexToCssFilter } from '../../utils/hexToCssFilter.js';
@@ -31,7 +32,7 @@ export function createLayerLegend(layer) {
 
   if (!activeTheme) {
     legend.append(createLegendRow({
-      label: thematic.length ? 'Default' : '',
+      label: thematic.length ? $HR('Default') : '',
       symbol: style.symbol || {},
       geometryTypes,
       iconContext: layer?.iconContext,
@@ -50,7 +51,7 @@ export function createLayerLegend(layer) {
 
     const heading = document.createElement('div');
     heading.className = 'heurist-map-legend-field-title';
-    heading.textContent = field?.title || field?.code || 'Values';
+    heading.textContent = field?.title || field?.code || $HR('Values');
     section.append(heading);
 
     for (const range of ranges) {

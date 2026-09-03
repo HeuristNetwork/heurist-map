@@ -1,5 +1,6 @@
 /** LayerPanel.js - Render ordered layers for the active MapDocument. */
 import { LayerPanelItem } from './LayerPanelItem.js';
+import { $HR } from './i18n/HResource.js';
 export class LayerPanel {
   constructor({ api, container, editingEnabled = false, symbologyEditingEnabled = false, onEditLayer = null, showLegend = true }) {
     this.api = api;
@@ -24,7 +25,8 @@ export class LayerPanel {
     if (!layers.length) {
       const e = document.createElement('div');
       e.className = 'heurist-map-empty';
-      e.textContent = loading ? 'Loading...' : 'No layers';
+      e.classList.add('h-i18n');
+      e.textContent = $HR(loading ? 'Loading...' : 'No layers');
       this.container.append(e);
     }
   }

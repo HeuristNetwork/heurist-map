@@ -5,6 +5,7 @@
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
 import { createLayerLegend } from './legend/LegendRenderer.js';
+import { $HR } from './i18n/HResource.js';
 
 export class LayerPanelItem {
   constructor({ api, layer, editingEnabled = false, symbologyEditingEnabled = false, onEditLayer = null, showLegend = true }) {
@@ -124,7 +125,7 @@ export class LayerPanelItem {
     const list = document.createElement('div');
     list.className = 'heurist-map-layer-themes';
     list.setAttribute('role', 'radiogroup');
-    list.setAttribute('aria-label', `Symbology for ${this.layer.title || this.layer.id}`);
+    list.setAttribute('aria-label', `${$HR('Symbology for')} ${this.layer.title || this.layer.id}`);
 
     const activeIndex = thematic.findIndex((theme) => theme?.active === true);
     list.append(this.createThemeRadio('Default', null, activeIndex < 0));
@@ -149,7 +150,9 @@ export class LayerPanelItem {
     });
 
     const text = document.createElement('span');
-    text.textContent = labelText;
+    text.className = 'h-i18n';
+    text.textContent = /^Theme \d+$/.test(labelText)
+      ? labelText.replace('Theme', $HR('Theme')) : $HR(labelText);
     label.append(radio, text);
     return label;
   }
@@ -158,8 +161,8 @@ export class LayerPanelItem {
     if (this.layer.loadState === 'loading') {
       const status = document.createElement('span');
       status.className = 'heurist-map-layer-status';
-      status.title = 'Loading layer';
-      status.setAttribute('aria-label', 'Loading layer');
+      status.title = $HR('Loading layer');
+      status.setAttribute('aria-label', $HR('Loading layer'));
       status.innerHTML = '<span class="heurist-map-spinner" aria-hidden="true"></span>';
       return status;
     }
@@ -178,8 +181,8 @@ export class LayerPanelItem {
     checkbox.type = 'checkbox';
     checkbox.checked = this.layer.visible;
     checkbox.title = this.layer.loadState === 'deferred'
-      ? 'Layer has not been loaded'
-      : 'Layer loaded';
+      ? $HR('Layer has not been loaded')
+      : $HR('Layer loaded');
     checkbox.addEventListener('change', async () => {
       const requested = checkbox.checked;
       try {
@@ -209,7 +212,7 @@ function button(icon, title, handler) {
   const element = document.createElement('button');
   element.type = 'button';
   element.className = 'heurist-map-icon-button';
-  element.title = title;
+  element.title = $HR(title);
   element.innerHTML = `<span class="${icon}" aria-hidden="true"></span>`;
   element.addEventListener('click', handler);
   return element;
@@ -242,8 +245,8 @@ function openOpacityPopover({ api, layer, row, trigger }) {
   const close = document.createElement('button');
   close.type = 'button';
   close.className = 'heurist-map-opacity-close';
-  close.title = 'Close opacity control';
-  close.setAttribute('aria-label', 'Close opacity control');
+  close.title = $HR('Close opacity control');
+  close.setAttribute('aria-label', $HR('Close opacity control'));
   close.textContent = '×';
 
   const input = document.createElement('input');
@@ -252,8 +255,8 @@ function openOpacityPopover({ api, layer, row, trigger }) {
   input.max = '100';
   input.step = '1';
   input.value = String(Math.round((layer.opacity ?? 1) * 100));
-  input.title = 'Layer opacity';
-  input.setAttribute('aria-label', 'Layer opacity');
+  input.title = $HR('Layer opacity');
+  input.setAttribute('aria-label', $HR('Layer opacity'));
 
   const value = document.createElement('span');
   value.className = 'heurist-map-opacity-value';

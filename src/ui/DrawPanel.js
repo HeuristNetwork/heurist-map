@@ -4,6 +4,7 @@
  * @project     Heurist mapping application
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
+import { $HR, applyI18n } from './i18n/HResource.js';
 
 export class DrawPanel {
   constructor({ api, container }) {
@@ -32,6 +33,7 @@ export class DrawPanel {
     this.finishButton = action('Save', () => this.api.finishDrawing(), 'primary');
     panel.append(...this.standardControls, this.cancelButton, this.finishButton);
     this.container.append(panel);
+    applyI18n(panel);
     this.sessionHandler = (event) => {
       this.multipleControl.checked = event.detail?.options?.allowMultiple === true;
       this.applySessionOptions(event.detail?.options || {});
@@ -45,9 +47,9 @@ export class DrawPanel {
     const mode = options.mode || 'full';
     const bboxExtent = mode === 'image' || mode === 'rectangle' || mode === 'filter';
     for (const control of this.standardControls) control.hidden = bboxExtent;
-    this.finishButton.textContent = mode === 'image' ? 'Apply image extent'
+    this.finishButton.textContent = $HR(mode === 'image' ? 'Apply image extent'
       : mode === 'rectangle' ? 'Save extent'
-        : mode === 'filter' ? 'Apply Extent' : 'Save';
+        : mode === 'filter' ? 'Apply Extent' : 'Save');
   }
 
   openGeometryEditor(mode) {
@@ -57,10 +59,11 @@ export class DrawPanel {
     const dialog = document.createElement('section');
     dialog.className = 'heurist-map-draw-geometry-dialog';
     const heading = document.createElement('h3');
-    heading.textContent = mode === 'add' ? 'Add Geometry' : 'Get Geometry';
+    heading.className = 'h-i18n';
+    heading.textContent = $HR(mode === 'add' ? 'Add Geometry' : 'Get Geometry');
     const textarea = document.createElement('textarea');
     textarea.rows = 12;
-    textarea.placeholder = mode === 'add' ? 'Paste WKT or GeoJSON' : '';
+    textarea.placeholder = mode === 'add' ? $HR('Paste WKT or GeoJSON') : '';
     const error = document.createElement('div');
     error.className = 'heurist-map-draw-geometry-error';
     const controls = document.createElement('div');
@@ -102,6 +105,7 @@ export class DrawPanel {
     dialog.append(textarea, error, controls);
     overlay.append(dialog);
     this.container.append(overlay);
+    applyI18n(dialog);
     this.geometryDialog = overlay;
     textarea.focus();
   }
@@ -126,7 +130,8 @@ function radioGroup(name, values) {
     input.name = name;
     input.value = value;
     input.checked = index === 0;
-    row.append(input, document.createTextNode(label));
+    const text = document.createElement('span'); text.className = 'h-i18n'; text.textContent = label;
+    row.append(input, text);
     element.append(row);
     return input;
   });
@@ -143,8 +148,8 @@ function stopMapInteraction(element) {
 function action(label, handler, className = '') {
   const button = document.createElement('button');
   button.type = 'button';
-  button.textContent = label;
-  if (className) button.className = className;
+  button.className = `${className} h-i18n`.trim();
+  button.textContent = $HR(label);
   button.addEventListener('click', async () => {
     try { await handler(); } catch (error) { globalThis.console?.error(error); }
   });
@@ -155,6 +160,7 @@ function checkbox(label) {
   const row = document.createElement('label');
   const control = document.createElement('input');
   control.type = 'checkbox';
-  row.append(control, document.createTextNode(label));
+  const text = document.createElement('span'); text.className = 'h-i18n'; text.textContent = label;
+  row.append(control, text);
   return { row, control };
 }
