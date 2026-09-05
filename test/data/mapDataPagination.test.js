@@ -80,7 +80,7 @@ test('GeoJSON runtime layer preserves map API result metadata', () => {
   const layer = createGeoJsonRuntimeLayer(
     {
       id: null,
-      title: 'Current results',
+      title: 'Filtered Result',
       visible: true,
       selectable: true,
       source: { type: 'heurist-query' },

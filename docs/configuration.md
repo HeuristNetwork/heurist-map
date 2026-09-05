@@ -173,7 +173,7 @@ The portable configuration stored in preferences or a website is a versioned set
 
     dynamicDocument: {
       enabled: true,
-      title: "Current results",
+      title: "Filtered Result",
       minZoom: null,
       maxZoom: null,
       minimumZoomKm: null,
@@ -197,7 +197,7 @@ The schema is an allowlist. Unknown fields and runtime fields are discarded duri
 
 - `enabled` — show/hide the Heurist control panel as a whole;
 - `initiallyExpanded` — initial expanded/collapsed state;
-- `showCurrentDocument` — Current results entry;
+- `showCurrentDocument` — Filtered Result entry;
 - `showMapDocuments` — Map documents section;
 - `showLayers` — Layers section;
 - `showBaseMaps` — Base maps section;
@@ -205,7 +205,7 @@ The schema is an allowlist. Unknown fields and runtime fields are discarded duri
 - `showHomeControl` — Home tool;
 - `showOptions` — Options tool;
 - `showPublish` — Publish tool;
-- `showSourceHeader` — header shown above the map container with the active MapDocument's title (Current Results' configured title when the dynamic document is active).
+- `showSourceHeader` — header shown above the map container with the active MapDocument's title (the Filtered Result's configured title when the dynamic document is active).
 
 `options.nativeControls` controls Leaflet/native map tools independently:
 
@@ -218,7 +218,7 @@ The schema is an allowlist. Unknown fields and runtime fields are discarded duri
 
 The remaining `options` properties control available/default MapDocuments, available/default basemaps, and interaction behaviour.
 
-`mapDocuments.initiallyActive === null` means the dynamic **Current results** document is the default document.
+`mapDocuments.initiallyActive === null` means the dynamic **Filtered Result** document is the default document.
 
 ### `config`
 
@@ -242,7 +242,7 @@ Only values defined by the map defaults and accepted by `mapConfigurationSchema.
 
 Vector symbology uses sparse inheritance: built-in `DEFAULT_MAP_SYMBOL` → configured default symbology → MapLayer symbol → thematic renderer symbol → thematic range/facet symbol. Missing properties are resolved from the effective parent at runtime. Opacity values are canonical fractions in the range `0..1`; legacy percentages are accepted only when normalizing incoming data. `iconSize` is the semantic marker diameter and Leaflet circle `radius` is derived as `iconSize / 2`.
 
-`config.dynamicDocument` controls the dynamic **Current results** MapDocument, including its title, zoom restrictions, optional bounds, and `dynamicRequests` (Load by map extent).
+`config.dynamicDocument` controls the dynamic **Filtered Result** MapDocument, including its title, zoom restrictions, optional bounds, and `dynamicRequests` (Load by map extent).
 
 ### Temporary legacy symbology compatibility
 

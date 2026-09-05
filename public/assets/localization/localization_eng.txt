@@ -57,7 +57,7 @@
 #Discard changes to map configuration?#Discard changes to map configuration?
 #Interface#Interface
 #Publication#Publication
-#Current Results Map#Current Results Map
+#Filtered Result Map#Filtered Result Map
 #Default settings#Default settings
 #Map documents#Map documents
 #Interaction#Interaction
@@ -89,7 +89,7 @@
 #Always available#Always available
 #Cannot load MapDocument list:#Cannot load MapDocument list:
 #Default document#Default document
-#Current results#Current results
+#Filtered Result#Filtered Result
 #Allowed base maps#Allowed base maps
 #All Heurist base maps#All Heurist base maps
 #Email team for other base maps#Email team for other base maps

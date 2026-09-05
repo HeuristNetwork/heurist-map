@@ -60,7 +60,7 @@ export class MapApplication {
     this.dynamicDocumentId = String(config.dynamicDocument?.id || 'dynamic');
     this.initializeDynamicDocument();
 
-    // When Current Results is the configured startup document, initialize the
+    // When Filtered Result is the configured startup document, initialize the
     // engine from its real document-specific environment immediately. Previously
     // the synthetic empty MapDocument was initialized first, so dynamic min/max
     // zoom settings were skipped until applyConfiguration() ran.
@@ -300,7 +300,7 @@ export class MapApplication {
       // that work is in progress.
       await this.beginMapEnvironment(document, environment);
 
-      // Current Results has no persisted worldBaseMap. Re-entering the dynamic
+      // Filtered Result has no persisted worldBaseMap. Re-entering the dynamic
       // document after a persisted MapDocument must therefore restore the
       // configured initial/first allowed basemap explicitly. Do not inherit the
       // basemap (or lack of one) from the previously active MapDocument.
@@ -614,7 +614,7 @@ export class MapApplication {
         ? canonical.symbol
         : canonical;
 
-      // Current Results uses the same Default symbology edited in Map Configuration.
+      // Filtered Result uses the same Default symbology edited in Map Configuration.
       // Treat the editor Save as an explicit preference change: persist it when the
       // host supports map preferences, then apply the complete configuration so every
       // layer that inherits from Default symbology is recomputed consistently.
@@ -1651,7 +1651,7 @@ export class MapApplication {
 
     const dynamicEntry = this.getDynamicDocumentEntry();
     if (dynamicEntry) {
-      dynamicEntry.title = this.config.dynamicDocument.title || 'Current results';
+      dynamicEntry.title = this.config.dynamicDocument.title || 'Filtered Result';
       dynamicEntry.showInPanel = this.config.ui.showCurrentDocument !== false;
     }
 
@@ -1786,7 +1786,7 @@ export class MapApplication {
       }
     }
 
-    // The saved query belongs only to the Current Results document. A published
+    // The saved query belongs only to the Filtered Result document. A published
     // persisted MapDocument may still carry state.query for later switching, but
     // it must not create/reload current-results while that document is active.
     if (state.query && String(this.activeMapDocumentId) === this.dynamicDocumentId) {
@@ -1796,7 +1796,7 @@ export class MapApplication {
       } else {
         await this.addQueryLayer(state.query, {
           id: 'current-results',
-          title: 'Current results',
+          title: 'Filtered Result',
           visible: true,
           selectable: true
         });
@@ -2371,7 +2371,7 @@ function createDynamicMapDocument(config, entry) {
   return {
     ...base,
     id: null,
-    title: entry?.title || dynamic.title || 'Current results',
+    title: entry?.title || dynamic.title || 'Filtered Result',
     bounds: dynamic.bounds ?? base.bounds,
     minZoom: dynamic.minZoom ?? null,
     maxZoom: dynamic.maxZoom ?? null,

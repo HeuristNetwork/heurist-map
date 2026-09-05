@@ -199,7 +199,7 @@ export class MapConfigurationDialog {
     }
     this.form.append(
       this.section('Interface', (body) => this.buildInterface(body), { open: true }),
-      this.section('Current Results Map', (body) => this.buildCurrentResults(body), { open: true }),
+      this.section('Filtered Result Map', (body) => this.buildCurrentResults(body), { open: true }),
       this.section('Default settings', (body) => this.buildDefaults(body), { open: true }),
       this.section('Map documents', (body) => this.buildMapDocuments(body), { advanced: true }),
       this.section('Base maps', (body) => this.buildBaseMaps(body), { advanced: true }),
@@ -337,7 +337,7 @@ export class MapConfigurationDialog {
       onChange: () => this.refreshMapDocumentDefaultChoices()
     });
     this.select(body, 'options.mapDocuments.initiallyActive', 'Default document', [
-      ['', 'Current results']
+      ['', 'Filtered Result']
     ], { kind: 'identifier-select' });
     void this.loadMapDocumentChoices();
   }
@@ -385,7 +385,7 @@ export class MapConfigurationDialog {
     const choices = values.map((value) => [value, this.transferChoiceLabel(field, value)]);
     this.replaceConstrainedSelectChoices(
       'options.mapDocuments.initiallyActive',
-      [['', 'Current results'], ...choices]
+      [['', 'Filtered Result'], ...choices]
     );
   }
 
@@ -416,7 +416,7 @@ export class MapConfigurationDialog {
 
     const primary = document.createElement('div');
     primary.className = 'heurist-map-config-inline-checks';
-    this.checkbox(primary, 'options.ui.showCurrentDocument', 'Current results');
+    this.checkbox(primary, 'options.ui.showCurrentDocument', 'Filtered Result');
     this.checkbox(primary, 'options.ui.showMapDocuments', 'Map documents');
     this.checkbox(primary, 'options.ui.showBaseMaps', 'Base maps');
     heuristSection.append(primary);

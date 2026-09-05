@@ -76,7 +76,7 @@ export function getHeuristMapConfig() {
     dynamicDocument: {
       enabled: settings.config.dynamicDocument.enabled,
       id: 'dynamic',
-      title: String(settings.config.dynamicDocument.title || 'Current results'),
+      title: String(settings.config.dynamicDocument.title || 'Filtered Result'),
       minZoom: settings.config.dynamicDocument.minZoom,
       maxZoom: settings.config.dynamicDocument.maxZoom,
       minimumZoomKm: settings.config.dynamicDocument.minimumZoomKm,

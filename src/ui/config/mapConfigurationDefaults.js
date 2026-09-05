@@ -62,7 +62,7 @@ export const HEURIST_MAP_CONFIG_DEFAULTS = Object.freeze({
   }),
   dynamicDocument: Object.freeze({
     enabled: true,
-    title: 'Current results',
+    title: 'Filtered Result',
     minZoom: null,
     maxZoom: null,
     minimumZoomKm: null,

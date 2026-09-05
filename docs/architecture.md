@@ -170,7 +170,7 @@ The same dialog is also reused from a running map for Options/Publish workflows.
 
 ## 11. MapDocument model
 
-There is no special runtime class for Current results. The predefined document ID `dynamic` uses the same application document registry as persisted MapDocuments.
+There is no special runtime class for Filtered Result. The predefined document ID `dynamic` uses the same application document registry as persisted MapDocuments.
 
 Persisted documents are lightweight until activated. Activating a different document releases native layers and heavy feature payloads from the previous one while retaining enough metadata to reactivate it later.
 
@@ -196,7 +196,7 @@ When a deferred static layer first becomes visible it is loaded through the norm
 
 ## 13. Query loading: bounded results and dynamic viewport
 
-Heurist query layers are deliberately bounded so that large result sets cannot create an uncontrolled number of client-side geographic features. The same paging mechanism is used for ordinary Current results / MapLayer queries and for dynamic viewport queries.
+Heurist query layers are deliberately bounded so that large result sets cannot create an uncontrolled number of client-side geographic features. The same paging mechanism is used for ordinary Filtered Result / MapLayer queries and for dynamic viewport queries.
 
 ### 13.1 Bounded query loading
 
@@ -213,13 +213,13 @@ The provider never accepts a configured feature limit above 5,000. Reaching the 
 
 The MapControlPanel reports the result as follows:
 
-- for **Current results**, the layer row itself shows `Result: <features> features`;
+- for **Filtered Result**, the layer row itself shows `Result: <features> features`;
 - for an ordinary named MapLayer, the layer name remains the row label and the same `Result: <features> features` text is available as its title/hint;
 - if the feature limit truncates the result and record totals are available, the title becomes  
   `Result: <features> features — first <processed> of <total> records processed`;
 - for a named MapLayer a second warning line is also shown:  
   `Partial load: first <processed> of <total> records processed.`;
-- for Current results the partial information remains in the main result label and the separate warning line is suppressed.
+- for Filtered Result the partial information remains in the main result label and the separate warning line is suppressed.
 
 If the server does not provide enough metadata to state the processed/total record counts, the fallback text is `only part of the result set was loaded`.
 
@@ -279,7 +279,7 @@ For normal Heurist record popups, `PopupProvider` uses Heurist presentation endp
 
 It manages:
 
-- Current results and persisted MapDocuments;
+- Filtered Result and persisted MapDocuments;
 - ordered layers and their loading/error states;
 - layer visibility, opacity, zoom-to-extent, and editing requests;
 - basemap selection;

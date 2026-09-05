@@ -41,7 +41,7 @@ test('Map Control custom CSS supports declarations and complete CSS rules', () =
 test('configuration dialog keeps Interface first and uses flat Default settings layout', async () => {
   const dialogSource = await readFile(new URL('../../src/ui/config/MapConfigurationDialog.js', import.meta.url), 'utf8');
   const interfaceIndex = dialogSource.indexOf("this.section('Interface'");
-  const currentResultsIndex = dialogSource.indexOf("this.section('Current Results Map'");
+  const currentResultsIndex = dialogSource.indexOf("this.section('Filtered Result Map'");
   assert.ok(interfaceIndex >= 0 && currentResultsIndex > interfaceIndex);
   assert.doesNotMatch(dialogSource, /legend\('Map defaults'\)|legend\('Layer defaults'\)/);
   assert.match(dialogSource, /heurist-map-config-inline-number/);

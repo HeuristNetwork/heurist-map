@@ -57,7 +57,7 @@
 #Discard changes to map configuration?#Abandonner les modifications de la configuration cartographique ?
 #Interface#Interface
 #Publication#Publication
-#Current Results Map#Carte des résultats actuels
+#Filtered Result Map#Carte du résultat filtré
 #Default settings#Paramètres par défaut
 #Map documents#Documents cartographiques
 #Interaction#Interaction
@@ -89,7 +89,7 @@
 #Always available#Toujours disponible
 #Cannot load MapDocument list:#Impossible de charger la liste des documents cartographiques :
 #Default document#Document par défaut
-#Current results#Résultats actuels
+#Filtered Result#Résultat filtré
 #Allowed base maps#Fonds de carte autorisés
 #All Heurist base maps#Tous les fonds de carte Heurist
 #Email team for other base maps#Contacter l’équipe pour d’autres fonds de carte

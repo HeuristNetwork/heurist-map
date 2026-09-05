@@ -51,35 +51,34 @@ export class MapControlPanel {
       this.angleToggle.classList.add('heurist-module-panel-angle-toggle');
       header.append(this.angleToggle);
 
-      const title = document.createElement('strong');
-      title.className = 'h-i18n';
-      title.textContent = 'Map controls';
-      title.title = $HR('Map controls');
-      header.append(title);
-
       layerToggle = iconButton('fa-solid fa-layer-group', 'Show or hide map controls', () => this.toggleFullyCollapsed());
       layerToggle.classList.add('heurist-module-panel-toggle');
     }
+
+    this.actions = document.createElement('span');
+    this.actions.className = 'heurist-module-panel-actions';
     if (this.api.getCapabilities?.().editing === true) {
-      header.append(iconButton('fa-solid fa-circle-plus', 'Create new map document', () => this.api.requestAddMapDocument()));
+      this.actions.append(iconButton('fa-solid fa-circle-plus', 'Create new map document', () => this.api.requestAddMapDocument()));
     }
     if (this.options.showHomeControl !== false) {
-      header.append(iconButton('fa-solid fa-house', 'Zoom to active map document', () => this.api.zoomHome()));
+      this.actions.append(iconButton('fa-solid fa-house', 'Zoom to active map document', () => this.api.zoomHome()));
     }
 
-    header.append(iconButton('fa-solid fa-circle-question', 'Help', () => this.openHelp()));
+    this.actions.append(iconButton('fa-solid fa-circle-question', 'Help', () => this.openHelp()));
 
     const hostCapabilities = this.api.getHostCapabilities?.() || {};
     if (this.options.showOptions !== false && hostCapabilities.mapPreferences) {
-      header.append(iconButton('fa-solid fa-gear', 'Map options', () => this.api.openPreferencesDialog()));
+      this.actions.append(iconButton('fa-solid fa-gear', 'Map options', () => this.api.openPreferencesDialog()));
     }
     if (this.options.showPublish !== false && hostCapabilities.mapPublishing) {
-      header.append(iconButton('fa-solid fa-share-nodes', 'Publish map', () => this.api.openPublishDialog()));
+      this.actions.append(iconButton('fa-solid fa-share-nodes', 'Publish map', () => this.api.openPublishDialog()));
     }
+    header.append(this.actions);
     if (layerToggle) header.append(layerToggle);
 
     const body = document.createElement('div');
     body.className = 'heurist-module-panel-body';
+    if (this.options.showSourceHeader === true) body.classList.add('with-source-header');
     if (this.options.initiallyExpanded === false) this.element.classList.add('fully-collapsed');
 
     if (hasDocumentControls) {

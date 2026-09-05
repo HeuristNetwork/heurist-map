@@ -544,7 +544,7 @@ await map.addLayer({
 
 await map.addQueryLayer('t:10', {
   id: 'current-results',
-  title: 'Current results'
+  title: 'Filtered Result'
 });
 
 await map.setQueryForLayer('current-results', 't:12');

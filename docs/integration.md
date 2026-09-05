@@ -31,7 +31,7 @@ All new integration code belongs under `hclient/modules`. The former `hclient/wi
 | --- | --- |
 | `hclient/modules/HeuristModuleViewer.js` | Base iframe lifecycle, visibility/resizing, queued operations, public-API acquisition, and common host-event plumbing. |
 | `hclient/modules/HeuristModuleRecordset.js` | Shared query, `HRecordSet`, selection, and search-realm conversion/synchronization for recordset-driven modules. |
-| `hclient/modules/map/HeuristModuleMap.js` | Map bootstrap, `heuristMapHost` bridge, configuration/draw workflows, map events, record editing/creation, symbology editing, and Current results behavior. |
+| `hclient/modules/map/HeuristModuleMap.js` | Map bootstrap, `heuristMapHost` bridge, configuration/draw workflows, map events, record editing/creation, symbology editing, and Filtered Result behavior. |
 | `hclient/modules/map/mapViewer.js` | Thin jQuery widget facade which constructs/delegates to `HeuristModuleMap`. |
 | `hclient/modules/map/mapViewer.html` | Same-origin iframe launcher for the compiled map application. |
 
@@ -83,7 +83,7 @@ For example, record creation requires `HostAdapter.addRecord(recordTypeId)`, `He
 
 When `eventbased` integration is enabled, `HeuristModuleMap` and its recordset base listen to the main application events used by the mapping context, including credentials, layout resize, record search start/finish, system initialization, and record selection.
 
-`HeuristModuleMap` caches query/selection state and sends it to Current results only when the dynamic MapDocument/layer can use it. In the opposite direction, `heurist-map-selection-changed` is translated into the normal Heurist selection event.
+`HeuristModuleMap` caches query/selection state and sends it to Filtered Result only when the dynamic MapDocument/layer can use it. In the opposite direction, `heurist-map-selection-changed` is translated into the normal Heurist selection event.
 
 This synchronization belongs in the wrapper, not in `heurist-map`.
 
@@ -356,6 +356,6 @@ For a coordinated Heurist/`heurist-map` release:
 6. verify the production bundle without the Vite development server;
 7. verify OpenAPI examples/schemas match current server MapDocument/MapLayer/data output;
 8. verify `HeuristModuleMap`/`mapViewer` against current `HeuristMapPublicApi` events and methods;
-9. test Preferences, Current results, persisted MapDocuments, dynamic viewport loading, thematic symbology, drawing, and publishing;
+9. test Preferences, Filtered Result, persisted MapDocuments, dynamic viewport loading, thematic symbology, drawing, and publishing;
 10. generate/test the Heurist modules distribution and verify it contains `hclient/bundles/heurist-map`;
 11. verify browser cache/version behavior after replacing the bundle.

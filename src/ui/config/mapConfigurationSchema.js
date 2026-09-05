@@ -137,7 +137,7 @@ function normalizeConfig(source, defaults) {
       minimumZoomKm: nullablePositiveNumber(document.minimumZoomKm),
       maximumZoomKm: nullablePositiveNumber(document.maximumZoomKm),
       bounds: normalizeBounds(document.bounds),
-      // Migrate the former global default into the Current Results Map setting.
+      // Migrate the former global default into the Filtered Result Map setting.
       dynamicRequests: boolean(
         document.dynamicRequests,
         boolean(configuredDefaults.dynamicRequests, defaults.dynamicDocument.dynamicRequests)

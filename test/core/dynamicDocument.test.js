@@ -95,7 +95,7 @@ test('every application has one lightweight dynamic MapDocument', () => {
   });
 });
 
-test('Current Results Map applies its document-specific zoom limits', async () => {
+test('Filtered Result Map applies its document-specific zoom limits', async () => {
   const { application, zoomLimits } = createApplication({
     dynamicDocument: { minZoom: 3, maxZoom: 11 }
   });
@@ -103,7 +103,7 @@ test('Current Results Map applies its document-specific zoom limits', async () =
   assert.deepEqual(zoomLimits.at(-1), { minZoom: 3, maxZoom: 11 });
 });
 
-test('Current Results Map startup applies its document-specific zoom limits', async () => {
+test('Filtered Result Map startup applies its document-specific zoom limits', async () => {
   const { application, zoomLimits } = createApplication({
     initiallyActive: true,
     dynamicDocument: { minZoom: 4, maxZoom: 12 }
@@ -124,7 +124,7 @@ test('global interaction selection policy restricts otherwise selectable layers'
 
 test('query layer added while dynamic document is inactive is retained but not rendered', async () => {
   const { application, rendered } = createApplication();
-  const layer = await application.addQueryLayer({ t: 10 }, { id: 'current-results', title: 'Current results' });
+  const layer = await application.addQueryLayer({ t: 10 }, { id: 'current-results', title: 'Filtered Result' });
   assert.equal(layer.id, 'current-results');
   assert.equal(rendered.length, 0);
 
@@ -166,14 +166,14 @@ test('getDocumentLayer exposes inactive dynamic query layer state', async () => 
   const { application, rendered } = createApplication();
   await application.addQueryLayer('t:10', {
     id: 'current-results',
-    title: 'Current results',
+    title: 'Filtered Result',
     visible: true
   });
 
   assert.equal(rendered.length, 0);
   const stored = application.getDocumentLayer('current-results', 'dynamic');
   assert.equal(stored.id, 'current-results');
-  assert.equal(stored.title, 'Current results');
+  assert.equal(stored.title, 'Filtered Result');
   assert.equal(stored.visible, true);
   assert.equal(stored.selectable, true);
   assert.equal(stored.source.type, 'heurist-query');
