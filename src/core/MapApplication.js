@@ -623,7 +623,7 @@ export class MapApplication {
       );
       settings.config.defaults.symbology = clonePlain(baseSymbol || {});
       if (this.host.getCapabilities?.().mapPreferences === true) {
-        await this.host.saveMapPreferences(settings);
+        await this.host.savePreferences(settings);
       }
       return this.applyConfiguration(settings);
     }

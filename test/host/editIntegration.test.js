@@ -27,7 +27,7 @@ test('HeuristHostAdapter exposes generic record editing only when bridge support
 test('base HostAdapter does not expose editing', async () => {
   const adapter = new HostAdapter();
   assert.equal(adapter.supportsEditing(), false);
-  await assert.rejects(() => adapter.editRecord(1), /not supported/);
+  await assert.rejects(() => adapter.editRecord(1), /not available/);
 });
 
 test('MapDocument edit uses record editor and reloads only after save', async () => {
@@ -208,7 +208,7 @@ test('current-results default symbology edit persists map preferences and reappl
       calls.push(['edit', value, options]);
       return { iconType: 'iconfont', iconFont: 'location' };
     },
-    async saveMapPreferences(settings) {
+    async savePreferences(settings) {
       calls.push(['savePreferences', settings]);
       return settings;
     }

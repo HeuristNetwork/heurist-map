@@ -177,7 +177,7 @@ test('saving preferences updates the parent-owned bootstrap through the direct b
     config: { dynamicDocument: { title: 'Updated' } }
   };
 
-  await adapter.saveMapPreferences(settings);
+  await adapter.savePreferences(settings);
   assert.deepEqual(updated, settings);
 });
 

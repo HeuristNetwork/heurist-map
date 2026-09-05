@@ -18,8 +18,8 @@ test('Heurist host adapter uses keyed preference FrontController contract', asyn
     baseUrl: 'http://example.test/heurist/', database: 'demo', fetchImpl
   });
 
-  await host.loadMapPreferences();
-  await host.saveMapPreferences({ format: 'heurist-map-settings', version: 1 });
+  await host.loadPreferences();
+  await host.savePreferences({ format: 'heurist-map-settings', version: 1 });
 
   assert.match(calls[0].url, /controller=UserController/);
   assert.match(calls[0].url, /action=get_prefs/);
@@ -69,7 +69,7 @@ test('Heurist host adapter parses persisted map preference JSON strings', async 
     })
   });
 
-  assert.deepEqual(await host.loadMapPreferences(), stored);
+  assert.deepEqual(await host.loadPreferences(), stored);
 });
 
 test('default host fetch keeps Window/global receiver and avoids illegal invocation', async () => {
@@ -81,7 +81,7 @@ test('default host fetch keeps Window/global receiver and avoids illegal invocat
   };
   try {
     const host = new HeuristHostAdapter({ baseUrl: 'http://example.test/heurist/', database: 'demo' });
-    await host.loadMapPreferences();
+    await host.loadPreferences();
     assert.equal(receiver, globalThis);
   } finally {
     globalThis.fetch = originalFetch;
@@ -95,7 +95,7 @@ test('Heurist host adapter accepts string ok status and null preference data', a
     database: 'demo',
     fetchImpl: async () => ({ ok: true, json: async () => ({ status: 'ok', data: null }) })
   });
-  assert.equal(await host.loadMapPreferences(), null);
+  assert.equal(await host.loadPreferences(), null);
 });
 
 test('Heurist host adapter accepts string ok status for publish save', async () => {
@@ -104,7 +104,7 @@ test('Heurist host adapter accepts string ok status for publish save', async () 
     database: 'demo',
     fetchImpl: async () => ({ ok: true, json: async () => ({ status: 'ok', data: { id: 'abc123' } }) })
   });
-  assert.deepEqual(await host.publishMap({ format: 'heurist-publication' }), { id: 'abc123' });
+  assert.deepEqual(await host.publish({ format: 'heurist-publication' }), { id: 'abc123' });
 });
 
 test('Heurist host adapter uses legacy map symbol preferences as runtime defaults', async () => {

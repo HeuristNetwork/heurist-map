@@ -59,13 +59,13 @@ export class HeuristMapPublicApi {
   }
 
   /** Load the current user's persisted map settings through the host. */
-  loadMapPreferences() {
-    return this.application.host.loadMapPreferences();
+  loadPreferences() {
+    return this.application.host.loadPreferences();
   }
 
   /** Save allowlisted map settings through the host. */
-  saveMapPreferences(settings) {
-    return this.application.host.saveMapPreferences(serializeMapConfigurationSettings(settings));
+  savePreferences(settings) {
+    return this.application.host.savePreferences(serializeMapConfigurationSettings(settings));
   }
 
   /** Apply persisted settings to the live map without full reinitialization. */
@@ -134,7 +134,7 @@ export class HeuristMapPublicApi {
   }
 
   /** Publish settings plus the selected amount of current map state through the host. */
-  publishMap(settings, publishOptions = {}) {
+  publish(settings, publishOptions = {}) {
     const serialized = serializeMapConfigurationSettings(settings);
     const captured = this.captureState();
     const dynamicId = String(this.application.dynamicDocumentId || 'dynamic');
@@ -159,7 +159,7 @@ export class HeuristMapPublicApi {
       ? { activeDocumentId: captured.activeDocumentId ?? null, query: captured.query ?? null }
       : captured;
 
-    return this.application.host.publishMap({
+    return this.application.host.publish({
       format: 'heurist-publication',
       version: 1,
       options: serialized.options,
@@ -170,13 +170,13 @@ export class HeuristMapPublicApi {
 
   /** Open preferences, loading/saving only the `heurist-map` preference key. */
   async openPreferencesDialog(options = {}) {
-    const saved = await this.loadMapPreferences();
+    const saved = await this.loadPreferences();
     return this.openConfigurationDialog({
       ...options,
       mode: 'preferences',
       value: saved || this.application.config.persistedSettings || null,
       onSave: async (value, context) => {
-        const result = await this.saveMapPreferences(value);
+        const result = await this.savePreferences(value);
         const applied = await this.applyConfiguration(context.serialized);
         this.application.dispatch('heurist-map-preferences-saved', { settings: context.serialized, result, applied });
         return options.onSave ? options.onSave(value, context, result, applied) : result;
@@ -196,7 +196,7 @@ export class HeuristMapPublicApi {
         dynamicDocumentId: this.application.dynamicDocumentId || 'dynamic'
       },
       onSave: async (value, context) => {
-        const result = await this.publishMap(value, context.publishOptions || {});
+        const result = await this.publish(value, context.publishOptions || {});
         this.application.dispatch('heurist-map-published', { publication: result, settings: context.serialized });
         if (options.onSave) await options.onSave(value, context, result);
         // MapConfigurationDialog closes after this callback resolves. Defer the
