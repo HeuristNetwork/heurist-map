@@ -1,5 +1,7 @@
 #Map controls#Contrôles de la carte
 #Show or hide map controls#Afficher ou masquer les contrôles de la carte
+#Show or hide panels#Afficher ou masquer les panneaux
+#Help#Aide
 #Create new map document#Créer un document cartographique
 #Zoom to active map document#Zoomer sur le document cartographique actif
 #Map options#Options de la carte
@@ -95,6 +97,8 @@
 #Map Controls#Contrôles de la carte
 #Heurist Map Controls#Contrôles cartographiques Heurist
 #Initially expanded#Développé initialement
+#Header#En-tête
+#Show a header above the map with the active map document title.#Affiche un en-tête au-dessus de la carte avec le titre du document cartographique actif.
 #Home#Accueil
 #Options#Options
 #Publish#Publier

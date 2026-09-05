@@ -7,7 +7,7 @@
 import { MapDocumentSelector } from './MapDocumentSelector.js';
 import { LayerPanel } from './LayerPanel.js';
 import { BaseMapSelector } from './BaseMapSelector.js';
-import { $HR, applyI18n } from './i18n/HResource.js';
+import { $HR, applyI18n, InlineHelp } from '@heurist/client-core/ui';
 
 export class MapControlPanel {
   constructor({ api, mapContainer, options }) {
@@ -21,37 +21,44 @@ export class MapControlPanel {
   mount() {
     if (this.options.enabled === false || this.options.placement === 'none') return;
 
+    if (this.options.showSourceHeader === true) {
+      this.sourceHeader = document.createElement('div');
+      this.sourceHeader.className = 'heurist-source-header';
+      this.mapContainer.before(this.sourceHeader);
+    }
+
     this.element = document.createElement('aside');
-    this.element.className = 'heurist-map-control-panel';
+    this.element.className = 'heurist-module-control-panel';
+    if (this.options.showSourceHeader === true) this.element.classList.add('with-source-header');
     this.element.setAttribute('aria-label', $HR('Map controls'));
     if (this.options.position) this.element.classList.add(`position-${this.options.position}`);
     if (this.options.maxHeight) this.element.style.maxHeight = String(this.options.maxHeight);
     this.applyControlCss();
 
     const header = document.createElement('div');
-    header.className = 'heurist-map-panel-header';
+    header.className = 'heurist-module-panel-header';
     const hasDocumentControls = this.options.showCurrentDocument !== false || this.options.showMapDocuments !== false;
     const configuredBaseMaps = this.api.getBaseMaps?.() || [];
     const hasSelectableBaseMaps = this.options.showBaseMaps !== false
       && configuredBaseMaps.some((item) => String(item?.id) !== 'None');
     const hasPanelSections = hasDocumentControls || hasSelectableBaseMaps;
+    this.hasVisiblePanels = hasPanelSections;
+    let layerToggle = null;
     if (!hasPanelSections) {
       this.element.classList.add('controls-only');
     } else {
-      let toggle;
-      const togglePanel = () => {
-        this.element.classList.toggle('collapsed');
-        toggle?.setAttribute('aria-expanded', String(!this.element.classList.contains('collapsed')));
-      };
-      toggle = iconButton('fa-solid fa-layer-group', 'Show or hide map controls', togglePanel);
-      toggle.classList.add('heurist-map-panel-toggle');
-      toggle.setAttribute('aria-expanded', String(this.options.initiallyExpanded !== false));
+      this.angleToggle = iconButton('fa-solid fa-angle-up', 'Show or hide panels', () => this.toggleBody());
+      this.angleToggle.classList.add('heurist-module-panel-angle-toggle');
+      header.append(this.angleToggle);
+
       const title = document.createElement('strong');
       title.className = 'h-i18n';
       title.textContent = 'Map controls';
-      title.title = $HR('Show or hide map controls');
-      title.addEventListener('click', togglePanel);
-      header.append(toggle, title);
+      title.title = $HR('Map controls');
+      header.append(title);
+
+      layerToggle = iconButton('fa-solid fa-layer-group', 'Show or hide map controls', () => this.toggleFullyCollapsed());
+      layerToggle.classList.add('heurist-module-panel-toggle');
     }
     if (this.api.getCapabilities?.().editing === true) {
       header.append(iconButton('fa-solid fa-circle-plus', 'Create new map document', () => this.api.requestAddMapDocument()));
@@ -60,6 +67,8 @@ export class MapControlPanel {
       header.append(iconButton('fa-solid fa-house', 'Zoom to active map document', () => this.api.zoomHome()));
     }
 
+    header.append(iconButton('fa-solid fa-circle-question', 'Help', () => this.openHelp()));
+
     const hostCapabilities = this.api.getHostCapabilities?.() || {};
     if (this.options.showOptions !== false && hostCapabilities.mapPreferences) {
       header.append(iconButton('fa-solid fa-gear', 'Map options', () => this.api.openPreferencesDialog()));
@@ -67,10 +76,11 @@ export class MapControlPanel {
     if (this.options.showPublish !== false && hostCapabilities.mapPublishing) {
       header.append(iconButton('fa-solid fa-share-nodes', 'Publish map', () => this.api.openPublishDialog()));
     }
+    if (layerToggle) header.append(layerToggle);
 
     const body = document.createElement('div');
-    body.className = 'heurist-map-panel-body';
-    if (this.options.initiallyExpanded === false) this.element.classList.add('collapsed');
+    body.className = 'heurist-module-panel-body';
+    if (this.options.initiallyExpanded === false) this.element.classList.add('fully-collapsed');
 
     if (hasDocumentControls) {
       this.documentsContainer = document.createElement('div');
@@ -103,6 +113,7 @@ export class MapControlPanel {
     if (target && globalThis.getComputedStyle?.(target).position === 'static') target.style.position = 'relative';
     target?.append(this.element);
     applyI18n(this.element);
+    this.updateExpandedState();
 
     this.documentSelector = this.documentsContainer
       ? new MapDocumentSelector({ api: this.api, container: this.documentsContainer })
@@ -138,7 +149,9 @@ export class MapControlPanel {
   }
 
   refresh() {
-    const activeId = this.api.getActiveMapDocument()?.id;
+    const activeDocument = this.api.getActiveMapDocument();
+    const activeId = activeDocument?.id;
+    if (this.sourceHeader) this.sourceHeader.textContent = activeDocument?.title || '';
     const editingEnabled = this.api.getCapabilities?.().editing === true;
     const symbologyEditingEnabled = this.api.getCapabilities?.().symbologyEditing === true;
     const allDocuments = this.api.getMapDocuments();
@@ -191,6 +204,47 @@ export class MapControlPanel {
     this.baseMapsContainer.hidden = !this.baseMapsExpanded;
   }
 
+  /** Shrink or restore the whole panel down to its far-right toggle button. */
+  toggleFullyCollapsed() {
+    const fullyCollapsed = this.element.classList.toggle('fully-collapsed');
+    if (!fullyCollapsed) {
+      this.element.classList.toggle('body-collapsed', !this.hasVisiblePanels);
+    }
+    this.updateExpandedState();
+  }
+
+  /** Show or hide the document/base-map list while keeping the header visible. */
+  toggleBody() {
+    if (this.element.classList.contains('fully-collapsed')) return;
+    if (!this.hasVisiblePanels) {
+      this.toggleFullyCollapsed();
+      return;
+    }
+    this.element.classList.toggle('body-collapsed');
+    this.updateExpandedState();
+  }
+
+  /** Sync toggle aria-expanded state and the angle icon with the current collapse classes. */
+  updateExpandedState() {
+    const fullyCollapsed = this.element.classList.contains('fully-collapsed');
+    const bodyCollapsed = this.element.classList.contains('body-collapsed');
+    this.element.querySelector('.heurist-module-panel-toggle')
+      ?.setAttribute('aria-expanded', String(!fullyCollapsed));
+    if (this.angleToggle) {
+      const expanded = !fullyCollapsed && !bodyCollapsed;
+      this.angleToggle.setAttribute('aria-expanded', String(expanded));
+      const icon = this.angleToggle.querySelector('.fa-solid');
+      icon?.classList.toggle('fa-angle-up', expanded);
+      icon?.classList.toggle('fa-angle-down', !expanded);
+    }
+  }
+
+  /** Load the module user manual for the active language into a full-viewport overlay. */
+  openHelp() {
+    this.helpOverlay ||= new InlineHelp({ moduleName: 'map' });
+    this.helpOverlay.open();
+  }
+
   /** Apply custom Map Control CSS as inline declarations or a complete CSS rule. */
   applyControlCss() {
     this.controlCssStyle?.remove();
@@ -213,14 +267,15 @@ export class MapControlPanel {
   /** Rebuild the lightweight control panel with new presentation options. */
   applyOptions(options = {}) {
     const next = { ...this.options, ...options };
-    const wasExpanded = this.element ? !this.element.classList.contains('collapsed') : next.initiallyExpanded !== false;
+    const wasExpanded = this.element ? !this.element.classList.contains('fully-collapsed') : next.initiallyExpanded !== false;
     this.destroy();
     this.options = next;
     this.listeners = [];
     this.baseMapsExpanded = next.baseMapsInitiallyExpanded === true;
     this.mount();
     if (this.element && wasExpanded !== (next.initiallyExpanded !== false)) {
-      this.element.classList.toggle('collapsed', !wasExpanded);
+      this.element.classList.toggle('fully-collapsed', !wasExpanded);
+      this.updateExpandedState();
     }
     return this.element || null;
   }
@@ -229,6 +284,9 @@ export class MapControlPanel {
     for (const [name, handler] of this.listeners) this.api.removeEventListener(name, handler);
     this.controlCssStyle?.remove();
     this.controlCssStyle = null;
+    this.sourceHeader?.remove();
+    this.sourceHeader = null;
+    this.helpOverlay?.close();
     this.element?.remove();
   }
 }
@@ -236,7 +294,7 @@ export class MapControlPanel {
 function iconButton(icon, title, handler) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'heurist-map-icon-button';
+  button.className = 'heurist-module-icon-button';
   button.title = $HR(title);
   button.setAttribute('aria-label', $HR(title));
   button.innerHTML = `<span class="${icon}" aria-hidden="true"></span>`;

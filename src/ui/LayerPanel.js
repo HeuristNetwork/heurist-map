@@ -1,6 +1,6 @@
 /** LayerPanel.js - Render ordered layers for the active MapDocument. */
 import { LayerPanelItem } from './LayerPanelItem.js';
-import { $HR } from './i18n/HResource.js';
+import { $HR } from '@heurist/client-core/ui';
 export class LayerPanel {
   constructor({ api, container, editingEnabled = false, symbologyEditingEnabled = false, onEditLayer = null, showLegend = true }) {
     this.api = api;

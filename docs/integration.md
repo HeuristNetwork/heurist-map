@@ -65,8 +65,9 @@ This avoids giving the standalone project a dependency on HAPI4 or jQuery.
 | `@heurist/client-core/host` | `HostAdapter`, `StandaloneHostAdapter`, iframe-host discovery, and global-bootstrap access. |
 | `@heurist/client-core/config` | Common `{runtime, settings, state}` bootstrap normalization. |
 | `@heurist/client-core/contracts` | Common module constants and event names. |
+| `@heurist/client-core/ui` | `$HR`/`applyI18n`/`initLocale`/localization resource loading, `InlineHelp` (per-module user-manual overlay), `PublishedDialog` (publish-link dialog), and the generic configuration-envelope/value-normalizer helpers (`serializeConfigurationSettings`, `boolean`, `enumValue`, `nullableIdentifier`, etc.) reused by each module's own configuration schema. |
 
-The package exposes source ESM directly and currently needs no separate build. Map providers, map settings/schema, `HeuristMapPublicApi`, `HeuristHostAdapter`, configuration UI, and Leaflet integration remain in `heurist-map`.
+The package exposes source ESM directly and currently needs no separate build. Map providers, map settings/schema (including the map-only `CONFIGURATION_FORMAT`/geo/zoom normalizers in `src/ui/config/configurationUtils.js`), `HeuristMapPublicApi`, `HeuristHostAdapter`, the map configuration dialog, and Leaflet integration remain in `heurist-map`.
 
 ### 2.3 Classes to update when the host contract changes
 

@@ -27,6 +27,7 @@ test('map configuration defaults contain agreed global fallback settings', () =>
   assert.equal(value.options.ui.controlCss, null);
   assert.equal(value.options.ui.showHomeControl, false);
   assert.equal(value.options.ui.showOptions, true);
+  assert.equal(value.options.ui.showSourceHeader, false);
   assert.deepEqual(value.options.nativeControls, {
     zoom: true, scale: true, bookmark: false, print: false, selector: false, search: false
   });

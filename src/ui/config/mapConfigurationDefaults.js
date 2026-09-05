@@ -20,6 +20,7 @@ export const HEURIST_MAP_OPTIONS_DEFAULTS = Object.freeze({
     showHomeControl: false,
     showOptions: true,
     showPublish: true,
+    showSourceHeader: false,
     controlCss: null
   }),
   nativeControls: Object.freeze({

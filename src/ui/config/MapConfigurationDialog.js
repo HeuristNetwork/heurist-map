@@ -17,7 +17,7 @@ import {
 import { getDefaultBaseMaps } from '../../basemaps/defaultBasemaps.js';
 import { createSymbolPreview } from '../legend/LegendRenderer.js';
 import { DEFAULT_MAP_SYMBOL, normalizeMapSymbol } from '../../utils/normalizeMapSymbol.js';
-import { $HR, applyI18n } from '../i18n/HResource.js';
+import { $HR, applyI18n } from '@heurist/client-core/ui';
 
 const ZOOM_LEVEL_TOOLTIP = 'Level 1 = ~10,000km (15 deg.) to ~65,000 km (equator). Level 18 = ~50m (15 deg.) to ~250m (equator)';
 const advancedStateByMode = new Map();
@@ -422,6 +422,8 @@ export class MapConfigurationDialog {
     heuristSection.append(primary);
 
     this.checkbox(heuristSection, 'options.ui.initiallyExpanded', 'Initially expanded');
+    const sourceHeader = this.checkbox(heuristSection, 'options.ui.showSourceHeader', 'Header');
+    sourceHeader.title = $HR('Show a header above the map with the active map document title.');
 
     const secondary = document.createElement('div');
     secondary.className = 'heurist-map-config-inline-checks';
@@ -482,7 +484,8 @@ export class MapConfigurationDialog {
       'options.ui.initiallyExpanded',
       'options.ui.showHomeControl',
       'options.ui.showOptions',
-      'options.ui.showPublish'
+      'options.ui.showPublish',
+      'options.ui.showSourceHeader'
     ]) {
       const control = this.fields.get(path)?.control;
       if (control) control.disabled = disabled

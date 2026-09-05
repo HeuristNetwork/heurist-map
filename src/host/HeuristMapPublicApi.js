@@ -11,7 +11,7 @@
  */
 
 import { serializeMapConfigurationSettings } from '../ui/config/mapConfigurationSchema.js';
-import { PublishedDialog } from '../ui/PublishedDialog.js';
+import { PublishedDialog } from '@heurist/client-core/ui';
 
 /**
  * Stable public facade for direct and same-origin iframe integrations.

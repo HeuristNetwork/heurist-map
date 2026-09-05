@@ -26,8 +26,8 @@ test('zoom-to-layer action is available but remains hover/focus-only', () => {
 
 test('control-only mode removes title-toggle footprint and sizes to buttons', () => {
   assert.match(panelSource, /classList\.add\('controls-only'\)/);
-  assert.match(cssSource, /\.heurist-map-control-panel\.controls-only\{[\s\S]*?width:auto/);
-  assert.match(cssSource, /\.heurist-map-panel-header\{[\s\S]*?box-sizing:border-box/);
+  assert.match(cssSource, /\.heurist-module-control-panel\.controls-only\{[\s\S]*?width:auto/);
+  assert.match(cssSource, /\.heurist-module-panel-header\{[\s\S]*?box-sizing:border-box/);
 });
 
 

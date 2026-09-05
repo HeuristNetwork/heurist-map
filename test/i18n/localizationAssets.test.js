@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { parseLocale } from '../../src/ui/i18n/HResource.js';
+import { parseLocale } from '@heurist/client-core/ui';
 
 const assets = fileURLToPath(new URL('../../public/assets/localization/', import.meta.url));
 
@@ -21,8 +21,7 @@ test('every direct $HR string in map UI source is present in module dictionaries
   const sourceFiles = [
     '../../src/main.js', '../../src/ui/MapControlPanel.js', '../../src/ui/MapDocumentSelector.js',
     '../../src/ui/LayerPanel.js', '../../src/ui/LayerPanelItem.js', '../../src/ui/DrawPanel.js',
-    '../../src/ui/PublishedDialog.js', '../../src/ui/config/MapConfigurationDialog.js',
-    '../../src/ui/legend/LegendRenderer.js'
+    '../../src/ui/config/MapConfigurationDialog.js', '../../src/ui/legend/LegendRenderer.js'
   ];
   const sources = await Promise.all(sourceFiles.map((file) => readFile(fileURLToPath(new URL(file, import.meta.url)), 'utf8')));
   const keys = sources.flatMap((source) => [...source.matchAll(/\$HR\('([^']+)'/g)].map((match) => match[1]));

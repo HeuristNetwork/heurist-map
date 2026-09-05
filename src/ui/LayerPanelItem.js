@@ -5,7 +5,7 @@
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
 import { createLayerLegend } from './legend/LegendRenderer.js';
-import { $HR } from './i18n/HResource.js';
+import { $HR } from '@heurist/client-core/ui';
 
 export class LayerPanelItem {
   constructor({ api, layer, editingEnabled = false, symbologyEditingEnabled = false, onEditLayer = null, showLegend = true }) {
@@ -211,7 +211,7 @@ function supportsThematicSelection(layer) {
 function button(icon, title, handler) {
   const element = document.createElement('button');
   element.type = 'button';
-  element.className = 'heurist-map-icon-button';
+  element.className = 'heurist-module-icon-button';
   element.title = $HR(title);
   element.innerHTML = `<span class="${icon}" aria-hidden="true"></span>`;
   element.addEventListener('click', handler);

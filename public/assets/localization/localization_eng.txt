@@ -1,5 +1,7 @@
 #Map controls#Map controls
 #Show or hide map controls#Show or hide map controls
+#Show or hide panels#Show or hide panels
+#Help#Help
 #Create new map document#Create new map document
 #Zoom to active map document#Zoom to active map document
 #Map options#Map options
@@ -95,6 +97,8 @@
 #Map Controls#Map Controls
 #Heurist Map Controls#Heurist Map Controls
 #Initially expanded#Initially expanded
+#Header#Header
+#Show a header above the map with the active map document title.#Show a header above the map with the active map document title.
 #Home#Home
 #Options#Options
 #Publish#Publish

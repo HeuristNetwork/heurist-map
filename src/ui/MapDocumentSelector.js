@@ -4,7 +4,7 @@
  * @project     Heurist mapping application
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
-import { $HR } from './i18n/HResource.js';
+import { $HR } from '@heurist/client-core/ui';
 export class MapDocumentSelector {
   constructor({ api, container }) {
     this.api = api;
@@ -88,7 +88,7 @@ function createDocumentStatus(item) {
 function iconButton(icon, title, handler) {
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'heurist-map-icon-button';
+  button.className = 'heurist-module-icon-button';
   button.title = $HR(title);
   button.setAttribute('aria-label', $HR(title));
   button.innerHTML = `<span class="${icon}" aria-hidden="true"></span>`;

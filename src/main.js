@@ -31,7 +31,7 @@ import '@fortawesome/fontawesome-free/css/solid.min.css';
 import { getHeuristMapConfig } from './mapConfig.js';
 import { initHeuristMap } from './initHeuristMap.js';
 import { initHeuristMapConfiguration } from './initHeuristMapConfiguration.js';
-import { initLocale, $HR } from './ui/i18n/HResource.js';
+import { initLocale, $HR } from '@heurist/client-core/ui';
 
 // Leaflet.markercluster 1.x is distributed as a UMD plugin and expects a
 // browser-global `L` while it is being evaluated. A static plugin import runs

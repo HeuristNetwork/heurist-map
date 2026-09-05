@@ -128,6 +128,7 @@ The portable configuration stored in preferences or a website is a versioned set
       showHomeControl: false,
       showOptions: true,
       showPublish: true,
+      showSourceHeader: false,
       controlCss: null
     },
 
@@ -203,7 +204,8 @@ The schema is an allowlist. Unknown fields and runtime fields are discarded duri
 - `showLegend` — Legend;
 - `showHomeControl` — Home tool;
 - `showOptions` — Options tool;
-- `showPublish` — Publish tool.
+- `showPublish` — Publish tool;
+- `showSourceHeader` — header shown above the map container with the active MapDocument's title (Current Results' configured title when the dynamic document is active).
 
 `options.nativeControls` controls Leaflet/native map tools independently:
 

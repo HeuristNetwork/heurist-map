@@ -76,6 +76,7 @@ function normalizeOptions(source, defaults) {
       showHomeControl: boolean(ui.showHomeControl, defaults.ui.showHomeControl),
       showOptions: boolean(ui.showOptions, defaults.ui.showOptions),
       showPublish: boolean(ui.showPublish, defaults.ui.showPublish),
+      showSourceHeader: boolean(ui.showSourceHeader, defaults.ui.showSourceHeader),
       controlCss: nullableString(ui.controlCss)
     },
     nativeControls: {

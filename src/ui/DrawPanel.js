@@ -4,7 +4,7 @@
  * @project     Heurist mapping application
  * @license     https://www.gnu.org/licenses/gpl-3.0.txt GNU License 3.0
  */
-import { $HR, applyI18n } from './i18n/HResource.js';
+import { $HR, applyI18n } from '@heurist/client-core/ui';
 
 export class DrawPanel {
   constructor({ api, container }) {
